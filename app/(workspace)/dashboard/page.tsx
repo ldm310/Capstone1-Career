@@ -1,4 +1,4 @@
-import { DashboardPage } from "@/components/dashboard/dashboard-page";
+import { GrowthHub } from "@/components/growth/growth-hub";
 export default function Page() {
-  return <DashboardPage />;
+  return <GrowthHub demo view="overview" />;
 }

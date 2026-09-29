@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
+import { legacyDestination } from "../lib/feature-sections";
 import { randomUUID } from "node:crypto";
 
 test("account data is isolated, persists across sessions, links documents, compares jobs, and revokes shares", async ({
@@ -9,17 +10,16 @@ test("account data is isolated, persists across sessions, links documents, compa
 }) => {
   const email = `career-test-${randomUUID()}@example.com`,
     password = "Career-test-2026!";
-  await page.goto("/sign-in");
-  await page.getByRole("button", { name: "처음이신가요? 계정 만들기" }).click();
-  await page.getByLabel("이름", { exact: true }).fill("검증 사용자");
-  await page.getByLabel("이메일", { exact: true }).fill(email);
-  await page.getByLabel("비밀번호", { exact: true }).fill(password);
-  await page.getByRole("button", { name: "계정 만들기", exact: true }).click();
-  await expect(page).toHaveURL(/\/career/);
-  await expect(
-    page.getByRole("heading", { name: "검증 사용자님의 커리어" }),
-  ).toBeVisible();
-  const audit = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
+  await page.request.post("/api/account", {
+    headers: { Origin: baseURL! },
+    data: { action: "register", email, password, name: "검증 사용자" },
+  });
+  await page.goto("/career");
+  await expect(page).toHaveURL(/\/growth/);
+  await expect(page.getByText(/검증 사용자님의 공간/)).toBeVisible();
+  const audit = await new AxeBuilder({ page })
+    .withTags(["wcag2a", "wcag2aa", "wcag21aa"])
+    .analyze();
   expect(audit.violations).toEqual([]);
   const headers = { Origin: baseURL! };
   const api = page.request;
@@ -27,7 +27,7 @@ test("account data is isolated, persists across sessions, links documents, compa
     headers,
     multipart: {
       file: {
-        name: "my-resume.txt",
+        name: "my-resume.md",
         mimeType: "text/plain",
         buffer: Buffer.from(
           "프로젝트: Python API를 개발했습니다.\nDocker 컨테이너 배포를 수행했습니다.\nSQL 쿼리를 작성했습니다.",
@@ -146,7 +146,7 @@ test("account data is isolated, persists across sessions, links documents, compa
   ).toBeFalsy();
   await page.goto("/career?tab=sources");
   await expect(
-    page.getByText("my-resume.txt", { exact: true }).first(),
+    page.getByText("my-resume.md", { exact: true }).first(),
   ).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
   expect(
@@ -172,6 +172,7 @@ test("weekly plan, schedule export, interview and account views work on desktop 
     },
   });
   await page.goto("/career?tab=plan");
+  await page.getByText("기존 준비 계획", { exact: true }).click();
   await page.getByRole("button", { name: "준비 조건으로 계획 추가" }).click();
   await expect(page.locator(".career-task")).toHaveCount(18);
   await page.locator(".career-task input[type=checkbox]").first().check();
@@ -213,8 +214,8 @@ test("weekly plan, schedule export, interview and account views work on desktop 
     "share",
   ]) {
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto(`/career?tab=${tab}`);
-    await expect(page.locator(".career-tabs")).toBeVisible();
+    await page.goto(legacyDestination(tab));
+    await expect(page.getByRole("button", { name: "메뉴 열기" })).toBeVisible();
     expect(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= innerWidth,
@@ -222,7 +223,15 @@ test("weekly plan, schedule export, interview and account views work on desktop 
       tab,
     ).toBeTruthy();
   }
-  await page.getByRole("button", { name: "로그아웃", exact: true }).click();
-  await expect(page).toHaveURL(/sign-in/);
-  expect((await page.request.get("/api/career")).status()).toBe(401);
+  await page.request.post("/api/account", {
+    headers: { Origin: baseURL! },
+    data: { action: "logout" },
+  });
+  await page.reload();
+  await expect(
+    page.getByText(/로그인 없이 이용 중 · 게스트 공간/),
+  ).toBeVisible();
+  const guest = await (await page.request.get("/api/career")).json();
+  expect(guest.guest).toBe(true);
+  expect(guest.workspace.events).toHaveLength(0);
 });

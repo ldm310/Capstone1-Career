@@ -9,8 +9,15 @@ test("sky intro enters with keyboard, restores focus, remembers and replays", as
   const enter = page.getByRole("button", { name: "Career 홈페이지 열기" });
   await expect(enter).toBeFocused();
   await enter.press("Tab");
+  await expect(
+    page.getByRole("button", { name: "구름 배경 자동 전환 재생", exact: true }),
+  ).toBeFocused();
+  await page.keyboard.press("Tab");
   await expect(enter).toBeFocused();
-  await expect(page.locator(".intro-click-link")).toHaveCSS("outline-style", "none");
+  await expect(page.locator(".intro-click-link")).toHaveCSS(
+    "outline-style",
+    "none",
+  );
   await expect(page.locator(".intro-click-link")).toHaveCSS(
     "box-shadow",
     "rgb(39, 79, 111) 0px 1px 0px 0px",
@@ -31,9 +38,9 @@ test("sky intro enters with keyboard, restores focus, remembers and replays", as
   await enter.press("Escape");
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await page
-    .getByRole("link", { name: "내 역량 분석 시작하기", exact: true })
+    .getByRole("link", { name: "내 역량 확인하기", exact: true })
     .click();
-  await expect(page).toHaveURL(/career/);
+  await expect(page).toHaveURL(/my-skills/);
 });
 test("mouse parallax, animated reveal and mobile tap", async ({ page }) => {
   await mockPublicJobs(page);
@@ -71,5 +78,5 @@ test("in-page links skip the intro", async ({ page }) => {
   await mockPublicJobs(page);
   await page.goto("/#market-preview");
   await expect(page.getByRole("dialog")).toHaveCount(0);
-  await expect(page.locator(".public-job-card")).toHaveCount(4);
+  await expect(page.locator(".public-job-card")).toHaveCount(3);
 });

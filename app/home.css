@@ -1,0 +1,511 @@
+/* Selected homepage: five clear destinations, shared bright sky, quiet surfaces. */
+.sky-home {
+  background: #f6f8fb;
+}
+.home-width,
+.sky-home .public-jobs {
+  width: min(1312px, calc(100% - 96px));
+  max-width: 1312px;
+  margin-inline: auto;
+}
+.sky-home .site-header {
+  height: 76px;
+  background: #fff;
+}
+.sky-home .site-header-inner {
+  max-width: 1408px;
+  padding-inline: 48px;
+  gap: 32px;
+}
+.sky-home .header-nav {
+  margin: 0 auto 0 28px;
+  gap: 26px;
+  font-size: 14px;
+  color: #27455b;
+  white-space: nowrap;
+}
+.sky-home .header-nav a {
+  padding-block: 12px;
+}
+.sky-home .header-actions {
+  gap: 24px;
+  flex-shrink: 0;
+}
+.sky-home .header-actions .cta {
+  background: #fff;
+  color: #315a7b;
+  border: 1px solid #ccdae7;
+  min-height: 42px;
+}
+.sky-home .mobile-only {
+  display: none;
+}
+.sky-home .brand {
+  font-size: 30px;
+  color: #233f52;
+}
+.sky-home .brand-mark {
+  display: none;
+}
+.career-home-hero.sky-hero {
+  padding: 40px 0 48px;
+  min-height: 336px;
+}
+.career-home-hero .sky-hero-copy {
+  text-align: left;
+  max-width: 1312px;
+}
+.career-home-hero h1 {
+  font-size: clamp(36px, 3.4vw, 48px);
+  line-height: 1.2;
+  font-weight: 750;
+  color: #233f52;
+  margin: 16px 0 24px;
+}
+.career-home-hero .sky-hero-copy > p {
+  font-size: 15px;
+  line-height: 1.7;
+  color: #456078;
+}
+.career-home-hero .sky-hero-actions {
+  justify-content: flex-start;
+  margin: 26px 0 0;
+  gap: 10px;
+}
+.career-home-hero .sky-hero-actions .cta {
+  font-size: 14px;
+  padding: 12px 22px;
+  border-radius: 9px;
+}
+.career-home-hero:before {
+  background:
+    linear-gradient(90deg, #f1f6facc, #f1f6fa26 65%),
+    linear-gradient(0deg, #f6f8fb, transparent 65%);
+}
+.cloud-slideshow.intro-sky-photo,
+.cloud-slideshow.home-sky-photo {
+  background-image: none;
+  filter: none;
+  animation: none;
+  opacity: 1;
+  overflow: hidden;
+}
+.cloud-slide {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center 43%;
+  opacity: 0;
+  transition: opacity 1.2s ease;
+  filter: saturate(0.6) brightness(1.08);
+}
+.cloud-slide.is-active {
+  opacity: 1;
+}
+.cloud-slide-1,
+.cloud-slide-2 {
+  filter: saturate(0.65) brightness(1.04);
+  background-color: #50859e;
+  background-blend-mode: screen;
+}
+.cloud-slideshow::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: #d7e9f51a;
+}
+.sky-playback {
+  position: absolute;
+  right: 24px;
+  bottom: 18px;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 7px 12px;
+  border: 1px solid #c4d5e3;
+  border-radius: 20px;
+  background: #ffffffcf;
+  color: #385871;
+  font-size: 12px;
+  cursor: pointer;
+}
+.sky-intro .sky-playback {
+  bottom: auto;
+  top: 22px;
+}
+.home-features {
+  padding-block: 24px 0;
+}
+.home-section-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+.home-section-heading h2 {
+  font-size: 22px;
+  font-weight: 720;
+  color: #233f52;
+}
+.home-section-heading p {
+  color: #59738a;
+  font-size: 13px;
+}
+.home-feature-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 18px;
+}
+.home-feature-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 20px 18px;
+  min-height: 274px;
+  border: 1px solid #d8e2eb;
+  background: #fff;
+  border-radius: 16px;
+  color: #244259;
+  transition:
+    transform 0.2s,
+    box-shadow 0.2s,
+    border-color 0.2s;
+}
+.home-feature-card:hover {
+  transform: translateY(-4px);
+  border-color: #82a6c5;
+  box-shadow: 0 10px 28px #2f537511;
+}
+.home-feature-card.recommended {
+  background: #f1f7fc;
+  border-color: #83aacc;
+}
+.home-feature-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  min-height: 64px;
+  margin-bottom: 13px;
+}
+.feature-art {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 60px;
+  height: 60px;
+  color: #3b6a97;
+}
+.feature-art svg {
+  width: 60px;
+  height: 60px;
+  overflow: visible;
+}
+.icon-back {
+  fill: #dfebf8;
+}
+.icon-front {
+  fill: #f7fbff;
+}
+.feature-art-skills {
+  color: #368782;
+}
+.feature-art-skills .icon-back {
+  fill: #daefea;
+}
+.feature-art-prepare {
+  color: #b17e39;
+}
+.feature-art-prepare .icon-back {
+  fill: #f7e9d3;
+}
+.feature-art-applications {
+  color: #7f6aa8;
+}
+.feature-art-applications .icon-back {
+  fill: #ebe5f7;
+}
+.feature-art-growth {
+  color: #4278a2;
+}
+.feature-art-growth .icon-back {
+  fill: #e3eef8;
+}
+.first-visit-badge {
+  border-radius: 5px;
+  background: #e1edf7;
+  padding: 5px 7px;
+  color: #365b77;
+  font-size: 12px;
+  line-height: 1.4;
+}
+.home-feature-card h3 {
+  font-size: 18px;
+  font-weight: 720;
+  line-height: 1.4;
+  margin: 0 0 8px;
+}
+.home-feature-card p {
+  color: #506a80;
+  font-size: 14px;
+  line-height: 1.7;
+  word-break: keep-all;
+}
+.home-feature-card small {
+  margin-top: 26px;
+  font-size: 12px;
+  color: #567189;
+  line-height: 1.6;
+  word-break: keep-all;
+}
+.feature-action {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: auto;
+  padding-top: 26px;
+  font-size: 14px;
+  font-weight: 650;
+  color: #315d80;
+}
+.home-start-guide {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  flex-wrap: wrap;
+  padding: 18px 22px;
+  margin-top: 20px;
+  border: 1px solid #d5e4ef;
+  border-radius: 12px;
+  background: #ebf3f9;
+  font-size: 13px;
+  color: #2c4c64;
+}
+.home-start-guide ol {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 13px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+  color: #4e6d85;
+}
+.home-start-guide li {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+}
+.home-start-guide > a {
+  margin-left: auto;
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  background: #fff;
+  border: 1px solid #cbdceb;
+  border-radius: 8px;
+  padding: 9px 16px;
+  font-weight: 650;
+}
+.sky-home .public-jobs {
+  padding: 30px 0 40px;
+}
+.sky-home .public-jobs-heading h2 {
+  font-size: 24px;
+  margin-top: 6px;
+}
+.sky-home .public-jobs-heading p {
+  font-size: 14px;
+}
+.sky-home .public-jobs-heading {
+  margin-bottom: 20px;
+}
+.home-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  border-top: 1px solid #dde5ec;
+  color: #567189;
+  padding-block: 20px 64px;
+  font-size: 12px;
+}
+.home-feature-card:focus-visible,
+.home-start-guide a:focus-visible,
+.sky-playback:focus-visible {
+  outline: 2px solid #315d80;
+  outline-offset: 4px;
+}
+@media (max-width: 1150px) {
+  .sky-home .site-header-inner {
+    padding-inline: 28px;
+    gap: 20px;
+  }
+  .sky-home .header-nav {
+    gap: 16px;
+    margin-left: 0;
+    font-size: 13px;
+  }
+  .home-width,
+  .sky-home .public-jobs {
+    width: calc(100% - 56px);
+  }
+  .home-feature-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+  }
+  .home-feature-card {
+    min-height: 250px;
+  }
+}
+@media (max-width: 800px) {
+  .sky-home .site-header {
+    height: 68px;
+  }
+  .sky-home .mobile-only {
+    display: inline-flex;
+  }
+  .sky-home .header-nav {
+    display: none;
+  }
+  .sky-home .header-nav.open {
+    display: flex;
+    position: absolute;
+    top: 68px;
+    left: 0;
+    right: 0;
+    flex-direction: column;
+    background: #fff;
+    padding: 16px 28px;
+    margin: 0;
+    gap: 0;
+    border-bottom: 1px solid #d8e2eb;
+    box-shadow: 0 12px 16px #23445b0a;
+  }
+  .sky-home .header-actions {
+    margin-left: auto;
+    gap: 12px;
+  }
+  .home-feature-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .home-feature-card:last-child {
+    grid-column: 1/-1;
+  }
+  .home-start-guide {
+    gap: 16px;
+  }
+  .home-start-guide ol {
+    order: 3;
+    width: 100%;
+    gap: 9px;
+  }
+  .home-start-guide li {
+    gap: 9px;
+  }
+  .home-section-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+  }
+}
+@media (max-width: 480px) {
+  .home-width,
+  .sky-home .public-jobs {
+    width: calc(100% - 36px);
+  }
+  .sky-home .site-header-inner {
+    padding-inline: 18px;
+    gap: 10px;
+  }
+  .sky-home .brand {
+    font-size: 26px;
+  }
+  .sky-home .header-actions .sign-in {
+    display: none;
+  }
+  .career-home-hero.sky-hero {
+    padding-top: 32px;
+    padding-bottom: 66px;
+    min-height: 360px;
+  }
+  .career-home-hero h1 {
+    font-size: 36px;
+  }
+  .career-home-hero .sky-hero-copy > p {
+    font-size: 14px;
+    max-width: 300px;
+  }
+  .career-home-hero .sky-hero-actions {
+    flex-wrap: wrap;
+  }
+  .career-home-hero .sky-hero-actions .cta {
+    padding: 12px 15px;
+    font-size: 13px;
+  }
+  .home-feature-grid {
+    grid-template-columns: 1fr;
+  }
+  .home-feature-card {
+    min-height: 0;
+    padding: 18px 20px;
+    position: relative;
+    padding-left: 88px;
+  }
+  .home-feature-top {
+    position: static;
+    margin: 0;
+    min-height: 0;
+  }
+  .feature-art {
+    position: absolute;
+    left: 16px;
+    top: 18px;
+    width: 54px;
+    height: 54px;
+  }
+  .feature-art svg {
+    width: 54px;
+    height: 54px;
+  }
+  .first-visit-badge {
+    margin-bottom: 8px;
+  }
+  .home-feature-card small {
+    margin-top: 12px;
+  }
+  .feature-action {
+    padding-top: 16px;
+  }
+  .home-start-guide {
+    padding: 16px;
+    gap: 12px;
+  }
+  .home-start-guide > a {
+    margin-left: 0;
+  }
+  .home-start-guide ol {
+    gap: 7px;
+    font-size: 12px;
+  }
+  .home-start-guide li {
+    gap: 7px;
+  }
+  .home-footer {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cloud-slide,
+  .home-feature-card {
+    transition: none;
+  }
+  .home-feature-card:hover {
+    transform: none;
+  }
+}

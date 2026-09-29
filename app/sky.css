@@ -84,9 +84,9 @@
 .intro-kicker {
   position: absolute;
   top: 9%;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
-  letter-spacing: 0.36em;
+  letter-spacing: var(--tracking-label);
   color: #244d6d;
 }
 .intro-title-group {
@@ -98,6 +98,7 @@
   will-change: transform;
 }
 .intro-word {
+  font-family: var(--font-geist-sans), sans-serif;
   font-size: clamp(100px, 19vw, 290px);
   line-height: 1.15;
   letter-spacing: -0.07em;
@@ -122,7 +123,7 @@
 .intro-subtitle {
   font-size: clamp(17px, 2vw, 26px);
   font-weight: 550;
-  letter-spacing: -0.04em;
+  letter-spacing: var(--tracking-heading);
   line-height: 1.65;
   margin-top: 25px;
   transform: translateZ(35px);
@@ -158,7 +159,7 @@
   font-size: 17px;
   font-weight: 550;
   line-height: 1.5;
-  letter-spacing: -0.025em;
+  letter-spacing: var(--tracking-heading);
   color: #274f6f;
 }
 .intro-click-link > svg {
@@ -169,7 +170,7 @@
   transform: translateX(3px);
 }
 .intro-keyboard {
-  font-size: 10px;
+  font-size: 12px;
   color: #365c79;
   font-weight: 400;
 }
@@ -180,8 +181,8 @@
   right: 40px;
   display: flex;
   justify-content: space-between;
-  font-size: 9px;
-  letter-spacing: 0.2em;
+  font-size: 12px;
+  letter-spacing: var(--tracking-label);
   color: #315672;
 }
 .sky-phase-leaving .sky-intro {
@@ -200,7 +201,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 11px;
+  font-size: 12px;
   background: #fffffff2;
   border: 1px solid #dce5ec;
   border-radius: 30px;
@@ -301,13 +302,13 @@
 .sky-eyebrow {
   font-size: 12px;
   color: #335976;
-  letter-spacing: 0.08em;
+  letter-spacing: var(--tracking-label);
 }
 .sky-hero h1 {
   font-size: clamp(35px, 4.5vw, 64px);
   font-weight: 600;
   line-height: 1.33;
-  letter-spacing: -0.055em;
+  letter-spacing: var(--tracking-heading);
   margin: 24px 0;
 }
 .sky-hero h1:focus {
@@ -333,7 +334,7 @@
   padding: 12px 19px;
 }
 .sky-hero-copy > small {
-  font-size: 11px;
+  font-size: 12px;
   color: #45627a;
 }
 .sky-preview-grid {
@@ -369,12 +370,12 @@
 .sky-card-label > span {
   margin-left: auto;
   color: #8698a8;
-  font-size: 10px;
+  font-size: 12px;
 }
 .sky-preview-card h2 {
   font-size: 20px;
   font-weight: 550;
-  letter-spacing: -0.035em;
+  letter-spacing: var(--tracking-heading);
   line-height: 1.55;
   margin: 21px 0;
   color: #263f54;
@@ -386,7 +387,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: 11px;
+  font-size: 12px;
   color: #4f6e85;
 }
 .sky-mini-bars {
@@ -398,7 +399,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: 11px;
+  font-size: 12px;
 }
 .sky-mini-bars span {
   min-width: 62px;
@@ -419,7 +420,7 @@
 .sky-mini-bars strong {
   font-weight: 400;
   color: #5b768c;
-  font-size: 10px;
+  font-size: 12px;
 }
 .sky-evidence-preview,
 .sky-action-preview {
@@ -427,7 +428,7 @@
   flex-direction: column;
   gap: 12px;
   margin-bottom: 24px;
-  font-size: 11px;
+  font-size: 12px;
   color: #59748a;
 }
 .sky-evidence-preview > div {
@@ -445,7 +446,7 @@
 }
 .sky-evidence-preview small,
 .sky-action-preview small {
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.7;
 }
 .sky-action-preview > strong {
@@ -455,7 +456,7 @@
 }
 .sky-preview-caption {
   text-align: center;
-  font-size: 10px;
+  font-size: 12px;
   color: #617b90;
   margin-top: 18px;
 }
@@ -478,9 +479,10 @@
 @media (max-width: 700px) {
   .intro-kicker {
     top: 12%;
-    font-size: 9px;
+    font-size: 12px;
   }
   .intro-word {
+    font-family: var(--font-geist-sans), sans-serif;
     font-size: 23vw;
   }
   .intro-title-group {
@@ -494,13 +496,13 @@
     display: block;
   }
   .intro-description {
-    font-size: 11px;
+    font-size: 12px;
   }
   .intro-click {
     margin-top: 28px;
   }
   .intro-bottom {
-    font-size: 7px;
+    font-size: 12px;
     left: 22px;
     right: 22px;
   }
@@ -528,12 +530,12 @@
     font-size: 20px;
   }
   .sky-hero-copy > small {
-    font-size: 10px;
+    font-size: 12px;
   }
   .intro-replay {
     bottom: 12px;
     left: 12px;
-    font-size: 10px;
+    font-size: 12px;
   }
 }
 @media (prefers-reduced-motion: reduce) {

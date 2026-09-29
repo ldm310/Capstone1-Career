@@ -1,4 +1,4 @@
-import { SkillsPage } from "@/components/skills/skills-page";
+import { GrowthHub } from "@/components/growth/growth-hub";
 export default function Page() {
-  return <SkillsPage />;
+  return <GrowthHub demo view="skills" />;
 }

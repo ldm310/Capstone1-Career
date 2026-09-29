@@ -8,7 +8,10 @@ export function PreferencesPanel({
 }: Pick<PanelProps, "state" | "busy" | "save">) {
   return (
     <section className="career-panel">
-      <h2>나의 준비 조건</h2>
+      <h2>어떤 직무를 준비하고 있나요?</h2>
+      <p>
+        목표 직무를 선택하세요. 지역이나 준비 일정은 나중에 입력해도 괜찮아요.
+      </p>
       <form
         onSubmit={async (e) => {
           e.preventDefault();
@@ -31,41 +34,44 @@ export function PreferencesPanel({
               <option value="data">데이터 엔지니어</option>
             </select>
           </label>
-          <label>
-            희망 지역
-            <input
-              name="region"
-              defaultValue={state.region}
-              placeholder="예: 서울 / 비우면 전체"
-            />
-          </label>
-          <label>
-            경력·준비 상황
-            <input
-              name="experience"
-              defaultValue={state.experience}
-              placeholder="예: 신입 / 백엔드 2년"
-            />
-          </label>
-          <label>
-            주당 준비 시간
-            <input
-              name="hours"
-              type="number"
-              min={1}
-              max={60}
-              defaultValue={state.hours}
-            />
-          </label>
-          <label>
-            목표 지원일
-            <input
-              name="targetDate"
-              type="date"
-              min={day()}
-              defaultValue={state.targetDate}
-            />
-          </label>
+          <details>
+            <summary>지역·준비 시간 추가하기 (선택)</summary>
+            <label>
+              희망 지역
+              <input
+                name="region"
+                defaultValue={state.region}
+                placeholder="예: 서울 / 비우면 전체"
+              />
+            </label>
+            <label>
+              경력·준비 상황
+              <input
+                name="experience"
+                defaultValue={state.experience}
+                placeholder="예: 신입 / 백엔드 2년"
+              />
+            </label>
+            <label>
+              주당 준비 시간
+              <input
+                name="hours"
+                type="number"
+                min={1}
+                max={60}
+                defaultValue={state.hours}
+              />
+            </label>
+            <label>
+              목표 지원일
+              <input
+                name="targetDate"
+                type="date"
+                min={day()}
+                defaultValue={state.targetDate}
+              />
+            </label>
+          </details>
         </div>
         <button disabled={busy}>준비 조건 저장</button>
       </form>

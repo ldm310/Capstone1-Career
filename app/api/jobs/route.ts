@@ -1,11 +1,21 @@
-import { getPublicJobs } from "@/lib/public-jobs";
+import { workplaceKey } from "@/lib/job-filters";
+import { collectedJobs } from "@/lib/server/job-feed";
+export const runtime = "nodejs";
 export async function GET(request: Request) {
   const params = new URL(request.url).searchParams;
   const offset = Number(params.get("offset") ?? 0),
     limit = Number(params.get("limit") ?? 4),
     role = params.get("role") ?? "all";
   const query = (params.get("q") ?? "").trim().toLowerCase().slice(0, 200);
+  const location = (params.get("location") || "")
+    .trim()
+    .toLowerCase()
+    .slice(0, 100);
+  const workplace = params.get("workplace") || "all";
+  const sort = params.get("sort") || "newest";
   if (
+    !["all", "remote", "hybrid", "on-site"].includes(workplace) ||
+    !["newest", "company"].includes(sort) ||
     !Number.isInteger(offset) ||
     offset < 0 ||
     offset > 10000 ||
@@ -16,11 +26,21 @@ export async function GET(request: Request) {
   )
     return Response.json({ error: "잘못된 조회 조건입니다." }, { status: 400 });
   try {
-    const feed = await getPublicJobs();
+    const feed = await collectedJobs();
     const filtered = feed.jobs.filter(
       (job) =>
         (role === "all" || job.category === role) &&
-        `${job.company} ${job.title}`.toLowerCase().includes(query),
+        (!location || job.location.toLowerCase().includes(location)) &&
+        (workplace === "all" || workplaceKey(job.workplace) === workplace) &&
+        `${job.company} ${job.title} ${(job.skills || []).join(" ")}`
+          .toLowerCase()
+          .includes(query),
+    );
+    filtered.sort((a, b) =>
+      sort === "company"
+        ? a.company.localeCompare(b.company, "ko")
+        : (Date.parse(b.postedAt || "") || 0) -
+          (Date.parse(a.postedAt || "") || 0),
     );
     return Response.json(
       {

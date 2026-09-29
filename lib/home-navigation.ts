@@ -1,0 +1,43 @@
+export const homeFeatures = [
+  {
+    id: "jobs",
+    title: "채용공고",
+    question: "지원할 곳을 찾고 있나요?",
+    detail: "공고 검색 · 저장 · 내 역량과 비교",
+    action: "공고 찾아보기",
+    href: "/jobs",
+  },
+  {
+    id: "skills",
+    title: "내 역량 확인",
+    question: "내가 가진 기술이 궁금한가요?",
+    detail: "자료 추가 · 분석 결과 · 원문 근거",
+    action: "내 자료로 시작하기",
+    href: "/my-skills",
+  },
+  {
+    id: "prepare",
+    title: "취업 준비",
+    question: "부족한 기술을 어떻게 준비할까요?",
+    detail: "단계별 과제 · 주간 계획 · 면접 준비",
+    action: "필요한 준비 보기",
+    href: "/preparation",
+  },
+  {
+    id: "applications",
+    title: "지원 관리",
+    question: "지원한 곳과 일정을 정리할까요?",
+    detail: "지원 내역 · 이력서 · 마감 일정",
+    action: "지원 기록 보기",
+    href: "/application-tracker",
+  },
+  {
+    id: "growth",
+    title: "성장 대시보드",
+    question: "얼마나 성장했는지 확인해요.",
+    detail: "획득 포인트 · 순위 · 완료한 과제",
+    action: "성장 기록 보기",
+    href: "/growth",
+  },
+] as const;
+export type HomeFeatureId = (typeof homeFeatures)[number]["id"];

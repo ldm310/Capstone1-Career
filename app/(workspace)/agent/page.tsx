@@ -1,4 +1,4 @@
-import { AgentPage } from "@/components/agent/agent-page";
+import { GrowthHub } from "@/components/growth/growth-hub";
 export default function Page() {
-  return <AgentPage />;
+  return <GrowthHub demo view="tasks" />;
 }

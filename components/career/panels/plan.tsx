@@ -123,7 +123,7 @@ export function PlanPanel({
         활동 체크만으로 검증 근거를 만들지 않습니다. 완료 후 자료를 다시 분석해
         변화를 확인하세요.
       </p>
-      <Link href="/career?tab=sources">구현한 자료 다시 분석하기 →</Link>
+      <Link href="/my-skills">구현한 자료 다시 분석하기 →</Link>
     </section>
   );
 }

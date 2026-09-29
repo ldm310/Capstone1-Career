@@ -5,9 +5,9 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-career-ui);
   --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-geist-sans);
+  --font-heading: var(--font-career-ui);
   --color-primary: var(--primary);
   --color-primary-foreground: #fff;
   --color-secondary: #f7f9f8;
@@ -53,7 +53,7 @@ body {
   margin: 0;
   background: #fff;
   color: var(--foreground);
-  font-family: var(--font-geist-sans), Arial, sans-serif;
+  font-family: var(--font-career-ui), sans-serif;
   font-size: 14px;
   -webkit-font-smoothing: antialiased;
 }
@@ -98,7 +98,7 @@ p {
 h1,
 h2,
 h3 {
-  letter-spacing: -0.035em;
+  letter-spacing: var(--tracking-heading);
 }
 svg {
   flex-shrink: 0;
@@ -130,7 +130,7 @@ a {
   align-items: center;
   gap: 10px;
   font-size: 23px;
-  letter-spacing: -1px;
+  letter-spacing: var(--tracking-heading);
   font-weight: 700;
   white-space: nowrap;
 }
@@ -194,9 +194,9 @@ a {
   border-color: #bfcec3;
 }
 .eyebrow {
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 650;
-  letter-spacing: 1.7px;
+  letter-spacing: var(--tracking-label);
   color: var(--green);
   display: flex;
   align-items: center;
@@ -280,15 +280,15 @@ a {
   border: 1px solid #e6ebe7;
   border-radius: 30px;
   padding: 7px 11px;
-  font-size: 10px;
-  letter-spacing: 1.35px;
+  font-size: 12px;
+  letter-spacing: var(--tracking-label);
   color: #5b7062;
   font-weight: 550;
 }
 .hero h1 {
   font-size: clamp(58px, 5.9vw, 79px);
   line-height: 1.03;
-  letter-spacing: -5px;
+  letter-spacing: var(--tracking-heading);
   font-weight: 530;
   margin: 23px 0 23px;
   position: relative;
@@ -306,7 +306,7 @@ a {
 }
 .hero-description {
   font-size: 17px;
-  letter-spacing: -0.4px;
+  letter-spacing: var(--tracking-heading);
   margin-bottom: 10px;
 }
 .hero-subcopy {
@@ -325,7 +325,7 @@ a {
   align-items: center;
   gap: 6px;
   margin-top: 17px;
-  font-size: 10px;
+  font-size: 12px;
   color: #656e67;
 }
 .tiny-check {
@@ -361,8 +361,8 @@ a {
   display: flex;
   align-items: center;
   gap: 7px;
-  letter-spacing: 1.6px;
-  font-size: 10px;
+  letter-spacing: var(--tracking-label);
+  font-size: 12px;
   color: #616d64;
 }
 .orbit {
@@ -404,11 +404,11 @@ a {
   gap: 7px;
 }
 .twin-node strong {
-  font-size: 11px;
-  letter-spacing: -0.2px;
+  font-size: 12px;
+  letter-spacing: var(--tracking-heading);
 }
 .twin-node > span {
-  font-size: 10px;
+  font-size: 12px;
   color: #5a7160;
 }
 .floating-card {
@@ -431,13 +431,13 @@ a {
   align-items: center;
   gap: 10px;
   padding: 14px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 550;
 }
 .float-heading small {
   display: block;
   color: #606b64;
-  font-size: 10px;
+  font-size: 12px;
   margin-top: 3px;
   font-weight: 400;
 }
@@ -488,7 +488,7 @@ a {
   align-items: center;
   gap: 8px;
   margin: 10px 0;
-  font-size: 10px;
+  font-size: 12px;
 }
 .mini-chart span {
   width: 39px;
@@ -501,7 +501,7 @@ a {
   max-width: 95px;
 }
 .mini-chart b {
-  font-size: 10px;
+  font-size: 12px;
   color: #5f6f64;
   font-weight: 500;
 }
@@ -531,13 +531,13 @@ a {
   display: flex;
   align-items: center;
   gap: 5px;
-  font-size: 10px;
+  font-size: 12px;
   color: #49755c;
 }
 .float-bottom > span:last-child {
   margin-left: auto;
   color: #656d68;
-  font-size: 10px;
+  font-size: 12px;
 }
 .gap-float {
   top: 282px;
@@ -547,8 +547,8 @@ a {
   transform: rotate(-4deg);
 }
 .gap-float .eyebrow {
-  font-size: 10px;
-  letter-spacing: 1.2px;
+  font-size: 12px;
+  letter-spacing: var(--tracking-label);
   color: #646e63;
 }
 .gap-float strong {
@@ -559,7 +559,7 @@ a {
   margin: 10px 0 6px;
 }
 .gap-float p {
-  font-size: 10px;
+  font-size: 12px;
   color: #646e67;
 }
 .gap-dashes {
@@ -588,14 +588,14 @@ a {
   border-color: #cfe3d4;
 }
 .action-float small {
-  font-size: 10px;
-  letter-spacing: 1.5px;
+  font-size: 12px;
+  letter-spacing: var(--tracking-label);
   color: #526e5c;
   display: block;
   margin-bottom: 5px;
 }
 .action-float strong {
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 550;
 }
 .action-float > svg {
@@ -606,8 +606,8 @@ a {
   position: absolute;
   bottom: 8px;
   left: 30%;
-  font-size: 10px;
-  letter-spacing: 1.8px;
+  font-size: 12px;
+  letter-spacing: var(--tracking-label);
   color: #636b64;
 }
 .source-strip {
@@ -622,9 +622,9 @@ a {
   gap: 24px;
 }
 .source-strip > span {
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.8;
-  letter-spacing: 1.25px;
+  letter-spacing: var(--tracking-label);
 }
 .source-strip strong {
   font-weight: 500;
@@ -635,7 +635,7 @@ a {
   align-items: center;
   gap: 10px;
   font-size: 19px;
-  letter-spacing: -0.6px;
+  letter-spacing: var(--tracking-heading);
   font-weight: 550;
   color: #5f6b62;
 }
@@ -651,7 +651,7 @@ a {
   justify-content: center;
 }
 .source-file {
-  font-size: 10px;
+  font-size: 12px;
   border: 1px solid #8e9c92;
   border-radius: 3px;
   padding: 4px;
@@ -671,7 +671,7 @@ a {
 .section-heading h2 {
   font-size: 44px;
   font-weight: 500;
-  letter-spacing: -2px;
+  letter-spacing: var(--tracking-heading);
   line-height: 1.13;
   margin: 17px 0;
 }
@@ -749,11 +749,11 @@ a {
   height: 34px;
   font-size: 18px;
   font-weight: 750;
-  letter-spacing: -1px;
+  letter-spacing: var(--tracking-heading);
   border-radius: 8px;
 }
 .job-card-top small {
-  font-size: 10px;
+  font-size: 12px;
   display: flex;
   align-items: center;
   gap: 2px;
@@ -776,7 +776,7 @@ a {
   gap: 6px;
 }
 .tag {
-  font-size: 10px;
+  font-size: 12px;
   padding: 4px 8px;
   border: 1px solid #e5ebe6;
   border-radius: 5px;
@@ -785,7 +785,7 @@ a {
   line-height: 1.3;
 }
 .job-card-3d .tag {
-  font-size: 10px;
+  font-size: 12px;
   padding: 4px 7px;
 }
 .job-card-3d:hover .tag {
@@ -800,7 +800,7 @@ a {
   margin-top: 21px;
   padding-top: 12px;
   color: #636b64;
-  font-size: 10px;
+  font-size: 12px;
 }
 .job-position-0 {
   left: 30%;
@@ -846,7 +846,7 @@ a {
   gap: 30px;
   justify-content: center;
   align-items: center;
-  font-size: 10px;
+  font-size: 12px;
   color: #606b64;
   margin-top: 22px;
 }
@@ -858,7 +858,7 @@ a {
   border: 0;
   background: none;
   color: #5c7063;
-  font-size: 10px;
+  font-size: 12px;
 }
 .market-explore {
   display: flex;
@@ -891,7 +891,7 @@ a {
   margin-bottom: 26px;
 }
 .step-top > span {
-  font-size: 10px;
+  font-size: 12px;
   font-family: var(--font-geist-mono);
   color: #616e64;
 }
@@ -913,7 +913,7 @@ a {
   align-items: center;
   gap: 7px;
   color: #5c6e60;
-  font-size: 10px;
+  font-size: 12px;
   margin-top: 28px;
 }
 .features-section {
@@ -930,7 +930,7 @@ a {
   line-height: 1.15;
   font-weight: 500;
   margin: 20px 0;
-  letter-spacing: -1.8px;
+  letter-spacing: var(--tracking-heading);
 }
 .feature-copy p {
   font-size: 12px;
@@ -960,7 +960,7 @@ a {
   font-weight: 550;
 }
 .feature-evidence-row p {
-  font-size: 10px;
+  font-size: 12px;
   color: #656e69;
   margin-top: 4px;
 }
@@ -969,7 +969,7 @@ a {
 }
 .source-label {
   margin-left: auto;
-  font-size: 10px;
+  font-size: 12px;
   color: #606d64;
 }
 .closing-cta {
@@ -985,7 +985,7 @@ a {
 .closing-cta h2 {
   font-size: 42px;
   font-weight: 500;
-  letter-spacing: -2px;
+  letter-spacing: var(--tracking-heading);
   line-height: 1.15;
   margin: 24px 0 16px;
 }
@@ -997,7 +997,7 @@ a {
 .closing-note {
   display: block;
   color: #626e65;
-  font-size: 10px;
+  font-size: 12px;
   margin-top: 15px;
 }
 .site-footer {
@@ -1008,7 +1008,7 @@ a {
   justify-content: space-between;
   align-items: center;
   color: #606b64;
-  font-size: 10px;
+  font-size: 12px;
 }
 .site-footer .brand {
   font-size: 18px;
@@ -1057,7 +1057,7 @@ a {
   border-radius: 8px;
   margin: 5px 5px 29px;
   padding: 11px 9px;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 550;
 }
 .workspace-avatar {
@@ -1072,14 +1072,14 @@ a {
 }
 .workspace-label small {
   display: block;
-  font-size: 10px;
+  font-size: 12px;
   color: #616b64;
   margin-top: 2px;
   font-weight: 400;
 }
 .nav-caption {
-  font-size: 10px;
-  letter-spacing: 1.4px;
+  font-size: 12px;
+  letter-spacing: var(--tracking-label);
   color: #626b64;
   margin: 0 13px 10px;
 }
@@ -1105,7 +1105,7 @@ a {
 }
 .mini-badge {
   margin-left: auto;
-  font-size: 10px;
+  font-size: 12px;
   padding: 2px 4px;
   border: 1px solid #d4e7da;
   border-radius: 3px;
@@ -1125,14 +1125,14 @@ a {
 }
 .sidebar-tip strong {
   display: block;
-  font-size: 11px;
+  font-size: 12px;
   color: #516f5b;
   line-height: 1.5;
   margin: 9px 0 6px;
-  letter-spacing: -0.1px;
+  letter-spacing: var(--tracking-heading);
 }
 .sidebar-tip p {
-  font-size: 10px;
+  font-size: 12px;
   color: #626d64;
   line-height: 1.7;
 }
@@ -1140,7 +1140,7 @@ a {
   display: flex;
   align-items: center;
   gap: 4px;
-  font-size: 10px;
+  font-size: 12px;
   color: #3b7850;
   margin-top: 15px;
 }
@@ -1161,15 +1161,15 @@ a {
   place-items: center;
   border: 1px solid #dce7de;
   border-radius: 50%;
-  font-size: 11px;
+  font-size: 12px;
 }
 .profile-link strong {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 550;
 }
 .profile-link small {
   display: block;
-  font-size: 10px;
+  font-size: 12px;
   color: #636a65;
   margin-top: 2px;
 }
@@ -1196,7 +1196,7 @@ a {
   display: flex;
   align-items: center;
   gap: 12px;
-  font-size: 10px;
+  font-size: 12px;
   color: #626964;
 }
 .breadcrumb strong {
@@ -1207,7 +1207,7 @@ a {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 10px;
+  font-size: 12px;
   color: #5a6e61;
   border: 1px solid #e1e9e3;
   background: #fbfdfb;
@@ -1236,18 +1236,18 @@ a {
   margin-bottom: 28px;
 }
 .page-heading .eyebrow {
-  font-size: 10px;
-  letter-spacing: 1.35px;
+  font-size: 12px;
+  letter-spacing: var(--tracking-label);
   margin-bottom: 12px;
 }
 .page-heading h1 {
   font-size: 29px;
   line-height: 1.25;
   font-weight: 520;
-  letter-spacing: -1px;
+  letter-spacing: var(--tracking-heading);
 }
 .page-heading p {
-  font-size: 11px;
+  font-size: 12px;
   color: #656e69;
   margin-top: 10px;
   line-height: 1.7;
@@ -1273,7 +1273,7 @@ a {
   border: 1px solid #dfe7e1;
   border-radius: 7px;
   padding: 10px 33px 10px 12px;
-  font-size: 10px;
+  font-size: 12px;
   color: #5e7065;
   max-width: 100%;
 }
@@ -1292,7 +1292,7 @@ a {
   justify-content: space-between;
   gap: 10px;
   padding: 22px 36px;
-  font-size: 10px;
+  font-size: 12px;
   color: #636c65;
   border-top: 1px solid #ecf0ed;
 }
@@ -1314,10 +1314,10 @@ a {
 .panel-header h2 {
   font-size: 14px;
   font-weight: 550;
-  letter-spacing: -0.25px;
+  letter-spacing: var(--tracking-heading);
 }
 .panel-header p {
-  font-size: 10px;
+  font-size: 12px;
   color: #646c65;
   margin-top: 5px;
   line-height: 1.6;
@@ -1326,7 +1326,7 @@ a {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  font-size: 10px;
+  font-size: 12px;
   color: #587260;
   white-space: nowrap;
 }
@@ -1354,12 +1354,12 @@ a {
   gap: 14px;
 }
 .small-copy {
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.8;
   color: #646e69;
 }
 .micro-copy {
-  font-size: 10px;
+  font-size: 12px;
   color: #606a64;
   line-height: 1.7;
 }
@@ -1371,13 +1371,13 @@ a {
   border: 1px solid #e1ece4;
   border-radius: 8px;
   padding: 12px 15px;
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.8;
   color: #5d7063;
 }
 .demo-note {
   color: #616d65;
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.8;
   margin-top: 18px;
   display: flex;
@@ -1395,7 +1395,7 @@ a {
   gap: 5px;
   white-space: nowrap;
   padding: 4px 7px;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 450;
   border-radius: 5px;
   line-height: 1.4;
@@ -1437,7 +1437,7 @@ a {
   padding: 7px 12px;
   border-radius: 5px;
   color: #606e64;
-  font-size: 10px;
+  font-size: 12px;
 }
 .pill-tabs button[aria-pressed="true"] {
   background: #fff;
@@ -1459,7 +1459,7 @@ a {
   outline: none;
   min-width: 0;
   width: 100%;
-  font-size: 11px;
+  font-size: 12px;
   color: #506558;
   background: none;
 }
@@ -1479,7 +1479,7 @@ a {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
   color: #536b5b;
 }
@@ -1489,7 +1489,7 @@ a {
 }
 .form-error {
   color: #a84c45;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.6;
 }
 .toast {
@@ -1860,7 +1860,7 @@ a {
   }
   .header-actions .cta {
     padding: 7px 10px;
-    font-size: 10px;
+    font-size: 12px;
   }
   .hero {
     padding-top: 46px;
@@ -1868,7 +1868,7 @@ a {
   }
   .hero h1 {
     font-size: 56px;
-    letter-spacing: -3.7px;
+    letter-spacing: var(--tracking-heading);
   }
   .hero h1 > span:first-of-type {
     margin-left: 0;
@@ -1878,23 +1878,23 @@ a {
     font-size: 16px;
   }
   .hero-subcopy {
-    font-size: 11px;
+    font-size: 12px;
     max-width: 320px;
     margin: auto;
   }
   .hero-eyebrow {
-    font-size: 10px;
-    letter-spacing: 0.85px;
+    font-size: 12px;
+    letter-spacing: var(--tracking-label);
   }
   .hero-ctas {
     gap: 8px;
   }
   .hero-ctas .cta {
     padding: 10px 13px;
-    font-size: 11px;
+    font-size: 12px;
   }
   .hero-footnote {
-    font-size: 10px;
+    font-size: 12px;
   }
   .twin-visual {
     height: 418px;
@@ -1902,7 +1902,7 @@ a {
   }
   .visual-caption {
     left: 12%;
-    font-size: 10px;
+    font-size: 12px;
   }
   .market-float {
     width: 175px;
@@ -1924,7 +1924,7 @@ a {
   .float-heading {
     padding: 11px;
     gap: 7px;
-    font-size: 10px;
+    font-size: 12px;
   }
   .twin-node {
     width: 120px;
@@ -1936,10 +1936,10 @@ a {
     height: 45px;
   }
   .twin-node strong {
-    font-size: 10px;
+    font-size: 12px;
   }
   .twin-node > span {
-    font-size: 10px;
+    font-size: 12px;
   }
   .orbit-one {
     width: 230px;
@@ -1955,7 +1955,7 @@ a {
     top: 126px;
   }
   .float-bottom {
-    font-size: 10px;
+    font-size: 12px;
     padding: 8px;
   }
   .evidence-float .tags {
@@ -1971,7 +1971,7 @@ a {
     font-size: 14px;
   }
   .gap-float p {
-    font-size: 10px;
+    font-size: 12px;
   }
   .twin-visual .action-float {
     width: 204px;
@@ -1981,7 +1981,7 @@ a {
     gap: 7px;
   }
   .action-float strong {
-    font-size: 10px;
+    font-size: 12px;
   }
   .action-float .icon-tile {
     width: 28px;
@@ -1999,7 +1999,7 @@ a {
     gap: 21px;
   }
   .source-strip > div {
-    font-size: 11px;
+    font-size: 12px;
     gap: 6px;
   }
   .source-strip svg {
@@ -2015,10 +2015,10 @@ a {
   }
   .section-heading h2 {
     font-size: 34px;
-    letter-spacing: -1.5px;
+    letter-spacing: var(--tracking-heading);
   }
   .section-heading p {
-    font-size: 10px;
+    font-size: 12px;
     line-height: 1.8;
   }
   .jobs-stage {
@@ -2061,15 +2061,15 @@ a {
     margin: 17px 0;
   }
   .job-card-3d .tag {
-    font-size: 10px;
+    font-size: 12px;
   }
   .job-card-top small,
   .job-card-footer {
-    font-size: 10px;
+    font-size: 12px;
   }
   .jobs-caption {
     gap: 10px;
-    font-size: 10px;
+    font-size: 12px;
   }
   .jobs-caption .text-button {
     display: none;
@@ -2117,13 +2117,13 @@ a {
     font-size: 34px;
   }
   .closing-cta p {
-    font-size: 10px;
+    font-size: 12px;
   }
   .site-footer {
     gap: 18px;
     flex-wrap: wrap;
     padding-bottom: 25px;
-    font-size: 10px;
+    font-size: 12px;
   }
   .site-footer > span {
     order: 3;
@@ -2152,10 +2152,10 @@ a {
     justify-content: flex-start;
   }
   .page-heading p {
-    font-size: 10px;
+    font-size: 12px;
   }
   .workspace-footer {
-    font-size: 10px;
+    font-size: 12px;
     padding-inline: 17px;
   }
   .workspace-footer > span {
@@ -2172,10 +2172,10 @@ a {
   }
   .pill-tabs button {
     padding: 7px 9px;
-    font-size: 10px;
+    font-size: 12px;
   }
   .toast {
-    font-size: 10px;
+    font-size: 12px;
     width: max-content;
     max-width: 90vw;
   }
@@ -2236,7 +2236,7 @@ a {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 10px;
+  font-size: 12px;
   color: #646c65;
   white-space: nowrap;
   flex: 1;
@@ -2251,7 +2251,7 @@ a {
   border: 1px solid #dfe8e1;
   display: grid;
   place-items: center;
-  font-size: 10px;
+  font-size: 12px;
 }
 .onboarding-progress > div.current {
   color: #497458;
@@ -2274,19 +2274,19 @@ a {
 }
 .onboarding-title .eyebrow {
   justify-content: center;
-  font-size: 10px;
+  font-size: 12px;
 }
 .onboarding-title h1,
 .analysis-onboarding h1 {
   font-size: 35px;
   line-height: 1.2;
-  letter-spacing: -1.3px;
+  letter-spacing: var(--tracking-heading);
   font-weight: 520;
   margin: 15px 0;
 }
 .onboarding-title p,
 .analysis-onboarding > p {
-  font-size: 11px;
+  font-size: 12px;
   color: #606d64;
   line-height: 1.9;
 }
@@ -2319,7 +2319,7 @@ a {
   display: block;
 }
 .role-option small {
-  font-size: 10px;
+  font-size: 12px;
   color: #656e68;
   display: block;
   margin-top: 6px;
@@ -2363,7 +2363,7 @@ a {
   display: block;
   background: transparent;
   border: 0;
-  font-size: 10px;
+  font-size: 12px;
   color: #606e64;
   margin: 25px auto 0;
 }
@@ -2399,13 +2399,13 @@ a {
   font-weight: 550;
 }
 .connector-copy p {
-  font-size: 10px;
+  font-size: 12px;
   margin-top: 5px;
   color: #606c64;
 }
 .connector-copy small {
   display: block;
-  font-size: 10px;
+  font-size: 12px;
   margin-top: 6px;
   color: #3b764d;
   overflow-wrap: anywhere;
@@ -2415,7 +2415,7 @@ a {
   border-color: #d6e8db;
 }
 .source-connector button {
-  font-size: 10px;
+  font-size: 12px;
 }
 .upload-button {
   display: flex;
@@ -2424,7 +2424,7 @@ a {
   border: 1px solid #dfe7e1;
   border-radius: 7px;
   padding: 8px 10px;
-  font-size: 10px;
+  font-size: 12px;
   cursor: pointer;
 }
 .upload-button:has(+ input:focus-visible) {
@@ -2441,11 +2441,11 @@ a {
   align-items: center;
   gap: 5px;
   color: #38764b;
-  font-size: 10px;
+  font-size: 12px;
 }
 .onboarding-footer {
   text-align: center;
-  font-size: 10px;
+  font-size: 12px;
   color: #626e64;
   padding: 30px;
 }
@@ -2481,11 +2481,11 @@ a {
 }
 .analysis-sources > div {
   margin-bottom: 21px;
-  font-size: 11px;
+  font-size: 12px;
   color: #587160;
 }
 .analysis-sources small {
-  font-size: 10px;
+  font-size: 12px;
   color: #626e66;
   margin-left: 6px;
 }
@@ -2506,7 +2506,7 @@ a {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 10px;
+  font-size: 12px;
   color: #636c65;
   margin-top: -8px;
   margin-bottom: 23px;
@@ -2533,7 +2533,7 @@ a {
   min-width: 0;
 }
 .summary-card .row-between {
-  font-size: 10px;
+  font-size: 12px;
   color: #5e6c61;
 }
 .summary-card .row-between > span {
@@ -2547,19 +2547,19 @@ a {
 .summary-card > strong {
   display: block;
   font-size: 37px;
-  letter-spacing: -1.5px;
+  letter-spacing: var(--tracking-heading);
   font-weight: 500;
   margin: 17px 0 9px;
   line-height: 1;
 }
 .summary-card > strong > span {
   font-size: 25px;
-  letter-spacing: -0.5px;
+  letter-spacing: var(--tracking-heading);
   margin-left: 2px;
   color: #5c6d61;
 }
 .summary-card p {
-  font-size: 10px;
+  font-size: 12px;
   color: #606b64;
   line-height: 1.7;
 }
@@ -2574,7 +2574,7 @@ a {
   min-width: 0;
 }
 .chart-footnote {
-  font-size: 10px;
+  font-size: 12px;
   text-align: center;
   color: #626e66;
   margin-top: 13px;
@@ -2583,7 +2583,7 @@ a {
   display: flex;
   justify-content: center;
   gap: 17px;
-  font-size: 10px;
+  font-size: 12px;
   color: #5c6e61;
   margin-top: 12px;
 }
@@ -2608,7 +2608,7 @@ a {
   border: 0;
 }
 .evidence-overview > a > strong {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
 }
 .evidence-overview .evidence-badge {
@@ -2625,13 +2625,13 @@ a {
   border: 1px solid #e8eee9;
   display: grid;
   place-items: center;
-  font-size: 10px;
+  font-size: 12px;
   color: #586c60;
   flex-shrink: 0;
 }
 .subtle-badge {
   display: inline-flex;
-  font-size: 10px;
+  font-size: 12px;
   color: #5d6c64;
   border: 1px solid #e6ece7;
   border-radius: 5px;
@@ -2650,7 +2650,7 @@ a {
   border: 0;
 }
 .gap-number {
-  font-size: 10px;
+  font-size: 12px;
   color: #636d64;
   font-family: var(--font-geist-mono);
 }
@@ -2662,7 +2662,7 @@ a {
   display: flex;
   gap: 5px;
   align-items: center;
-  font-size: 10px;
+  font-size: 12px;
   color: #606b62;
   margin-top: 6px;
 }
@@ -2676,7 +2676,7 @@ a {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 10px;
+  font-size: 12px;
   color: #5e6b60;
   gap: 10px;
   margin-top: 20px;
@@ -2701,11 +2701,11 @@ a {
   display: flex;
   gap: 7px;
   align-items: center;
-  font-size: 10px;
-  letter-spacing: 1.1px;
+  font-size: 12px;
+  letter-spacing: var(--tracking-label);
 }
 .action-card-eyebrow .action-duration {
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: 0;
   color: #586e5f;
 }
@@ -2713,21 +2713,21 @@ a {
   font-size: 25px;
   font-weight: 500;
   line-height: 1.25;
-  letter-spacing: -0.8px;
+  letter-spacing: var(--tracking-heading);
   margin: 24px 0 13px;
   max-width: 470px;
   color: #345d41;
 }
 .action-card > p {
-  font-size: 11px;
+  font-size: 12px;
   color: #5c7162;
   line-height: 1.9;
   max-width: 550px;
   word-break: keep-all;
 }
 .expected-label {
-  font-size: 10px;
-  letter-spacing: 1.25px;
+  font-size: 12px;
+  letter-spacing: var(--tracking-label);
   color: #586e60;
   margin: 24px 0 10px;
 }
@@ -2735,7 +2735,7 @@ a {
   background: #ffffffa0;
   color: #497458;
   border-color: #d8e9de;
-  font-size: 10px;
+  font-size: 12px;
 }
 .action-card-bottom {
   display: flex;
@@ -2748,11 +2748,11 @@ a {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 10px;
+  font-size: 12px;
   color: #556d5c;
 }
 .action-card-bottom button {
-  font-size: 10px;
+  font-size: 12px;
   padding: 9px 13px;
   min-height: 35px;
 }
@@ -2768,7 +2768,7 @@ a {
   display: none;
 }
 .action-card > p.micro-copy {
-  font-size: 10px;
+  font-size: 12px;
   margin-top: 16px;
 }
 .dashboard-bottom-banner {
@@ -2786,13 +2786,13 @@ a {
   color: #587160;
 }
 .dashboard-bottom-banner p {
-  font-size: 10px;
+  font-size: 12px;
   color: #626e66;
   margin-top: 5px;
 }
 .dashboard-bottom-banner .cta {
   margin-left: auto;
-  font-size: 10px;
+  font-size: 12px;
   min-height: 35px;
   padding: 8px 13px;
 }
@@ -2804,7 +2804,7 @@ a {
   gap: 15px;
   padding: 16px 0 24px;
   color: #5d6b63;
-  font-size: 10px;
+  font-size: 12px;
 }
 .market-context > span:first-child {
   display: flex;
@@ -2832,7 +2832,7 @@ a {
 }
 .trend-stats > div > div > span {
   color: #5c6f63;
-  font-size: 11px;
+  font-size: 12px;
   display: block;
 }
 .trend-stats strong {
@@ -2841,7 +2841,7 @@ a {
   font-size: 29px;
   margin-top: 10px;
   color: #437353;
-  letter-spacing: -1px;
+  letter-spacing: var(--tracking-heading);
 }
 .trend-stats strong small {
   font-size: 13px;
@@ -2856,7 +2856,7 @@ a {
   color: #4f7159;
 }
 .trend-spark small {
-  font-size: 10px;
+  font-size: 12px;
   color: #626d66;
 }
 .skill-relationships {
@@ -2884,7 +2884,7 @@ a {
   border: 1px solid #e3ebe5;
   background: #fcfdfc;
   border-radius: 7px;
-  font-size: 10px;
+  font-size: 12px;
   color: #5c6b60;
   min-width: 83px;
 }
@@ -2906,7 +2906,7 @@ a {
   font-weight: 500;
 }
 .section-row-title > span {
-  font-size: 10px;
+  font-size: 12px;
   color: #626c64;
 }
 .market-job-grid {
@@ -2927,7 +2927,7 @@ a {
 .company-label {
   font-weight: 700;
   font-size: 15px;
-  letter-spacing: -0.5px;
+  letter-spacing: var(--tracking-heading);
 }
 .market-job-card .row-between > svg {
   color: #646e68;
@@ -2938,7 +2938,7 @@ a {
   margin: 18px 0 7px;
 }
 .market-job-card p {
-  font-size: 10px;
+  font-size: 12px;
   color: #636e66;
   margin-bottom: 18px;
 }
@@ -2993,10 +2993,10 @@ a {
 .skill-card-heading h3 {
   font-size: 16px;
   font-weight: 550;
-  letter-spacing: -0.3px;
+  letter-spacing: var(--tracking-heading);
 }
 .skill-card-heading small {
-  font-size: 10px;
+  font-size: 12px;
   color: #616c64;
   display: block;
   margin-top: 4px;
@@ -3012,7 +3012,7 @@ a {
   margin-top: 10px;
 }
 .evidence-source .icon-inline {
-  font-size: 10px;
+  font-size: 12px;
   color: #586d60;
   min-width: 0;
   overflow-wrap: anywhere;
@@ -3022,16 +3022,16 @@ a {
   min-width: 0;
 }
 .evidence-kind {
-  font-size: 10px;
+  font-size: 12px;
   text-transform: uppercase;
-  letter-spacing: 0.7px;
+  letter-spacing: var(--tracking-label);
   color: #606a63;
 }
 .evidence-source ul {
   padding-left: 25px;
   margin: 11px 0 13px;
   color: #606f66;
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.9;
   list-style: disc;
 }
@@ -3039,7 +3039,7 @@ a {
   display: flex;
   justify-content: space-between;
   gap: 8px;
-  font-size: 10px;
+  font-size: 12px;
   color: #616d64;
   border-top: 1px solid #e8eee9;
   padding-top: 10px;
@@ -3054,7 +3054,7 @@ a {
   display: flex;
   align-items: center;
   gap: 7px;
-  font-size: 10px;
+  font-size: 12px;
   color: #786942;
   background: #fcf9f0;
   border-radius: 6px;
@@ -3064,7 +3064,7 @@ a {
 .add-evidence-button {
   width: 100%;
   margin-top: 14px;
-  font-size: 10px !important;
+  font-size: 12px !important;
   color: #576e5f !important;
 }
 .expand-evidence {
@@ -3072,7 +3072,7 @@ a {
   align-items: center;
   gap: 5px;
   justify-content: center;
-  font-size: 10px;
+  font-size: 12px;
   color: #5c6e62;
   width: 100%;
   border: 0;
@@ -3101,13 +3101,13 @@ a {
   gap: 13px;
 }
 .priority-title .eyebrow {
-  font-size: 10px;
-  letter-spacing: 1.3px;
+  font-size: 12px;
+  letter-spacing: var(--tracking-label);
 }
 .priority-title h2 {
   font-size: 24px;
   font-weight: 500;
-  letter-spacing: -0.7px;
+  letter-spacing: var(--tracking-heading);
   margin-top: 6px;
 }
 .priority-title .subtle-badge {
@@ -3122,13 +3122,13 @@ a {
   gap: 15px;
 }
 .priority-facts small {
-  font-size: 10px;
-  letter-spacing: 1px;
+  font-size: 12px;
+  letter-spacing: var(--tracking-label);
   color: #616c65;
   display: block;
 }
 .priority-facts strong {
-  font-size: 11px;
+  font-size: 12px;
   color: #577060;
   display: flex;
   align-items: center;
@@ -3139,7 +3139,7 @@ a {
 }
 .priority-facts strong > span {
   display: block;
-  font-size: 10px;
+  font-size: 12px;
   color: #5e6b60;
   font-weight: 400;
 }
@@ -3163,7 +3163,7 @@ a {
   display: flex;
   align-items: center;
   gap: 11px;
-  font-size: 10px;
+  font-size: 12px;
   color: #5d6b62;
   position: relative;
 }
@@ -3174,7 +3174,7 @@ a {
   place-items: center;
   border: 1px solid #dfeae3;
   border-radius: 50%;
-  font-size: 10px;
+  font-size: 12px;
   color: #54715c;
   background: #f7fbf8;
   z-index: 1;
@@ -3199,19 +3199,19 @@ a {
   margin: auto;
 }
 .resource-placeholder h3 {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
   color: #576d5e;
   margin: 14px 0 9px;
 }
 .resource-placeholder p {
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.9;
   word-break: keep-all;
 }
 .resource-placeholder > span {
   display: block;
-  font-size: 10px;
+  font-size: 12px;
   margin-top: 17px;
   color: #656e68;
 }
@@ -3219,7 +3219,7 @@ a {
   text-align: center;
   font-size: 12px;
   line-height: 1.9;
-  letter-spacing: -0.3px;
+  letter-spacing: var(--tracking-heading);
   color: #606e64;
   padding: 8px;
 }
@@ -3234,7 +3234,7 @@ a {
   display: flex;
   align-items: center;
   gap: 9px;
-  font-size: 10px;
+  font-size: 12px;
   color: #586f61;
 }
 .action-steps li > span {
@@ -3244,7 +3244,7 @@ a {
   border-radius: 50%;
   display: grid;
   place-items: center;
-  font-size: 10px;
+  font-size: 12px;
   color: #4c7058;
   flex-shrink: 0;
 }
@@ -3260,7 +3260,7 @@ a {
   align-items: center;
   gap: 6px;
   color: #3f7751;
-  font-size: 10px;
+  font-size: 12px;
 }
 .completed-action {
   display: flex;
@@ -3274,12 +3274,12 @@ a {
   border: 0;
 }
 .completed-action strong {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
   color: #567260;
 }
 .completed-action p {
-  font-size: 10px;
+  font-size: 12px;
   color: #626f67;
   margin-top: 6px;
 }
@@ -3290,7 +3290,7 @@ a {
   padding: 25px 0 5px;
 }
 .agent-chat > .eyebrow {
-  font-size: 10px;
+  font-size: 12px;
   margin-bottom: 20px;
   color: #586e60;
 }
@@ -3319,7 +3319,7 @@ a {
 .agent-chat > small {
   display: block;
   text-align: center;
-  font-size: 10px;
+  font-size: 12px;
   color: #606b64;
   margin-top: 10px;
 }
@@ -3329,7 +3329,7 @@ a {
   gap: 15px;
 }
 .chat-question {
-  font-size: 11px;
+  font-size: 12px;
   text-align: right;
   background: #f0f5f1;
   padding: 11px 15px;
@@ -3342,7 +3342,7 @@ a {
   align-items: flex-start;
   gap: 10px;
   color: #5e6e64;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.9;
   padding: 17px 7px 23px;
   overflow-wrap: anywhere;
@@ -3372,12 +3372,12 @@ a {
 .analyzer-hero h2 {
   font-size: 27px;
   font-weight: 500;
-  letter-spacing: -0.8px;
+  letter-spacing: var(--tracking-heading);
   margin: 21px 0 11px;
 }
 .analyzer-hero > p {
   color: #636d66;
-  font-size: 11px;
+  font-size: 12px;
 }
 .analyzer-input {
   display: flex;
@@ -3402,13 +3402,13 @@ a {
   min-width: 0;
   border: 0;
   outline: none;
-  font-size: 11px;
+  font-size: 12px;
   color: #566e60;
 }
 .analyzer-input button {
   height: 38px;
   padding: 8px 15px;
-  font-size: 11px;
+  font-size: 12px;
 }
 .try-companies {
   display: flex;
@@ -3419,9 +3419,9 @@ a {
   flex-wrap: wrap;
 }
 .try-companies > span {
-  font-size: 10px;
+  font-size: 12px;
   color: #626e66;
-  letter-spacing: 0.9px;
+  letter-spacing: var(--tracking-label);
   margin-right: 4px;
 }
 .try-companies button {
@@ -3431,12 +3431,12 @@ a {
   border: 1px solid #e3ece6;
   border-radius: 5px;
   padding: 5px 8px;
-  font-size: 10px;
+  font-size: 12px;
   background: #fcfefc;
   color: #586c60;
 }
 .analyzer-hero > p.analyzer-disclaimer {
-  font-size: 10px;
+  font-size: 12px;
   color: #646e67;
   margin-top: 20px;
   line-height: 1.8;
@@ -3462,13 +3462,13 @@ a {
 .analyzer-empty strong {
   display: block;
   font-size: 12px;
-  letter-spacing: -0.2px;
+  letter-spacing: var(--tracking-heading);
   color: #566d5f;
   font-weight: 500;
   margin: 17px 0 7px;
 }
 .analyzer-empty p {
-  font-size: 10px;
+  font-size: 12px;
   color: #606c64;
 }
 .analyzer-empty > svg {
@@ -3488,7 +3488,7 @@ a {
   font-weight: 500;
 }
 .analysis-loading p {
-  font-size: 11px;
+  font-size: 12px;
 }
 .analysis-result {
   margin-top: 28px;
@@ -3511,7 +3511,7 @@ a {
   font-weight: 700;
 }
 .analyzed-job > div > span {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 550;
   display: flex;
   align-items: center;
@@ -3524,7 +3524,7 @@ a {
   margin: 8px 0;
 }
 .analyzed-job p {
-  font-size: 10px;
+  font-size: 12px;
   color: #606e65;
 }
 .analyzed-job-actions {
@@ -3535,14 +3535,14 @@ a {
   margin-left: auto;
 }
 .analyzed-job-actions button {
-  font-size: 10px;
+  font-size: 12px;
   color: #586f60;
 }
 .comparison-head {
   display: flex;
   justify-content: space-between;
-  font-size: 10px;
-  letter-spacing: 1px;
+  font-size: 12px;
+  letter-spacing: var(--tracking-label);
   color: #606e66;
   padding: 6px 0 15px;
   border-bottom: 1px solid #e8f0eb;
@@ -3578,7 +3578,7 @@ a {
   display: flex;
   align-items: flex-start;
   gap: 9px;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.6;
   color: #5c6f64;
 }
@@ -3615,7 +3615,7 @@ a {
 }
 .application-summary > div > span {
   grid-column: 2;
-  font-size: 10px;
+  font-size: 12px;
   color: #606e65;
   margin-top: 9px;
 }
@@ -3632,7 +3632,7 @@ a {
   gap: 3px;
 }
 .applications-toolbar .pill-tabs button {
-  font-size: 10px;
+  font-size: 12px;
   padding: 7px 9px;
 }
 .applications-toolbar .pill-tabs button[aria-pressed="true"] {
@@ -3653,16 +3653,16 @@ a {
   white-space: nowrap;
 }
 .application-table th {
-  font-size: 10px;
+  font-size: 12px;
   color: #606c60;
   font-weight: 500;
-  letter-spacing: 1px;
+  letter-spacing: var(--tracking-label);
   padding: 17px 12px;
   border-bottom: 1px solid #e5eee8;
   background: #fbfdfb;
 }
 .application-table td {
-  font-size: 10px;
+  font-size: 12px;
   color: #606c64;
   padding: 22px 12px;
   border-bottom: 1px solid #e8f0eb;
@@ -3700,7 +3700,7 @@ a {
 }
 .application-company small {
   display: block;
-  font-size: 10px;
+  font-size: 12px;
   color: #606a64;
   margin-top: 5px;
 }
@@ -3708,7 +3708,7 @@ a {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  font-size: 10px;
+  font-size: 12px;
   border: 1px solid #e2ece6;
   border-radius: 4px;
   padding: 4px 7px;
@@ -3722,7 +3722,7 @@ a {
   background: #f1f5f2;
   color: #606d64;
   padding: 5px 8px;
-  font-size: 10px;
+  font-size: 12px;
 }
 .stage-badge i {
   width: 4px;
@@ -3750,7 +3750,7 @@ a {
   display: flex;
   justify-content: space-between;
   gap: 20px;
-  font-size: 10px;
+  font-size: 12px;
   color: #616c64;
   padding-top: 22px;
 }
@@ -3772,12 +3772,12 @@ a {
   padding: 10px 0 8px;
 }
 .drawer-heading .eyebrow {
-  font-size: 10px;
+  font-size: 12px;
   margin-bottom: 22px;
 }
 .drawer-heading [data-slot="dialog-title"] {
   font-size: 30px;
-  letter-spacing: -1px;
+  letter-spacing: var(--tracking-heading);
   margin-bottom: 10px;
 }
 .drawer-section-title {
@@ -3831,17 +3831,17 @@ a {
   padding-top: 3px;
 }
 .application-timeline strong {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
   color: #546e5d;
 }
 .application-timeline time {
   float: right;
-  font-size: 10px;
+  font-size: 12px;
   color: #636e67;
 }
 .application-timeline p {
-  font-size: 10px;
+  font-size: 12px;
   color: #5f6b63;
   margin-top: 5px;
   line-height: 1.7;
@@ -3850,7 +3850,7 @@ a {
   list-style: disc;
   padding-left: 17px;
   color: #5f6f65;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.8;
 }
 .application-drawer > .cta {
@@ -3893,23 +3893,23 @@ a {
     gap: 13px;
   }
   .summary-card .row-between {
-    font-size: 10px;
+    font-size: 12px;
   }
   .summary-card p {
-    font-size: 10px;
+    font-size: 12px;
   }
   .skills-toolbar {
     align-items: flex-start;
   }
   .skills-toolbar .pill-tabs button {
     padding: 7px 9px;
-    font-size: 10px;
+    font-size: 12px;
   }
   .skills-toolbar .search-input {
     max-width: 155px;
   }
   .evidence-badge {
-    font-size: 10px;
+    font-size: 12px;
     padding: 4px 6px;
   }
   .evidence-kind {
@@ -3939,10 +3939,10 @@ a {
     gap: 9px;
   }
   .priority-facts small {
-    font-size: 10px;
+    font-size: 12px;
   }
   .priority-facts strong {
-    font-size: 10px;
+    font-size: 12px;
   }
 }
 @media (max-width: 800px) {
@@ -3971,7 +3971,7 @@ a {
     padding-inline: 22px;
   }
   .analyzed-job-actions button {
-    font-size: 10px;
+    font-size: 12px;
   }
 }
 @media (max-width: 640px) {
@@ -4006,13 +4006,13 @@ a {
     flex: 1;
   }
   .priority-facts small {
-    font-size: 10px;
+    font-size: 12px;
   }
   .priority-facts strong {
-    font-size: 11px;
+    font-size: 12px;
   }
   .market-context .micro-copy {
-    font-size: 10px;
+    font-size: 12px;
   }
   .analyzed-job {
     flex-wrap: wrap;
@@ -4026,7 +4026,7 @@ a {
     margin-top: 10px;
   }
   .summary-card p {
-    font-size: 10px;
+    font-size: 12px;
   }
   .settings-profile {
     grid-template-columns: 1fr;
@@ -4046,13 +4046,13 @@ a {
     margin-bottom: 42px;
   }
   .onboarding-progress > div {
-    font-size: 10px;
+    font-size: 12px;
     gap: 5px;
   }
   .onboarding-progress > div > span {
     height: 18px;
     width: 18px;
-    font-size: 10px;
+    font-size: 12px;
   }
   .onboarding-progress i {
     margin-left: 1px;
@@ -4062,7 +4062,7 @@ a {
     font-size: 28px;
   }
   .onboarding-title p {
-    font-size: 10px;
+    font-size: 12px;
   }
   .role-option {
     padding: 17px;
@@ -4072,7 +4072,7 @@ a {
     font-size: 12px;
   }
   .role-option small {
-    font-size: 10px;
+    font-size: 12px;
   }
   .role-option .icon-tile {
     width: 31px;
@@ -4087,20 +4087,20 @@ a {
     height: 34px;
   }
   .connector-copy strong {
-    font-size: 11px;
+    font-size: 12px;
   }
   .connector-copy p {
-    font-size: 10px;
+    font-size: 12px;
   }
   .source-connector button {
-    font-size: 10px;
+    font-size: 12px;
     padding-inline: 7px;
   }
   .connected-actions {
     gap: 0;
   }
   .connected-actions > span {
-    font-size: 10px;
+    font-size: 12px;
   }
   .connected-actions > span svg {
     display: none;
@@ -4112,14 +4112,14 @@ a {
     gap: 6px;
   }
   .onboarding-buttons > button {
-    font-size: 10px;
+    font-size: 12px;
     padding-inline: 12px;
   }
   .dashboard-meta {
     flex-direction: column;
     align-items: flex-start;
     gap: 8px;
-    font-size: 10px;
+    font-size: 12px;
     margin-top: 0;
   }
   .summary-grid {
@@ -4134,10 +4134,10 @@ a {
     margin-top: 16px;
   }
   .summary-card p {
-    font-size: 10px;
+    font-size: 12px;
   }
   .summary-card .row-between {
-    font-size: 10px;
+    font-size: 12px;
   }
   .summary-card .row-between > svg {
     width: 14px;
@@ -4151,11 +4151,11 @@ a {
     flex: 1;
   }
   .dashboard-bottom-banner p {
-    font-size: 10px;
+    font-size: 12px;
     line-height: 1.7;
   }
   .dashboard-bottom-banner strong {
-    font-size: 11px;
+    font-size: 12px;
   }
   .dashboard-bottom-banner .cta {
     margin-left: 46px;
@@ -4167,10 +4167,10 @@ a {
     display: block;
   }
   .panel-bottom-note {
-    font-size: 10px;
+    font-size: 12px;
   }
   .panel-bottom-note .arrow-link {
-    font-size: 10px;
+    font-size: 12px;
   }
   .trend-stats {
     gap: 10px;
@@ -4182,13 +4182,13 @@ a {
     font-size: 24px;
   }
   .trend-stats > div > div > span {
-    font-size: 10px;
+    font-size: 12px;
   }
   .trend-spark {
     display: none;
   }
   .market-context {
-    font-size: 10px;
+    font-size: 12px;
   }
   .relationship-chain {
     gap: 8px;
@@ -4197,7 +4197,7 @@ a {
     gap: 8px;
   }
   .relationship-chain span {
-    font-size: 10px;
+    font-size: 12px;
     padding: 9px 11px;
     min-width: 65px;
   }
@@ -4207,7 +4207,7 @@ a {
     gap: 7px;
   }
   .section-row-title > span {
-    font-size: 10px;
+    font-size: 12px;
   }
   .skills-toolbar .pill-tabs {
     width: 100%;
@@ -4215,13 +4215,13 @@ a {
   }
   .skills-toolbar .pill-tabs button {
     padding-inline: 8px;
-    font-size: 10px;
+    font-size: 12px;
   }
   .skill-card {
     padding: 18px;
   }
   .evidence-badge {
-    font-size: 10px;
+    font-size: 12px;
   }
   .agent-aside {
     grid-template-columns: 1fr;
@@ -4230,17 +4230,17 @@ a {
     padding: 20px;
   }
   .priority-title .subtle-badge {
-    font-size: 10px;
+    font-size: 12px;
     padding: 4px;
   }
   .priority-facts {
     gap: 10px;
   }
   .priority-facts strong {
-    font-size: 10px;
+    font-size: 12px;
   }
   .priority-facts small {
-    font-size: 10px;
+    font-size: 12px;
   }
   .priority-title h2 {
     font-size: 23px;
@@ -4252,22 +4252,22 @@ a {
     font-size: 24px;
   }
   .action-card > p {
-    font-size: 10px;
+    font-size: 12px;
   }
   .action-card-eyebrow .action-duration {
-    font-size: 10px;
+    font-size: 12px;
   }
   .action-card-eyebrow > span {
-    font-size: 10px;
+    font-size: 12px;
   }
   .action-steps li {
-    font-size: 10px;
+    font-size: 12px;
   }
   .action-type {
-    font-size: 10px;
+    font-size: 12px;
   }
   .action-card-bottom button {
-    font-size: 10px;
+    font-size: 12px;
     padding: 7px 10px;
   }
   .analyzer-hero {
@@ -4277,7 +4277,7 @@ a {
     font-size: 22px;
   }
   .analyzer-hero > p {
-    font-size: 10px;
+    font-size: 12px;
   }
   .analyzer-input {
     padding: 7px;
@@ -4287,11 +4287,11 @@ a {
     display: none;
   }
   .analyzer-input input {
-    font-size: 10px;
+    font-size: 12px;
     padding-left: 5px;
   }
   .analyzer-input button {
-    font-size: 10px;
+    font-size: 12px;
     padding: 8px 10px;
     height: 34px;
   }
@@ -4299,7 +4299,7 @@ a {
     width: 12px;
   }
   .analyzer-input input::placeholder {
-    font-size: 10px;
+    font-size: 12px;
   }
   .analyzer-empty {
     padding: 38px 5px;
@@ -4309,12 +4309,12 @@ a {
     width: 12px;
   }
   .analyzer-empty strong {
-    font-size: 10px;
+    font-size: 12px;
     line-height: 1.6;
     margin-top: 12px;
   }
   .analyzer-empty p {
-    font-size: 10px;
+    font-size: 12px;
     line-height: 1.8;
   }
   .analyzed-job h2 {
@@ -4327,13 +4327,13 @@ a {
     font-size: 26px;
   }
   .application-summary > div > span {
-    font-size: 10px;
+    font-size: 12px;
   }
   .applications-panel {
     padding: 15px;
   }
   .applications-toolbar .pill-tabs button {
-    font-size: 10px;
+    font-size: 12px;
     padding: 7px;
   }
   .applications-toolbar {
@@ -4344,11 +4344,11 @@ a {
     width: 100%;
   }
   .application-table th {
-    font-size: 10px;
+    font-size: 12px;
   }
   .application-table td {
     padding: 18px 8px;
-    font-size: 10px;
+    font-size: 12px;
   }
   .application-company {
     gap: 9px;
@@ -4359,13 +4359,13 @@ a {
     font-size: 16px;
   }
   .application-company strong {
-    font-size: 11px;
+    font-size: 12px;
   }
   .application-company small {
-    font-size: 10px;
+    font-size: 12px;
   }
   .application-table-footer {
-    font-size: 10px;
+    font-size: 12px;
     line-height: 1.6;
     gap: 10px;
   }
@@ -4401,7 +4401,7 @@ a {
   font-size: 12px;
 }
 .summary-card p {
-  font-size: 10px;
+  font-size: 12px;
 }
 .small-copy {
   font-size: 12px;
@@ -4414,44 +4414,44 @@ a {
   font-size: 12px;
 }
 .workspace-footer {
-  font-size: 10px;
+  font-size: 12px;
 }
 .mini-badge {
-  font-size: 8px;
+  font-size: 12px;
 }
 .nav-caption {
-  font-size: 9px;
+  font-size: 12px;
 }
 .visual-caption,
 .visual-demo {
-  font-size: 8px;
+  font-size: 12px;
 }
 .mini-chart > div {
-  font-size: 9px;
+  font-size: 12px;
 }
 .mini-chart b {
-  font-size: 8px;
+  font-size: 12px;
 }
 .action-float small {
-  font-size: 8px;
+  font-size: 12px;
 }
 .hero-eyebrow {
-  font-size: 9px;
+  font-size: 12px;
 }
 .hero-subcopy {
   font-size: 13px;
 }
 .float-heading small {
-  font-size: 9px;
+  font-size: 12px;
 }
 .job-card-footer {
-  font-size: 9px;
+  font-size: 12px;
 }
 .job-card-top small {
-  font-size: 9px;
+  font-size: 12px;
 }
 .job-card-3d .tag {
-  font-size: 10px;
+  font-size: 12px;
 }
 .hero {
   overflow: clip;
@@ -4490,16 +4490,16 @@ textarea::placeholder {
   color: #61796a;
 }
 .priority-facts strong > span {
-  font-size: 10px;
+  font-size: 12px;
 }
 .resource-placeholder p {
-  font-size: 11px;
+  font-size: 12px;
 }
 .action-steps li {
   font-size: 12px;
 }
 .source-connectors .connector-copy p {
-  font-size: 11px;
+  font-size: 12px;
 }
 .evidence-source .icon-inline {
   font-size: 12px;
@@ -4518,16 +4518,16 @@ textarea::placeholder {
   font-size: 13px;
 }
 .tags .tag {
-  font-size: 11px;
+  font-size: 12px;
 }
 .floating-card .tag {
-  font-size: 9px;
+  font-size: 12px;
 }
 .hero-footnote {
-  font-size: 10px;
+  font-size: 12px;
 }
 .application-table th {
-  font-size: 10px;
+  font-size: 12px;
 }
 .application-table td {
   font-size: 12px;
@@ -4536,10 +4536,10 @@ textarea::placeholder {
   font-size: 13px;
 }
 .application-company small {
-  font-size: 11px;
+  font-size: 12px;
 }
 .panel-header .arrow-link {
-  font-size: 11px;
+  font-size: 12px;
 }
 .market-job-card p {
   font-size: 12px;
@@ -4569,7 +4569,7 @@ textarea::placeholder {
   color: #52695b !important;
 }
 .chart-legend {
-  font-size: 11px;
+  font-size: 12px;
 }
 .source-strip > div {
   color: #647067;
@@ -4579,13 +4579,13 @@ textarea::placeholder {
 }
 @media (max-width: 1100px) {
   .summary-card .row-between {
-    font-size: 10px;
+    font-size: 12px;
   }
   .summary-card {
     padding: 17px 14px;
   }
   .gap-row .evidence-badge {
-    font-size: 9px;
+    font-size: 12px;
   }
   .agent-layout {
     grid-template-columns: minmax(0, 1fr) 240px;
@@ -4598,7 +4598,7 @@ textarea::placeholder {
     margin-top: 5px;
   }
   .source-connectors .connector-copy p {
-    font-size: 10px;
+    font-size: 12px;
   }
 }
 @media (max-width: 800px) {
@@ -4616,78 +4616,78 @@ textarea::placeholder {
     overflow: visible;
   }
   .page-heading p {
-    font-size: 11px;
+    font-size: 12px;
   }
 }
 @media (max-width: 540px) {
   .summary-card .row-between {
-    font-size: 11px;
+    font-size: 12px;
   }
   .summary-card p {
-    font-size: 10px;
+    font-size: 12px;
   }
   .summary-card .row-between > svg {
     width: 14px;
   }
   .hero-eyebrow {
-    font-size: 8px;
+    font-size: 12px;
   }
   .hero-subcopy {
     font-size: 12px;
   }
   .hero-footnote {
-    font-size: 9px;
+    font-size: 12px;
     gap: 3px;
   }
   .twin-visual .visual-caption {
-    font-size: 7px;
+    font-size: 12px;
     left: 5%;
   }
   .twin-visual .visual-demo {
-    font-size: 6px;
+    font-size: 12px;
     left: 15%;
   }
   .twin-visual .float-heading small {
-    font-size: 8px;
+    font-size: 12px;
   }
   .twin-visual .float-bottom {
-    font-size: 7px;
+    font-size: 12px;
   }
   .twin-visual .float-bottom > span:last-child {
-    font-size: 7px;
+    font-size: 12px;
   }
   .twin-visual .gap-float .eyebrow {
-    font-size: 7px;
+    font-size: 12px;
   }
   .twin-visual .gap-float p {
-    font-size: 8px;
+    font-size: 12px;
   }
   .twin-visual .action-float small {
-    font-size: 6px;
+    font-size: 12px;
   }
   .twin-visual .action-float strong {
-    font-size: 8px;
+    font-size: 12px;
   }
   .twin-visual .mini-chart > div {
-    font-size: 8px;
+    font-size: 12px;
   }
   .twin-visual .mini-chart b {
-    font-size: 7px;
+    font-size: 12px;
   }
   .twin-visual .mini-chart span {
     width: 36px;
   }
   .onboarding-progress > div {
-    font-size: 8px;
+    font-size: 12px;
   }
   .connector-copy p {
-    font-size: 9px !important;
+    font-size: 12px !important;
   }
   .source-connector button {
-    font-size: 9px;
+    font-size: 12px;
   }
   .skills-toolbar .pill-tabs button {
-    font-size: 10px;
+    font-size: 12px;
   }
   .skills-toolbar .pill-tabs {
     gap: 3px;
@@ -4696,23 +4696,23 @@ textarea::placeholder {
     display: flex;
   }
   .action-steps li {
-    font-size: 11px;
+    font-size: 12px;
   }
   .priority-facts {
     gap: 9px;
   }
   .priority-facts strong {
-    font-size: 11px;
+    font-size: 12px;
   }
   .priority-facts strong > span {
-    font-size: 9px;
+    font-size: 12px;
   }
   .priority-facts small {
-    font-size: 8px;
-    letter-spacing: 0.5px;
+    font-size: 12px;
+    letter-spacing: var(--tracking-label);
   }
   .priority-title .subtle-badge {
-    font-size: 8px;
+    font-size: 12px;
   }
   .analyzer-input {
     flex-wrap: wrap;
@@ -4728,7 +4728,7 @@ textarea::placeholder {
     margin-top: 4px;
   }
   .analyzer-input input::placeholder {
-    font-size: 11px;
+    font-size: 12px;
   }
   .analyzer-empty {
     flex-direction: column;
@@ -4741,7 +4741,7 @@ textarea::placeholder {
     font-size: 13px;
   }
   .analyzer-empty p {
-    font-size: 11px;
+    font-size: 12px;
   }
   .settings-profile .select-wrap {
     width: 100%;
@@ -4762,25 +4762,25 @@ textarea::placeholder {
     flex-wrap: wrap;
   }
   .gap-row .evidence-badge {
-    font-size: 9px;
+    font-size: 12px;
   }
   .gap-row > svg {
     display: none;
   }
   .gap-row p {
-    font-size: 9px;
+    font-size: 12px;
   }
   .action-card-eyebrow > span {
-    font-size: 9px;
+    font-size: 12px;
   }
   .action-card-eyebrow .action-duration {
-    font-size: 9px;
+    font-size: 12px;
   }
   .action-type {
-    font-size: 10px;
+    font-size: 12px;
   }
   .expected-label {
-    font-size: 9px;
+    font-size: 12px;
   }
   .onboarding-progress {
     gap: 6px;

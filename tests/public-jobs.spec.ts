@@ -9,8 +9,8 @@ test("official job cards paginate, bookmark, persist, filter and link to source"
   page,
 }) => {
   await mockPublicJobs(page);
-  await page.goto("/");
-  await expect(page.locator(".public-job-card")).toHaveCount(4);
+  await page.goto("/jobs");
+  await expect(page.locator(".public-job-card")).toHaveCount(7);
   await expect(page.locator(".public-job-source").first()).toHaveAttribute(
     "href",
     "https://jobs.lever.co/zoyi/fixture-0",
@@ -25,17 +25,26 @@ test("official job cards paginate, bookmark, persist, filter and link to source"
       exact: true,
     })
     .click();
-  await page.getByRole("button", { name: "새로운 공고 더보기" }).click();
+
   await expect(page.locator(".public-job-card")).toHaveCount(7);
   await expect(
     page.getByText("현재 제공되는 공고를 모두 확인했어요."),
   ).toBeVisible();
-  await page.getByRole("button", { name: /저장한 공고/ }).click();
+  await page
+    .getByRole("navigation", { name: "채용공고 하위 메뉴" })
+    .getByRole("link", { name: "저장한 공고" })
+    .click();
   await expect(page.locator(".public-job-card")).toHaveCount(1);
   await page.reload();
   await expect(
     page.getByRole("button", { name: "Machine Learning Engineer 1 저장 취소" }),
   ).toHaveAttribute("aria-pressed", "true");
+  await page
+    .getByRole("navigation", { name: "채용공고 하위 메뉴" })
+    .getByRole("link", { name: "전체 공고", exact: true })
+    .click();
+  await expect(page).toHaveURL(/\/jobs$/);
+  await expect(page.locator(".public-job-card")).toHaveCount(7);
   await page.getByLabel("공고 직무").selectOption("ax");
   await expect(page.locator(".public-job-card")).toHaveCount(1);
   await expect(page.locator(".public-job-card h3")).toHaveText(
@@ -61,7 +70,7 @@ test("job errors retry and partial availability remains explicit", async ({
           },
         }),
   );
-  await page.goto("/");
+  await page.goto("/jobs");
   await expect(page.locator(".public-job-empty[role=alert]")).toBeVisible();
   failed = false;
   await page.getByRole("button", { name: "다시 시도", exact: true }).click();

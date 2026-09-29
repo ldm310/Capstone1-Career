@@ -25,7 +25,13 @@ export function db() {
  CREATE TABLE IF NOT EXISTS attempts(key TEXT PRIMARY KEY,count INTEGER,reset INTEGER);`);
     globals.careerDb = connection;
   }
+  globals.careerDb.exec(
+    "CREATE TABLE IF NOT EXISTS guests(user_id TEXT PRIMARY KEY)",
+  );
   return globals.careerDb;
+}
+export function isGuest(id: string) {
+  return !!db().prepare("SELECT user_id FROM guests WHERE user_id=?").get(id);
 }
 export function passwordHash(
   password: string,

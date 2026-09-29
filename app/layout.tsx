@@ -1,9 +1,19 @@
 import type { Metadata } from "next";
+import localFont from "next/font/local";
 import { Geist, Geist_Mono } from "next/font/google";
 import { CareerProvider } from "@/components/shared/career-provider";
 import "./globals.css";
 import "./korean.css";
 import "./career.css";
+import "./typography.css";
+import "./learning-path.css";
+const careerFont = localFont({
+  src: "./fonts/PretendardVariable.woff2",
+  variable: "--font-career-ui",
+  weight: "100 900",
+  display: "swap",
+  fallback: ["Apple SD Gothic Neo", "Malgun Gothic", "sans-serif"],
+});
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
@@ -15,7 +25,7 @@ export const metadata: Metadata = {
     template: "%s | Career",
   },
   description:
-    "기업 공식 채용공고를 살펴보고, 나의 경험과 역량 근거를 연결해 다음 커리어를 준비하세요. 개인 분석은 체험 데이터로 제공됩니다.",
+    "GitHub·PDF·Markdown에서 내 기술을 확인하고, 공고와 비교하며 단계별 과제로 다음 커리어를 준비하세요.",
 };
 export default function RootLayout({
   children,
@@ -23,7 +33,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="ko" className={`${geistSans.variable} ${geistMono.variable}`}>
+    <html
+      lang="ko"
+      className={`${geistSans.variable} ${geistMono.variable} ${careerFont.variable}`}
+    >
       <body>
         <CareerProvider>{children}</CareerProvider>
       </body>

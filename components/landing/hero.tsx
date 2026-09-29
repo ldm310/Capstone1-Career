@@ -11,7 +11,6 @@ import {
   ArrowDown,
   CornerDownRight,
   FileText,
-  Award,
 } from "lucide-react";
 import { LinkButton, Tags } from "@/components/shared/primitives";
 import type { getHeroPreview } from "@/lib/career-selectors";
@@ -48,7 +47,7 @@ export function Hero({
           <p className="hero-subcopy">
             시장이 원하는 역량과 내가 쌓아온 경험을 연결하세요.
             <br />
-            당신의 GitHub, 이력서, Notion에서 다음 커리어의 방향을 찾습니다.
+            당신의 GitHub, PDF, Markdown에서 다음 커리어의 방향을 찾습니다.
           </p>
           <div className="hero-ctas">
             <LinkButton href="/onboarding">
@@ -156,33 +155,18 @@ export function SourceStrip() {
   return (
     <section className="source-strip section-width">
       <span>
-        흩어져 있던 나의 기록,
+        지금까지 해온 것,
         <br />
-        <strong>한곳에서 역량으로 연결하세요.</strong>
+        <strong>자료 하나로 시작하세요.</strong>
       </span>
       <div>
-        <Github size={24} /> GitHub
+        <Github size={24} /> GitHub 링크
       </div>
       <div>
-        <span className="notion-mark">N</span> Notion
+        <FileText size={24} /> PDF
       </div>
       <div>
-        <FileText
-          className="source-document-icon"
-          size={24}
-          strokeWidth={1.6}
-          aria-hidden="true"
-        />{" "}
-        이력서
-      </div>
-      <div>
-        <Award
-          className="source-document-icon"
-          size={24}
-          strokeWidth={1.6}
-          aria-hidden="true"
-        />{" "}
-        자격증
+        <FileText size={24} /> Markdown
       </div>
     </section>
   );

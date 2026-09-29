@@ -1,4 +1,5 @@
 export const patterns: Record<string, RegExp> = {
+  PostgreSQL: /\b(?:postgresql|postgres)\b/i,
   Python: /\bpython\b|^\s*(?:from \w+ import|def \w+\()/im,
   Docker: /\bdocker\b|^FROM\s+\S+/im,
   LangGraph: /\blanggraph\b|\bStateGraph\b/i,

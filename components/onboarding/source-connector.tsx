@@ -136,7 +136,7 @@ export function SourceConnector() {
           {error}
         </p>
       )}
-      <a className="source-real-link" href="/career?tab=sources">실제 자료 분석: GitHub 코드·Notion 학습 기록·이력서에서 기술과 원문을 확인하기 →</a>
+      <a className="source-real-link" href="/my-skills">실제 자료 분석: GitHub 코드·Notion 학습 기록·이력서에서 기술과 원문을 확인하기 →</a>
       <p className="demo-note">
         파일명만 이 브라우저에 저장합니다. 파일 전송·내용 분석·실제 OAuth 연결은
         수행하지 않습니다.

@@ -118,7 +118,7 @@ export function OverviewPanel({
         ) : (
           <p>7일 이내 등록된 일정이 없습니다.</p>
         )}
-        <Link href="/career?tab=schedule">일정 관리 →</Link>
+        <Link href="/application-tracker?tab=schedule">일정 관리 →</Link>
       </section>
     </>
   );

@@ -33,14 +33,9 @@ export async function POST(req: Request) {
         await parser.destroy();
       }
       mime = "application/pdf";
-    } else if (/\.docx$/i.test(file.name)) {
-      const mammoth = await import("mammoth");
-      text = (await mammoth.extractRawText({ buffer: bytes })).value;
-      mime =
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-    } else if (/\.(md|txt)$/i.test(file.name)) {
+    } else if (/\.md$/i.test(file.name)) {
       text = bytes.toString("utf8");
-    } else throw new Error("PDF, DOCX, Markdown, TXT 파일을 지원합니다.");
+    } else throw new Error("PDF 또는 Markdown(.md) 파일을 선택해 주세요.");
     if (text.trim().length < 10)
       throw new Error(
         "읽을 수 있는 텍스트가 없습니다. 스캔 문서는 OCR 후 업로드하세요.",

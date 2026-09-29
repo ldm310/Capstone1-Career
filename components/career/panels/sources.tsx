@@ -10,10 +10,11 @@ export function SourcesPanel({
   return (
     <>
       <section className="career-panel">
-        <h2>자료 속 기술과 원문 찾기</h2>
+        <h2>지금까지 해온 것을 알려주세요</h2>
         <p>
-          실제 내용을 읽고 기술 패턴을 추출합니다. 기술 언급·코드 존재를
-          보여주며, 숙련도·코드 실행·작성자 여부를 검증하지 않습니다.
+          자료 하나로 시작할 수 있어요. 분석 후 찾은 기술과 근거를 확인해
+          주세요. 기술 언급만으로 수준을 확정하지 않으며, 자료는 나중에 더
+          추가할 수 있어요.
         </p>
         <div className="career-two">
           <form
@@ -53,64 +54,27 @@ export function SourcesPanel({
             }}
           >
             <h3>
-              <Upload size={18} /> 이력서·Notion 내보내기
+              <Upload size={18} /> PDF · Markdown
             </h3>
             <label>
               자료 종류
               <select name="source">
                 <option value="cv">이력서·경력 문서</option>
-                <option value="notion">Notion 학습 문서</option>
+                <option value="notion">학습 노트·프로젝트 설명</option>
               </select>
             </label>
             <label>
               파일 선택
-              <input
-                required
-                type="file"
-                name="file"
-                accept=".pdf,.docx,.md,.txt"
-              />
+              <input required type="file" name="file" accept=".pdf,.md" />
             </label>
             <small>
-              PDF·DOCX·MD·TXT / 10MB 이하. 원본 파일이 내 계정에 저장됩니다.
+              PDF(이력서·포트폴리오) 또는 Markdown(.md, 학습 노트·프로젝트
+              설명), 10MB 이하. Notion 자료는 Markdown으로 내보내서 올려주세요.
+              기존 자료는 그대로 보관돼요.
             </small>
             <button disabled={busy}>파일 저장하고 분석하기</button>
           </form>
         </div>
-        <details>
-          <summary>Notion 페이지를 직접 연결하기</summary>
-          <form
-            onSubmit={async (e) => {
-              e.preventDefault();
-              const form = new FormData(e.currentTarget);
-              const token = e.currentTarget.elements.namedItem(
-                "token",
-              ) as HTMLInputElement;
-              const data = {
-                kind: "notion",
-                url: form.get("url"),
-                token: form.get("token"),
-              };
-              token.value = "";
-              await request("/api/analyze", data);
-            }}
-          >
-            <label>
-              페이지 주소
-              <input name="url" type="url" required />
-            </label>
-            <label>
-              해당 페이지에 접근 가능한 연결 토큰
-              <input name="token" type="password" autoComplete="off" required />
-            </label>
-            <small>
-              토큰은 이번 조회에만 사용하며 저장하지 않습니다. Notion에서 해당
-              연결에 페이지 접근 권한을 먼저 부여하세요. 현재는 OAuth 로그인이
-              아닌 연결 토큰 방식입니다.
-            </small>
-            <button disabled={busy}>Notion 분석하기</button>
-          </form>
-        </details>
       </section>
       <section className="career-panel">
         <h2>발견한 근거 · {findings.length}개</h2>

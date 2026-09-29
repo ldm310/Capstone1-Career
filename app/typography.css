@@ -1,0 +1,107 @@
+/* Shared Korean/Latin reading rhythm. The 3D brand word is intentionally separate. */
+:root {
+  --tracking-heading: -0.025em;
+  --tracking-body: -0.01em;
+  --tracking-label: 0;
+}
+body {
+  font-family: var(--font-career-ui), sans-serif;
+  line-height: 1.6;
+  letter-spacing: var(--tracking-body);
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+  font-synthesis: none;
+}
+button,
+input,
+select,
+textarea,
+option {
+  font-family: inherit;
+  letter-spacing: var(--tracking-body);
+  line-height: 1.5;
+}
+h1,
+h2,
+h3,
+h4 {
+  font-family: inherit;
+  letter-spacing: var(--tracking-heading);
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+p,
+li,
+label,
+summary,
+td,
+th {
+  letter-spacing: var(--tracking-body);
+}
+small,
+.eyebrow,
+.live-label,
+.nav-caption,
+.growth-tag,
+.demo-badge {
+  letter-spacing: var(--tracking-label);
+}
+.logo,
+.brand {
+  font-family: var(--font-career-ui), sans-serif;
+}
+.nav-item,
+.career-tabs a,
+.cta,
+.career-primary {
+  line-height: 1.5;
+}
+.growth-hub h2,
+.career-panel h2 {
+  font-weight: 700;
+}
+.growth-hub h3,
+.career-panel h3 {
+  font-weight: 600;
+}
+.growth-hub p,
+.career-panel p {
+  line-height: 1.7;
+}
+.growth-hub small,
+.career-panel small {
+  font-size: 12px;
+  line-height: 1.6;
+}
+.growth-stats strong,
+.growth-ranking b,
+time {
+  font-variant-numeric: tabular-nums;
+}
+code,
+pre,
+kbd,
+samp {
+  font-family: var(--font-geist-mono), var(--font-career-ui), monospace;
+  letter-spacing: 0;
+  line-height: 1.65;
+  word-break: normal;
+}
+.growth-hub pre,
+.career-panel pre {
+  font-family: var(--font-geist-mono), var(--font-career-ui), monospace;
+}
+.recharts-wrapper text {
+  font-family: var(--font-career-ui), sans-serif;
+  letter-spacing: 0;
+}
+@media (max-width: 640px) {
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea {
+    font-size: 16px;
+  }
+  .growth-tag {
+    white-space: normal;
+  }
+}

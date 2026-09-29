@@ -1,14 +1,14 @@
 /* Korean reading rhythm and the official public jobs feed. */
 body {
   font-family:
-    var(--font-geist-sans), "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+    var(--font-career-ui), "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
   word-break: keep-all;
   overflow-wrap: anywhere;
 }
 .hero h1 {
   font-size: clamp(42px, 4.6vw, 68px);
   line-height: 1.22;
-  letter-spacing: -0.055em;
+  letter-spacing: var(--tracking-heading);
 }
 .hero-description {
   font-size: 20px;
@@ -19,17 +19,17 @@ body {
 }
 .eyebrow,
 .hero-eyebrow {
-  letter-spacing: 0.06em;
+  letter-spacing: var(--tracking-label);
 }
 .section-heading h2 {
   font-size: clamp(30px, 3.6vw, 48px);
   line-height: 1.4;
-  letter-spacing: -0.04em;
+  letter-spacing: var(--tracking-heading);
 }
 .page-heading h1 {
   font-size: clamp(27px, 3vw, 36px);
   line-height: 1.4;
-  letter-spacing: -0.04em;
+  letter-spacing: var(--tracking-heading);
 }
 .page-heading p,
 .panel-header p,
@@ -74,7 +74,7 @@ body {
   margin: 18px 0 12px;
   font-size: clamp(28px, 3vw, 42px);
   font-weight: 750;
-  letter-spacing: -0.045em;
+  letter-spacing: var(--tracking-heading);
   line-height: 1.4;
 }
 .public-jobs-heading p {
@@ -187,17 +187,17 @@ body {
 .official-label {
   margin-left: auto;
   color: #287448;
-  font-size: 10px;
+  font-size: 12px;
 }
 .public-job-category {
-  font-size: 11px;
+  font-size: 12px;
   color: #337e54;
   margin-top: 24px;
 }
 .public-job-card h3 {
   font-size: 18px;
   line-height: 1.6;
-  letter-spacing: -0.025em;
+  letter-spacing: var(--tracking-heading);
   font-weight: 700;
   margin: 6px 0 16px;
   word-break: normal;

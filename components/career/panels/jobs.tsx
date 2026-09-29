@@ -1,6 +1,7 @@
 "use client";
 import type { PanelProps } from "./types";
 import Link from "next/link";
+import { JobLevelComparison } from "@/components/growth/job-level-comparison";
 import { day } from "@/lib/workspace-selectors";
 import { id } from "./helpers";
 export function JobsPanel({
@@ -79,6 +80,7 @@ export function JobsPanel({
           ‘분류 미확인’에 남깁니다.
         </small>
       </section>
+      {state.job && <JobLevelComparison job={state.job} />}
       {state.job && (
         <section className="career-panel">
           <span className="live-label">실제 본문 기반 · 규칙 분석</span>
@@ -113,7 +115,7 @@ export function JobsPanel({
             </div>
           ))}
           <div className="career-actions">
-            <Link className="career-primary" href="/career?tab=plan">
+            <Link className="career-primary" href="/preparation?tab=plan">
               보완 계획 세우기 →
             </Link>
             <button
@@ -187,7 +189,7 @@ export function JobsPanel({
               </p>
               <div className="career-actions">
                 <Link
-                  href={`/career?tab=jobs&url=${encodeURIComponent(j.url)}`}
+                  href={`/jobs?tab=jobs&url=${encodeURIComponent(j.url)}`}
                   onClick={() => {
                     const field =
                       document.querySelector<HTMLInputElement>(
@@ -217,7 +219,7 @@ export function JobsPanel({
                 >
                   {state.savedJobs.some((s) => s.id === j.id)
                     ? "저장 취소"
-                    : "계정에 저장"}
+                    : "내 공간에 저장"}
                 </button>
               </div>
             </article>
@@ -233,7 +235,7 @@ export function JobsPanel({
               지역을 비워 범위를 넓힐 수 있습니다.
             </p>
           )}
-        <h3>계정에 저장한 공고</h3>
+        <h3>내가 저장한 공고</h3>
         {state.savedJobs.length ? (
           state.savedJobs.map((j) => (
             <div className="career-row" key={j.id}>

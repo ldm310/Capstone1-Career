@@ -1,5 +1,6 @@
 import {
   requireUser,
+  isGuest,
   workspace,
   saveWorkspace,
   originCheck,
@@ -12,7 +13,7 @@ export async function GET() {
   try {
     const u = await requireUser();
     return Response.json(
-      { user: u, workspace: workspace(u.id) },
+      { user: u, guest: isGuest(u.id), workspace: workspace(u.id) },
       { headers: { "Cache-Control": "no-store" } },
     );
   } catch {

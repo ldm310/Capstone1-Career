@@ -8,56 +8,39 @@ test.beforeEach(async ({ page }) => {
   await mockPublicJobs(page);
 });
 
-test("onboarding preserves role and demo connections", async ({ page }) => {
-  await page.goto("/");
-  await page
-    .getByRole("link", { name: "내 역량 분석 시작하기", exact: true })
-    .click();
-  await expect(page).toHaveURL(/career/);
+test("onboarding uses one source and carries target role into growth", async ({
+  page,
+}) => {
   await page.goto("/onboarding");
-  await page.getByRole("button", { name: /AI·머신러닝 엔지니어/ }).click();
-  await page.getByRole("button", { name: "다음 단계", exact: true }).click();
-  await page.getByRole("button", { name: "체험 연결" }).first().click();
-  await expect(page.getByText("GitHub 체험 자료")).toBeVisible();
-  await page.getByRole("button", { name: "나의 Career 만들기" }).click();
-  await page.getByRole("link", { name: "내 대시보드 보기" }).click();
-  await expect(page.getByLabel("희망 직무")).toHaveValue("ml");
+  await page.getByLabel("희망 직무").selectOption("ml");
+  await page.getByRole("button", { name: "이 직무로 시작하기" }).click();
+  await page.getByRole("button", { name: "GitHub 링크", exact: true }).click();
   await expect(
-    page.getByRole("heading", { name: /오늘도 한 걸음 더/ }),
+    page.getByRole("heading", { name: "자료에서 이런 기술을 찾았어요" }),
+  ).toBeVisible();
+  await page.getByRole("link", { name: "내 성장 화면으로 이동하기" }).click();
+  await page.goto("/skills");
+  await expect(
+    page.getByRole("heading", { name: "PyTorch", exact: true }),
   ).toBeVisible();
   await page.reload();
-  await expect(page.getByLabel("희망 직무")).toHaveValue("ml");
+  await expect(
+    page.getByRole("heading", { name: "PyTorch", exact: true }),
+  ).toBeVisible();
 });
 
-test("an action updates evidence, coverage and survives refresh", async ({
+test("initial evidence is not rewarded and next task shows fixed points", async ({
   page,
 }) => {
   await page.goto("/dashboard");
-  const coverage = page
-    .locator(".summary-card")
-    .first()
-    .locator(":scope > strong");
-  await expect(coverage).toHaveText("73%");
-  await page.getByRole("link", { name: "커리어 코치 AI", exact: true }).click();
-  const action = page.locator(".action-card").filter({
-    has: page.getByRole("heading", {
-      name: "RAG 프로젝트에 하이브리드 검색 구현하기",
-    }),
-  });
-  await action.getByRole("button", { name: "활동 시작하기" }).click();
-  await action.getByRole("button", { name: "체험 활동 완료하기" }).click();
-  await expect(
-    page.getByText("체험 근거 저장 완료 · 내 역량에서 확인하세요"),
-  ).toBeVisible();
-  await page.getByRole("link", { name: "대시보드", exact: true }).click();
-  await expect(coverage).toHaveText("82%");
-  await page.reload();
-  await expect(coverage).toHaveText("82%");
-  await page.getByRole("link", { name: "내 역량", exact: true }).click();
-  await page.getByLabel("역량 검색").fill("Vector DB");
-  await expect(page.locator(".skill-card .evidence-badge")).toHaveText(
-    "구현 근거",
-  );
+  await expect(page.locator(".growth-stats")).toContainText("0점");
+  const card = page
+    .locator(".growth-skill")
+    .filter({
+      has: page.getByRole("heading", { name: "Docker", exact: true }),
+    });
+  await expect(card).toContainText("LV1 · 기초 사용");
+  await expect(card).toContainText("완료 확인 후 20점");
 });
 
 test("job analyzer matches samples, validates input, and has an empty state", async ({
@@ -84,34 +67,23 @@ test("job analyzer matches samples, validates input, and has an empty state", as
   await expect(page.locator(".analyzed-job h2")).toHaveText("AX·LLM 개발자");
 });
 
-test("evidence source entry is shown and persisted", async ({ page }) => {
-  await page.goto("/skills?skill=vector");
-  await page
-    .getByRole("button", { name: "근거 추가", exact: true })
-    .first()
-    .click();
-  const dialog = page.getByRole("dialog");
-  await dialog
-    .getByRole("combobox", { name: "기술", exact: true })
-    .selectOption("vector");
-  await dialog.getByLabel("자료 이름").fill("Vector index implementation");
-  await dialog.getByLabel("자료 링크").fill("https://github.com/example/demo");
-  await dialog
-    .getByLabel("어떤 역량을 보여주는 자료인가요?")
-    .fill("Metadata filtering and semantic retrieval.");
-  await dialog.getByRole("button", { name: "근거 저장하기" }).click();
-  await page.getByLabel("역량 검색").fill("Vector DB");
-  await expect(
-    page.getByText("Vector index implementation", { exact: true }),
-  ).toBeVisible();
-  await expect(page.getByRole("link", { name: "출처 보기" })).toHaveAttribute(
-    "href",
-    "https://github.com/example/demo",
-  );
+test("skill correction is separate from level verification and rewards", async ({
+  page,
+}) => {
+  await page.goto("/skills");
+  const card = page
+    .locator(".growth-skill")
+    .filter({
+      has: page.getByRole("heading", { name: "PostgreSQL", exact: true }),
+    });
+  await card.getByRole("button").click();
+  await expect(page.getByRole("dialog")).toContainText("postgres");
+  await page.getByRole("button", { name: "결과 확인했어요" }).click();
+  await page.keyboard.press("Escape");
+  await expect(card).toContainText("결과 확인함");
+  await expect(card).toContainText("확인할 자료가 부족해요");
   await page.reload();
-  await expect(
-    page.getByText("Vector index implementation", { exact: true }),
-  ).toBeVisible();
+  await expect(card).toContainText("결과 확인함");
 });
 
 test("application detail, filtering and local record", async ({ page }) => {
@@ -240,19 +212,14 @@ test("primary routes pass accessibility audit", async ({ page }) => {
   }
 });
 
-test("skill filters preserve the full evidence status", async ({ page }) => {
+test("level and pending filters preserve uncertainty", async ({ page }) => {
   await page.goto("/skills");
-  await page.getByRole("button", { name: "학습 근거", exact: true }).click();
-  const langgraph = page.locator(".skill-card").filter({
-    has: page.getByRole("heading", { name: "LangGraph", exact: true }),
-  });
-  await expect(langgraph.locator(".evidence-badge")).toHaveText("구현 근거");
-  await expect(
-    langgraph.getByText("아직 직접 구현한 근거는 없어요."),
-  ).toHaveCount(0);
-  await expect(
-    langgraph.getByText("LangGraph 학습 정리", { exact: true }),
-  ).toBeVisible();
+  await page.getByLabel("보기", { exact: true }).selectOption("pending");
+  await expect(page.locator(".growth-skill")).toHaveCount(1);
+  await expect(page.locator(".growth-skill")).toContainText("PostgreSQL");
+  await page.getByLabel("보기", { exact: true }).selectOption("2");
+  await expect(page.locator(".growth-skill")).toHaveCount(1);
+  await expect(page.locator(".growth-skill")).toContainText("Python");
 });
 
 test("responsive layouts and chart rendering", async ({ page }, testInfo) => {
@@ -281,14 +248,7 @@ test("responsive layouts and chart rendering", async ({ page }, testInfo) => {
         )
         .toBe(true);
       if (route === "/dashboard") {
-        await expect(page.locator(".recharts-bar-rectangle path")).toHaveCount(
-          6,
-        );
-        const rect = await page
-          .locator(".recharts-bar-rectangle path")
-          .first()
-          .boundingBox();
-        expect(rect!.width).toBeGreaterThan(25);
+        await expect(page.locator(".growth-skill")).toHaveCount(4);
         await page.screenshot({
           path: testInfo.outputPath(`dashboard-${width}.png`),
           fullPage: true,

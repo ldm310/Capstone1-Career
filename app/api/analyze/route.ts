@@ -9,7 +9,7 @@ import {
   failure,
   rateLimit,
 } from "@/lib/server/store";
-import { github, notion, jobAnalysis } from "@/lib/server/analyze";
+import { github, jobAnalysis } from "@/lib/server/analyze";
 export const runtime = "nodejs";
 export async function POST(req: Request) {
   try {
@@ -18,7 +18,7 @@ export async function POST(req: Request) {
     rateLimit("analysis:" + u.id, 30);
     const input = z
       .object({
-        kind: z.enum(["github", "notion", "job"]),
+        kind: z.enum(["github", "job"]),
         url: z.string().max(2000).default(""),
         text: z.string().max(60000).default(""),
         token: z.string().max(300).default(""),
@@ -38,10 +38,7 @@ export async function POST(req: Request) {
       saveWorkspace(u.id, state);
       return Response.json({ workspace: state });
     }
-    const result =
-      input.kind === "github"
-        ? await github(input.url)
-        : await notion(input.url, input.token);
+    const result = await github(input.url);
     const state = workspace(u.id);
     state.runs = [
       { id: randomUUID(), at: new Date().toISOString(), ...result },
