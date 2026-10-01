@@ -1,0 +1,25 @@
+{
+  "normal_results_identical": true,
+  "python": {
+    "normal_result": "{\"confirmed_level\": \"LV2\", \"review_required\": true, \"criteria\": [[\"rag.contribution\", \"met\"], [\"rag.executed\", \"met\"], [\"rag.improvement\", \"unknown\"], [\"rag.project_integration\", \"met\"], [\"rag.use\", \"met\"]]}",
+    "elapsed_seconds": 0.003875417052768171,
+    "failure_preserved_stages": "prepare",
+    "restart_recovered": true,
+    "model_calls_with_restart": 2,
+    "duplicate_model_calls": 1,
+    "duplicate_stage_results": 0,
+    "restart_process_count": 2,
+    "support_code_lines": 33
+  },
+  "langgraph": {
+    "normal_result": "{\"confirmed_level\": \"LV2\", \"review_required\": true, \"criteria\": [[\"rag.contribution\", \"met\"], [\"rag.executed\", \"met\"], [\"rag.improvement\", \"unknown\"], [\"rag.project_integration\", \"met\"], [\"rag.use\", \"met\"]]}",
+    "elapsed_seconds": 0.008231957908719778,
+    "failure_preserved_stages": "prepare",
+    "restart_recovered": true,
+    "model_calls_with_restart": 2,
+    "duplicate_model_calls": 1,
+    "duplicate_stage_results": 0,
+    "restart_process_count": 2,
+    "support_code_lines": 58
+  }
+}

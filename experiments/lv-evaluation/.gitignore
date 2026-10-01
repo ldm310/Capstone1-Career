@@ -1,0 +1,12 @@
+.venv/
+.env
+.pytest_cache/
+__pycache__/
+*.py[cod]
+*.egg-info/
+artifacts/runs/
+artifacts/checkpoints/
+data/final/projects/*
+!data/final/projects/.gitkeep
+data/final/gold/*
+!data/final/gold/.gitkeep

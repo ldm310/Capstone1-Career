@@ -1,0 +1,6 @@
+method,unique_cases,runs,completed_runs,system_errors,budget_exceeded,failure_rate,decided_cases,coverage,final_lv_matches,final_lv_denominator,final_lv_accuracy,criterion_matches,criterion_denominator,criterion_accuracy,over_recognition,under_recognition,evidence_errors,evidence_error_denominator,deferrals,unnecessary_deferrals,repeat_consistent_groups,repeat_group_denominator,avg_seconds,total_model_calls,total_tool_calls,total_tokens,total_retries,total_cost_krw,reference_status
+fixed_workflow,10,20,20,0,0,0.0,3,0.3,10,10,1.0,50,50,1.0,0,0,,,7,0,10,10,0.0003905064077116549,20,0,18916,0,,synthetic_draft
+llm_only,10,20,20,0,0,0.0,3,0.3,10,10,1.0,50,50,1.0,0,0,,,7,0,10,10,0.00040551450219936667,20,0,19352,0,,synthetic_draft
+multi_agent,10,20,20,0,0,0.0,3,0.3,10,10,1.0,50,50,1.0,0,0,,,7,0,10,10,0.002122462581610307,248,168,124310,0,,synthetic_draft
+rule_only,10,20,20,0,0,0.0,3,0.3,10,10,1.0,50,50,1.0,0,0,,,7,0,10,10,0.00033675419399514794,0,0,0,0,,synthetic_draft
+single_agent,10,20,20,0,0,0.0,3,0.3,10,10,1.0,50,50,1.0,0,0,,,7,0,10,10,0.0010078896069899202,124,84,41950,0,,synthetic_draft
