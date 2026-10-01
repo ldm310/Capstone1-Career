@@ -8,6 +8,7 @@ version = "0.1.0"
 description = "Local, service-independent benchmark for Career LV evaluation architectures"
 requires-python = ">=3.11,<3.14"
 dependencies = [
+  "google-genai==2.26.0",
   "langgraph==1.2.12",
   "langgraph-checkpoint-sqlite==3.1.1",
   "openai==3.22.1",

@@ -1,5 +1,24 @@
 # Career LV evaluation benchmark
 
+현재 live 기본 공급자는 Gemini, 모델은 `gemini-2.5-flash-lite`다.
+Google AI Studio에서 무료 등급 프로젝트의 키를 발급하고 아래처럼 터미널에서 설정한다.
+키는 채팅이나 Git에 넣지 않는다. `.env` 자동 로딩은 지원하지 않는다.
+
+```bash
+cd experiments/lv-evaluation
+source .venv/bin/activate
+# zsh: 화면과 명령 기록에 키가 남지 않도록 입력
+read -s 'GEMINI_API_KEY?Gemini API key: '
+export GEMINI_API_KEY
+lv-eval run --mode live --methods fixed_workflow --case-id project_lv2 --output artifacts/runs/gemini-smoke
+```
+
+[키 발급](https://aistudio.google.com/apikey), [요금](https://ai.google.dev/gemini-api/docs/pricing),
+[한도](https://ai.google.dev/gemini-api/docs/rate-limits)를 확인한다.
+무료 등급은 모델/프로젝트별 제한이 있으며 코드에서 계정의 결제 등급을 확인하거나 무료 사용을 보장하지는 않는다.
+자동 재시도와 다른 모델로의 대체 호출은 하지 않는다. 무료 등급의 입력은 제품 개선에 사용될 수 있어 첫 실험은 공개·합성 자료로 진행한다.
+Gemini는 Google 공식 `google-genai` SDK를 사용하며 JSON 출력 검증과 입력·출력·thinking 토큰 합산을 수행한다.
+
 Career 서비스가 아직 없다는 전제로 만든 독립 Python 실험 프로그램이다. FE, 백엔드, 외부 DB, 배포 환경을 사용하지 않으며 제출 프로젝트 코드도 실행하지 않는다. 현재 지원 기술은 RAG 하나이고 기준표·합성 자료·예상 답안은 모두 **draft**다.
 
 ## 1. 환경 구성
@@ -45,7 +64,7 @@ lv-eval run --mode mock --methods rule_only --split development --output artifac
 lv-eval run --mode mock --methods all --split development --inject-error-case mention_only --output artifacts/runs/mock-error-check
 
 # 명시적인 실제 API 실행(첫 구조 비교에서는 plan의 같은 모델 사용)
-export OPENAI_API_KEY='...'
+export GEMINI_API_KEY  # 위의 비표시 입력으로 설정
 lv-eval run --mode live --methods all --split development --repeat 2 --output artifacts/runs/live-benchmark
 ```
 

@@ -12,7 +12,7 @@ from pathlib import Path
 
 from .corpus import case_fingerprint, load_case
 from .criteria import load_criteria
-from .llm import OpenAIAdapter, ReplayAdapter
+from .llm import GeminiAdapter, OpenAIAdapter, ReplayAdapter
 from .methods import (
     evaluate_llm,
     evaluate_multi_agent,
@@ -42,13 +42,17 @@ def _plan() -> tuple[dict[str, object], Budget]:
     return plan, Budget.model_validate(plan["limits"])
 
 
-def _adapter(mode: str, model: str, replay_path: Path | None = None, temperature: float = 0):
+def _adapter(mode: str, model: str, replay_path: Path | None = None, temperature: float = 0, provider: str = "openai"):
     if mode == "mock":
         return MockAdapter(model="mock-rag-reader-v1")
     if mode == "replay":
         if replay_path is None:
             raise ValueError("--replay-file is required in replay mode")
         return ReplayAdapter(replay_path, model=model)
+    if provider == "gemini":
+        return GeminiAdapter(model=model, temperature=temperature)
+    if provider != "openai":
+        raise ValueError(f"unsupported provider: {provider}")
     if not os.environ.get("OPENAI_API_KEY"):
         raise RuntimeError("OPENAI_API_KEY is required only for explicit live mode")
     return OpenAIAdapter(model=model, temperature=temperature)
@@ -80,8 +84,10 @@ def _expected(split: str) -> dict[str, ExpectedAnswer]:
 def command_run(args: argparse.Namespace) -> int:
     plan, budget = _plan()
     _validate_no_split_leakage()
-    if args.mode == "live" and not os.environ.get("OPENAI_API_KEY"):
-        raise RuntimeError("OPENAI_API_KEY is required only for explicit live mode")
+    provider = str(plan.get("provider", "openai"))
+    key_name = "GEMINI_API_KEY" if provider == "gemini" else "OPENAI_API_KEY"
+    if args.mode == "live" and not os.environ.get(key_name):
+        raise RuntimeError(f"{key_name} is required for explicit live mode")
     if args.inject_error_case and args.mode != "mock":
         raise ValueError("--inject-error-case is available only in mock mode")
     table = load_criteria(ROOT / "config/rag.criteria.json")
@@ -94,6 +100,8 @@ def command_run(args: argparse.Namespace) -> int:
     for repeat in range(args.repeat):
         for case_dir in _cases(args.split):
             manifest, _ = load_case(case_dir)
+            if args.case_id and manifest.case_id != args.case_id:
+                continue
             for method in selected:
                 manifest, tools = load_case(case_dir)
                 try:
@@ -102,7 +110,7 @@ def command_run(args: argparse.Namespace) -> int:
                     if method == "rule_only":
                         result = evaluate_rule(manifest.case_id, tools, table, budget, args.mode)
                     else:
-                        adapter = _adapter(args.mode, str(plan["model"]), Path(args.replay_file) if args.replay_file else None, float(plan["temperature"]))
+                        adapter = _adapter(args.mode, str(plan["model"]), Path(args.replay_file) if args.replay_file else None, float(plan["temperature"]), provider)
                         result = METHODS[method](manifest.case_id, tools, table, budget, args.mode, adapter)
                     result.dataset_labels = manifest.labels
                     result.source_fingerprint = case_fingerprint(case_dir, manifest)
@@ -238,6 +246,7 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--split", choices=("development", "final"), default="development")
     run.add_argument("--repeat", type=int, default=1)
     run.add_argument("--replay-file")
+    run.add_argument("--case-id", help="Run only this case for a small live smoke test")
     run.add_argument("--output", required=True)
     run.add_argument("--inject-error-case", help="mock-only system error path check")
     run.set_defaults(func=command_run)
