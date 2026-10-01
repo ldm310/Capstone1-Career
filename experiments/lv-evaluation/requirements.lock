@@ -1,5 +1,6 @@
 # Generated from a clean Python 3.13.15 venv on 2026-10-01.
 aiosqlite==0.22.1
+python-dotenv==1.2.4
 cffi==2.1.1
 cryptography==50.0.2
 google-auth==2.59.1

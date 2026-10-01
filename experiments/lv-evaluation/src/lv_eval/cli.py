@@ -12,6 +12,7 @@ from pathlib import Path
 
 from .corpus import case_fingerprint, load_case
 from .criteria import load_criteria
+from .environment import load_environment
 from .llm import GeminiAdapter, OpenAIAdapter, ReplayAdapter
 from .methods import (
     evaluate_llm,
@@ -38,6 +39,7 @@ METHODS = {
 
 
 def _plan() -> tuple[dict[str, object], Budget]:
+    load_environment(ROOT)
     plan = json.loads((ROOT / "config/experiment_plan.json").read_text(encoding="utf-8"))
     return plan, Budget.model_validate(plan["limits"])
 

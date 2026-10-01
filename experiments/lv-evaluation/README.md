@@ -1,15 +1,14 @@
 # Career LV evaluation benchmark
 
 현재 live 기본 공급자는 Gemini, 모델은 `gemini-2.5-flash-lite`다.
-Google AI Studio에서 무료 등급 프로젝트의 키를 발급하고 아래처럼 터미널에서 설정한다.
-키는 채팅이나 Git에 넣지 않는다. `.env` 자동 로딩은 지원하지 않는다.
+Google AI Studio에서 무료 등급 프로젝트의 키를 발급하고 이 폴더의 `.env`에 한 번 저장한다.
+`.env.example`을 참고해 `GEMINI_API_KEY=발급받은키`를 입력하면 CLI가 자동으로 읽는다.
+실험 폴더의 파일만 읽으며 기존 환경변수가 우선한다. 키는 채팅이나 Git에 넣지 않는다.
 
 ```bash
 cd experiments/lv-evaluation
 source .venv/bin/activate
-# zsh: 화면과 명령 기록에 키가 남지 않도록 입력
-read -s 'GEMINI_API_KEY?Gemini API key: '
-export GEMINI_API_KEY
+# 이 폴더의 .env에 GEMINI_API_KEY를 설정한 뒤 실행
 lv-eval run --mode live --methods fixed_workflow --case-id project_lv2 --output artifacts/runs/gemini-smoke
 ```
 
