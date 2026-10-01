@@ -1,0 +1,146 @@
+{
+  "schema_version": "2.0",
+  "technology": "RAG",
+  "status": "user-approved-levels / draft-operationalization",
+  "reviewed_by_human": false,
+  "levels": [
+    {
+      "level": "LV1",
+      "includes": [],
+      "mandatory_criteria": [
+        "rag.use",
+        "rag.executed",
+        "rag.reproducible"
+      ],
+      "description": "해당 기술로 기본 기능을 구현하고 실행할 수 있음"
+    },
+    {
+      "level": "LV2",
+      "includes": [
+        "LV1"
+      ],
+      "mandatory_criteria": [
+        "rag.project_integration",
+        "rag.requirement_tests",
+        "rag.reason"
+      ],
+      "description": "프로젝트의 요구사항에 맞춰 다른 기능과 연결하고 동작을 검증함"
+    },
+    {
+      "level": "LV3",
+      "includes": [
+        "LV2"
+      ],
+      "mandatory_criteria": [
+        "rag.improvement",
+        "rag.changed_code",
+        "rag.interpretation"
+      ],
+      "description": "문제를 측정·분석하고 수정한 뒤 효과와 한계를 설명함"
+    }
+  ],
+  "criteria": [
+    {
+      "id": "rag.use",
+      "level": "LV1",
+      "mandatory_condition": "문서 처리·검색과 검색 문맥을 이용한 기본 답변 생성 구현 코드",
+      "allowed_evidence": [
+        "implementation code"
+      ],
+      "unverified_handling": "근거 부족은 unknown; 능력 부재로 해석하지 않는다.",
+      "conflict_handling": "동일 조건의 상반된 근거는 conflict; 다른 조건의 결과를 자동 충돌 처리하지 않는다."
+    },
+    {
+      "id": "rag.executed",
+      "level": "LV1",
+      "mandatory_condition": "기본 기능의 실제 실행 결과. 실행 안내나 테스트 코드 자체를 실행 결과로 인정하지 않는다.",
+      "allowed_evidence": [
+        "submitted execution results"
+      ],
+      "unverified_handling": "근거 부족은 unknown; 능력 부재로 해석하지 않는다.",
+      "conflict_handling": "동일 조건의 상반된 근거는 conflict; 다른 조건의 결과를 자동 충돌 처리하지 않는다."
+    },
+    {
+      "id": "rag.reproducible",
+      "level": "LV1",
+      "mandatory_condition": "필요한 환경·입력·실행 명령을 재현 가능하게 설명한다.",
+      "allowed_evidence": [
+        "Markdown execution instructions"
+      ],
+      "unverified_handling": "근거 부족은 unknown; 능력 부재로 해석하지 않는다.",
+      "conflict_handling": "동일 조건의 상반된 근거는 conflict; 다른 조건의 결과를 자동 충돌 처리하지 않는다."
+    },
+    {
+      "id": "rag.project_integration",
+      "level": "LV2",
+      "mandatory_condition": "프로젝트 요구사항을 다른 기능과 연결하는 코드. CLI도 허용한다.",
+      "allowed_evidence": [
+        "integration code"
+      ],
+      "unverified_handling": "근거 부족은 unknown; 능력 부재로 해석하지 않는다.",
+      "conflict_handling": "동일 조건의 상반된 근거는 conflict; 다른 조건의 결과를 자동 충돌 처리하지 않는다."
+    },
+    {
+      "id": "rag.requirement_tests",
+      "level": "LV2",
+      "mandatory_condition": "요구사항에 대응하는 테스트와 그 동작을 검증한 결과가 있다.",
+      "allowed_evidence": [
+        "requirement-linked tests and results"
+      ],
+      "unverified_handling": "근거 부족은 unknown; 능력 부재로 해석하지 않는다.",
+      "conflict_handling": "동일 조건의 상반된 근거는 conflict; 다른 조건의 결과를 자동 충돌 처리하지 않는다."
+    },
+    {
+      "id": "rag.reason",
+      "level": "LV2",
+      "mandatory_condition": "프로젝트 요구사항과 연결해서 해당 기술의 적용 이유를 설명한다.",
+      "allowed_evidence": [
+        "design rationale"
+      ],
+      "unverified_handling": "근거 부족은 unknown; 능력 부재로 해석하지 않는다.",
+      "conflict_handling": "동일 조건의 상반된 근거는 conflict; 다른 조건의 결과를 자동 충돌 처리하지 않는다."
+    },
+    {
+      "id": "rag.improvement",
+      "level": "LV3",
+      "mandatory_condition": "문제를 측정·분석하고 동일 데이터·지표·조건에서 변경 전후 평가를 제시한다.",
+      "allowed_evidence": [
+        "problem analysis and comparable before/after results"
+      ],
+      "unverified_handling": "근거 부족은 unknown; 능력 부재로 해석하지 않는다.",
+      "conflict_handling": "동일 조건의 상반된 근거는 conflict; 다른 조건의 결과를 자동 충돌 처리하지 않는다."
+    },
+    {
+      "id": "rag.changed_code",
+      "level": "LV3",
+      "mandatory_condition": "분석한 문제와 연결된 변경 코드를 확인할 수 있다.",
+      "allowed_evidence": [
+        "versioned diff or baseline and changed implementation"
+      ],
+      "unverified_handling": "근거 부족은 unknown; 능력 부재로 해석하지 않는다.",
+      "conflict_handling": "동일 조건의 상반된 근거는 conflict; 다른 조건의 결과를 자동 충돌 처리하지 않는다."
+    },
+    {
+      "id": "rag.interpretation",
+      "level": "LV3",
+      "mandatory_condition": "개선 결과의 의미와 한계·트레이드오프를 설명한다.",
+      "allowed_evidence": [
+        "result interpretation and limitations"
+      ],
+      "unverified_handling": "근거 부족은 unknown; 능력 부재로 해석하지 않는다.",
+      "conflict_handling": "동일 조건의 상반된 근거는 conflict; 다른 조건의 결과를 자동 충돌 처리하지 않는다."
+    },
+    {
+      "id": "rag.contribution",
+      "level": "LV1",
+      "mandatory_condition": "개인 기여는 별도 확인 항목이다. 사용자 확정 표에는 필수 LV 조건이 아니므로 이 항목으로 자료 기반 LV를 제한하지 않는다.",
+      "allowed_evidence": [
+        "contribution record"
+      ],
+      "unverified_handling": "근거 부족은 unknown; 능력 부재로 해석하지 않는다.",
+      "conflict_handling": "동일 조건의 상반된 근거는 conflict; 다른 조건의 결과를 자동 충돌 처리하지 않는다."
+    }
+  ],
+  "global_conflict_policy": "충돌 기준은 met로 계산하지 않고 추가 확인한다. 상위 LV는 하위 필수 조건을 포함한다. 개인 기여와 자료의 구현 수준을 구분한다.",
+  "null_policy": "LV1 필수 기준이 충족되지 않으면 null. null은 LV1이나 능력 0이 아니다."
+}

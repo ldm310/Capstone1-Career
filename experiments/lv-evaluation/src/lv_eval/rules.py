@@ -60,6 +60,12 @@ def _citations(materials: dict[str, str], criterion_id: str) -> list[Citation]:
 def extract_rule_findings(materials: dict[str, str], table: CriteriaTable) -> list[CriterionFinding]:
     findings: list[CriterionFinding] = []
     for definition in table.criteria:
+        if definition.id not in PATTERNS:
+            findings.append(CriterionFinding(
+                criterion_id=definition.id, status=EvidenceStatus.UNKNOWN,
+                rationale="이 의미 기준에 대한 규칙 추출기는 아직 지원하지 않음; 파일 존재만으로 인정하지 않음",
+            ))
+            continue
         citations = _citations(materials, definition.id)
         required_pattern_count = len(PATTERNS[definition.id])
         matched_pattern_count = len({
