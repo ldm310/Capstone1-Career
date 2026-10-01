@@ -1,0 +1,26 @@
+{
+  "schema_version": "1.0",
+  "status": "draft",
+  "benchmark_scope": "RAG evidence in versioned local code, Markdown, and run logs",
+  "model": "gpt-5.6-luna",
+  "temperature": 0,
+  "limits": {
+    "max_model_calls_per_case": 24,
+    "max_tool_calls_per_case": 20,
+    "max_total_tokens_per_case": 30000,
+    "max_elapsed_seconds_per_case": 120
+  },
+  "pricing_krw_per_million_tokens": null,
+  "decision_gates": {
+    "minimum_quality": null,
+    "minimum_coverage": null,
+    "maximum_cost_krw_per_case": null,
+    "maximum_seconds_per_case": null
+  },
+  "winner_policy": "Never declare a winner until every gate is set and human-reviewed final data exists.",
+  "pilot": {
+    "target_project_count": "30-50",
+    "group_split_key": "project_id",
+    "current_dataset_role": "synthetic development smoke test only"
+  }
+}

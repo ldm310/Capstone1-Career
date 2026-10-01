@@ -1,0 +1,2 @@
+[console_scripts]
+lv-eval = lv_eval.cli:main

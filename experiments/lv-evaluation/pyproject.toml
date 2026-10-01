@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools==80.9.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "career-lv-evaluation"
+version = "0.1.0"
+description = "Local, service-independent benchmark for Career LV evaluation architectures"
+requires-python = ">=3.11,<3.14"
+dependencies = [
+  "langgraph==1.2.12",
+  "langgraph-checkpoint-sqlite==3.1.1",
+  "openai==3.22.1",
+  "pydantic==2.13.5",
+]
+
+[project.optional-dependencies]
+dev = ["pytest==9.1.1"]
+
+[project.scripts]
+lv-eval = "lv_eval.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

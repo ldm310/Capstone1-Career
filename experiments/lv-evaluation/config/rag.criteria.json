@@ -1,0 +1,70 @@
+{
+  "schema_version": "1.0",
+  "technology": "RAG",
+  "status": "draft",
+  "reviewed_by_human": false,
+  "levels": [
+    {
+      "level": "LV1",
+      "includes": [],
+      "mandatory_criteria": ["rag.use", "rag.executed", "rag.contribution"],
+      "description": "기초 RAG 사용을 코드, 실행 기록, 개인 기여로 확인"
+    },
+    {
+      "level": "LV2",
+      "includes": ["LV1"],
+      "mandatory_criteria": ["rag.project_integration"],
+      "description": "실제 프로젝트 흐름에 RAG를 연결"
+    },
+    {
+      "level": "LV3",
+      "includes": ["LV2"],
+      "mandatory_criteria": ["rag.improvement"],
+      "description": "문제를 진단하고 개선 전후 결과를 확인"
+    }
+  ],
+  "criteria": [
+    {
+      "id": "rag.use",
+      "level": "LV1",
+      "mandatory_condition": "제출 코드에서 문서 색인/조회와 조회 결과 사용이 모두 확인된다.",
+      "allowed_evidence": ["versioned source code", "configuration paired with calling code"],
+      "unverified_handling": "언급이나 의존성만 있으면 unknown",
+      "conflict_handling": "상반된 구현 설명은 conflict"
+    },
+    {
+      "id": "rag.executed",
+      "level": "LV1",
+      "mandatory_condition": "제출된 실행 기록에서 해당 RAG 경로의 성공이 확인된다.",
+      "allowed_evidence": ["versioned local run log", "test output containing the RAG path"],
+      "unverified_handling": "테스트 코드만 있고 실행 결과가 없으면 unknown",
+      "conflict_handling": "성공과 실패 로그가 같은 버전에서 충돌하면 conflict"
+    },
+    {
+      "id": "rag.contribution",
+      "level": "LV1",
+      "mandatory_condition": "지원자 개인이 해당 RAG 구현에 기여했다는 범위가 확인된다.",
+      "allowed_evidence": ["authorship statement with concrete files/tasks", "versioned contribution record"],
+      "unverified_handling": "팀 표현만 있으면 unknown",
+      "conflict_handling": "개인 기여 주장과 타인 구현 기록이 충돌하면 conflict"
+    },
+    {
+      "id": "rag.project_integration",
+      "level": "LV2",
+      "mandatory_condition": "RAG 결과가 프로젝트 사용자 흐름 또는 애플리케이션 출력에 연결된다.",
+      "allowed_evidence": ["integration code", "integration run log"],
+      "unverified_handling": "독립 데모만 확인되면 unknown",
+      "conflict_handling": "연결/미연결 자료가 충돌하면 conflict"
+    },
+    {
+      "id": "rag.improvement",
+      "level": "LV3",
+      "mandatory_condition": "구체 문제, 변경 내용, 동일 지표의 개선 전후 수치가 확인된다.",
+      "allowed_evidence": ["before/after experiment log", "versioned evaluation report plus implementation"],
+      "unverified_handling": "개선 주장이나 한쪽 수치만 있으면 unknown",
+      "conflict_handling": "재현 결과가 개선 주장과 반대면 conflict"
+    }
+  ],
+  "global_conflict_policy": "충돌한 기준은 충족으로 계산하지 않고 review_required=true로 표시한다.",
+  "null_policy": "LV1 필수 기준이 모두 met가 아니면 confirmed_level은 null이다. null은 LV1이나 능력 0이 아니다."
+}
