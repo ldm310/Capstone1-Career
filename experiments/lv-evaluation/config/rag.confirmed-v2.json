@@ -1,0 +1,22 @@
+{
+  "schema_version": "2.0",
+  "technology": "RAG",
+  "status": "user_confirmed_levels_operationalization_draft",
+  "reviewed_by_human": false,
+  "levels": [
+    {"level":"LV1","includes":[],"mandatory_criteria":["rag.use","rag.executed","rag.reproduction"],"description":"해당 기술로 기본 기능을 구현하고 실행할 수 있음"},
+    {"level":"LV2","includes":["LV1"],"mandatory_criteria":["rag.project_integration","rag.requirements_tests","rag.reason"],"description":"프로젝트의 요구사항에 맞춰 다른 기능과 연결하고 동작을 검증함"},
+    {"level":"LV3","includes":["LV2"],"mandatory_criteria":["rag.improvement"],"description":"문제를 측정·분석하고 수정한 뒤 효과와 한계를 설명함"}
+  ],
+  "criteria": [
+    {"id":"rag.use","level":"LV1","mandatory_condition":"구현 코드에서 문서 검색과 검색 문맥을 사용하는 답변 생성이 확인됨","allowed_evidence":["구현 코드"],"unverified_handling":"언급·의존성만 있으면 unknown","conflict_handling":"상반된 자료는 conflict"},
+    {"id":"rag.executed","level":"LV1","mandatory_condition":"해당 버전 기본 기능의 실제 실행 결과가 확인됨. 실행 명령 설명이나 print 문은 결과가 아님","allowed_evidence":["실행 로그","저장된 테스트 결과"],"unverified_handling":"실행 결과 없으면 unknown","conflict_handling":"같은 조건의 상충 결과는 conflict"},
+    {"id":"rag.reproduction","level":"LV1","mandatory_condition":"환경·설치·입력·실행 명령을 포함한 재현 가능한 실행 방법","allowed_evidence":["README","환경 설정","실행 지침"],"unverified_handling":"필수 실행 정보 부족하면 unknown","conflict_handling":"버전별 지침 충돌은 conflict"},
+    {"id":"rag.project_integration","level":"LV2","mandatory_condition":"다른 기능과 연결한 프로젝트 흐름의 연동 코드. CLI 입력에서 검색과 답변 출력까지의 연결도 허용","allowed_evidence":["연동 코드"],"unverified_handling":"연동 확인 불가면 unknown","conflict_handling":"상반된 자료는 conflict"},
+    {"id":"rag.requirements_tests","level":"LV2","mandatory_condition":"요구사항에 대응하는 테스트와 동작 검증 결과","allowed_evidence":["요구사항","테스트 코드","테스트 실행 결과"],"unverified_handling":"요구사항 대응이나 실행 검증 부족하면 unknown","conflict_handling":"상충 결과는 conflict"},
+    {"id":"rag.reason","level":"LV2","mandatory_condition":"프로젝트 요구사항과 관련된 기술 적용 이유 설명","allowed_evidence":["설계 문서","README"],"unverified_handling":"일반적 기술 설명만 있으면 unknown","conflict_handling":"상반된 설명은 conflict"},
+    {"id":"rag.improvement","level":"LV3","mandatory_condition":"문제 측정·분석, 변경 코드, 동일 데이터·지표·조건의 전후 평가, 효과와 한계 해석이 모두 확인됨","allowed_evidence":["문제 분석","변경 코드","동일 조건 전후 평가","결과 해석"],"unverified_handling":"어느 필수 근거라도 부족하면 unknown","conflict_handling":"주장과 평가 결과가 상반되면 conflict"}
+  ],
+  "global_conflict_policy":"충돌 기준은 충족으로 계산하지 않는다. 개인 기여는 기술 수준과 별도이며 이 결과를 개인 능력으로 귀속하지 않는다.",
+  "null_policy":"필수 근거 부족으로 확인 가능한 LV가 없으면 null. 능력 0 또는 LV1로 치환하지 않는다."
+}

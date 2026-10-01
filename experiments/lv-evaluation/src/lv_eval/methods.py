@@ -123,7 +123,7 @@ def _agent_loop(case_id: str, role: str, tools: ReadOnlyCaseTools, table: Criter
                  "seed_findings": [item.model_dump(mode="json") for item in (seed_findings or [])]}
         action, meta = adapter.generate(
             operation=f"{case_id}.{role}.action",
-            prompt="Choose one read-only tool or finish. AGENT_STATE_JSON=" + json.dumps(state, ensure_ascii=False),
+            prompt="Choose one read-only tool or finish. Available tools: list_files (no args), read_file(path), search_text(query: regex). Read relevant files before finishing. No shell or web. Criteria: " + criteria_prompt(table) + "\nAGENT_STATE_JSON=" + json.dumps(state, ensure_ascii=False),
             response_model=ToolAction,
         )
         tracker.model(meta)
@@ -138,9 +138,6 @@ def _agent_loop(case_id: str, role: str, tools: ReadOnlyCaseTools, table: Criter
             argument = action.path
         elif action.action == "search_text" and action.query:
             result = tools.search_text(action.query)
-            for hit in result:
-                path = str(hit["path"])
-                seen_materials[path] = tools._resolve(path).read_text(encoding="utf-8")
             argument = action.query
         else:
             raise ValueError(f"invalid tool action: {action}")

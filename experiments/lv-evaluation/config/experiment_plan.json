@@ -3,7 +3,7 @@
   "status": "draft",
   "benchmark_scope": "RAG evidence in versioned local code, Markdown, and run logs",
   "provider": "gemini",
-  "model": "gemini-2.5-flash-lite",
+  "model": "gemini-3.5-flash-lite",
   "temperature": 0,
   "limits": {
     "max_model_calls_per_case": 24,

@@ -1,5 +1,19 @@
 # Career LV evaluation benchmark
 
+## 사용자 확정 기준으로 실제 실행한 첫 비교
+
+`config/rag.confirmed-v2.json`은 사용자 확정 LV1~3을 반영한다. 개인 기여를 LV1 필수 조건에서 분리했다.
+세부 기준 해석과 정답은 아직 검토 전이다. 이전 기본 `run` 명령의 v1 합성 결과와 혼합하지 않는다.
+최신 공개 프로젝트 v2 실행은 아래 명령이다:
+
+```bash
+.venv/bin/python -m lv_eval.pilot
+```
+
+결과: `reports/confirmed-v2-live.md`. 원시 자료: `artifacts/runs/confirmed-v2-live/` (Git 제외).
+최초 2.5 Flash-Lite 호출이 신규 사용자 제한(404)으로 실패해 실험 모델을 `gemini-3.5-flash-lite`로 변경했다.
+이 명령은 공개 프로젝트 하나를 구성별 1회 실행한다. 429는 결과에 남기고 자동 재시도하지 않는다.
+
 현재 live 기본 공급자는 Gemini, 모델은 `gemini-2.5-flash-lite`다.
 Google AI Studio에서 무료 등급 프로젝트의 키를 발급하고 이 폴더의 `.env`에 한 번 저장한다.
 `.env.example`을 참고해 `GEMINI_API_KEY=발급받은키`를 입력하면 CLI가 자동으로 읽는다.

@@ -60,6 +60,10 @@ def _citations(materials: dict[str, str], criterion_id: str) -> list[Citation]:
 def extract_rule_findings(materials: dict[str, str], table: CriteriaTable) -> list[CriterionFinding]:
     findings: list[CriterionFinding] = []
     for definition in table.criteria:
+        if definition.id not in PATTERNS or (table.schema_version == "2.0" and definition.id == "rag.improvement"):
+            findings.append(CriterionFinding(criterion_id=definition.id, status=EvidenceStatus.UNKNOWN,
+                rationale="이 세부 기준의 충분성을 현재 규칙 추출기로 검증할 수 없음"))
+            continue
         if definition.id not in PATTERNS:
             findings.append(CriterionFinding(
                 criterion_id=definition.id, status=EvidenceStatus.UNKNOWN,
