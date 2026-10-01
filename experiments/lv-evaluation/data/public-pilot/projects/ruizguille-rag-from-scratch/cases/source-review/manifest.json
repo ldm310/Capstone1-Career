@@ -1,0 +1,1 @@
+{"case_id":"public_rag_source_review","project_id":"ruizguille-rag-from-scratch","technology":"RAG","split":"development","labels":["public-source","draft","source-only"],"files":["README.md","app/config.py","app/loader.py","app/rag.py","app/splitter.py","app/vector_store.py","pyproject.toml"]}
