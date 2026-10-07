@@ -94,6 +94,7 @@ test("catalog filters, saved-only view and comparison URL stay inside jobs", asy
   await expect(page.locator(".public-job-card")).toHaveCount(1);
   await page.reload();
   await expect(page.locator(".public-job-card")).toHaveCount(1);
+  await page.locator("summary").filter({ hasText: "상세조건" }).click();
   await page.getByLabel("근무 방식").selectOption("hybrid");
   await expect(page.locator(".public-job-card")).toHaveCount(1);
   await page.getByLabel("지역 검색").fill("부산");

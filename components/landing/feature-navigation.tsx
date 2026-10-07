@@ -44,6 +44,21 @@ function FeatureIcon({ kind }: { kind: HomeFeatureId }) {
             />
           </>
         )}
+        {kind === "studies" && (
+          <>
+            <rect
+              className="icon-back"
+              x="13"
+              y="15"
+              width="42"
+              height="38"
+              rx="10"
+              stroke="none"
+            />
+            <circle className="icon-front" cx="25" cy="24" r="7" />
+            <path d="M12 49v-5a13 13 0 0 1 26 0v5M42 18a7 7 0 0 1 0 14m3 5a11 11 0 0 1 8 11" />
+          </>
+        )}
         {kind === "skills" && (
           <>
             <rect

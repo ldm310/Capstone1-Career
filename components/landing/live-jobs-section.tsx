@@ -1,6 +1,13 @@
 "use client";
 import Link from "next/link";
-import { workplaceKey } from "@/lib/job-filters";
+import {
+  workplaceKey,
+  jobExperience,
+  sortPublicJobs,
+  type ExperienceKind,
+} from "@/lib/job-filters";
+import { CatalogFilters } from "@/components/jobs/catalog-filters";
+import { QualificationSummary } from "@/components/jobs/qualification-summary";
 import { useEffect, useRef, useState } from "react";
 import {
   Bookmark,
@@ -24,6 +31,7 @@ export function LiveJobsSection({
   const [location, setLocation] = useState("");
   const [workplace, setWorkplace] = useState("all");
   const [sort, setSort] = useState("newest");
+  const [experience, setExperience] = useState<ExperienceKind[]>([]);
   const [savedCards, setSavedCards] = useState<PublicJob[]>([]);
   const [feed, setFeed] = useState<PublicJobsResponse | null>(null);
   const [role, setRole] = useState("all"),
@@ -42,7 +50,7 @@ export function LiveJobsSection({
     setError("");
     try {
       const response = await fetch(
-        `/api/jobs?offset=${offset}&limit=${preview ? 3 : 12}&role=${selectedRole}&q=${encodeURIComponent(term)}&location=${encodeURIComponent(location)}&workplace=${workplace}&sort=${sort}`,
+        `/api/jobs?offset=${offset}&limit=${preview ? 3 : 12}&role=${selectedRole}&q=${encodeURIComponent(term)}&location=${encodeURIComponent(location)}&workplace=${workplace}&sort=${sort}&experience=${experience.join(",")}`,
         { signal: current.signal },
       );
       if (!response.ok)
@@ -136,7 +144,7 @@ export function LiveJobsSection({
     return () => clearTimeout(timer);
     // load changes with input; request cancellation handles stale results.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, role, savedOnly, location, workplace, sort]);
+  }, [query, role, savedOnly, location, workplace, sort, experience]);
   function toggle(id: string) {
     const next = saved.includes(id)
       ? saved.filter((value) => value !== id)
@@ -163,8 +171,8 @@ export function LiveJobsSection({
       );
     }
   }
-  const visible = (
-    savedOnly
+  const visible = sortPublicJobs(
+    (savedOnly
       ? [
           ...new Map(
             [
@@ -174,24 +182,21 @@ export function LiveJobsSection({
           ).values(),
         ]
       : (feed?.jobs ?? [])
-  )
-    .filter(
+    ).filter(
       (job) =>
         (!savedOnly || saved.includes(job.id)) &&
         (role === "all" || job.category === role) &&
+        (!experience.length ||
+          experience.some((value) => jobExperience(job).includes(value))) &&
         `${job.company} ${job.title} ${(job.skills || []).join(" ")} ${roleLabels[job.category]}`
           .toLowerCase()
           .includes(query.toLowerCase()) &&
         (!location ||
           job.location.toLowerCase().includes(location.toLowerCase())) &&
         (workplace === "all" || workplaceKey(job.workplace) === workplace),
-    )
-    .sort((a, b) =>
-      sort === "company"
-        ? a.company.localeCompare(b.company, "ko")
-        : (Date.parse(b.postedAt || "") || 0) -
-          (Date.parse(a.postedAt || "") || 0),
-    );
+    ),
+    sort,
+  );
   return (
     <section
       className={`public-jobs section-width ${preview ? "jobs-preview" : "jobs-catalog"}`}
@@ -225,6 +230,16 @@ export function LiveJobsSection({
       </div>
       {!preview && (
         <>
+          <aside className="study-preview-invite">
+            <div>
+              <strong>공고별 비교와 스터디를 만나보세요</strong>
+              <p>
+                실제 판정 기준은 준비 중이에요. 별도 예시로 만족·불만족과 수준별
+                스터디를 체험해 보세요.
+              </p>
+            </div>
+            <Link href="/jobs?demo=low">예시로 체험하기 →</Link>
+          </aside>
           <div className="public-jobs-toolbar">
             <span className="catalog-results-label">
               {savedOnly
@@ -258,59 +273,36 @@ export function LiveJobsSection({
               </label>
             </div>
           </div>
-          <div className="catalog-extra-filters">
-            <label>
-              지역
-              <input
-                aria-label="지역 검색"
-                placeholder="예: 서울, Seoul"
-                value={location}
-                onChange={(e) => setLocation(e.target.value)}
-              />
-            </label>
-            <label>
-              근무 방식
-              <select
-                aria-label="근무 방식"
-                value={workplace}
-                onChange={(e) => setWorkplace(e.target.value)}
-              >
-                <option value="all">전체</option>
-                <option value="remote">원격</option>
-                <option value="hybrid">혼합</option>
-                <option value="on-site">사무실</option>
-              </select>
-            </label>
-            <label>
-              정렬
-              <select
-                aria-label="공고 정렬"
-                value={sort}
-                onChange={(e) => setSort(e.target.value)}
-              >
-                <option value="newest">최신 등록순</option>
-                <option value="company">회사명순</option>
-              </select>
-            </label>
-            <button
-              className="plain-button"
-              onClick={() => {
-                setQuery("");
-                setRole("all");
-                setLocation("");
-                setWorkplace("all");
-                setSort("newest");
-              }}
-            >
-              필터 초기화
-            </button>
-          </div>
+          <CatalogFilters
+            sort={sort}
+            setSort={setSort}
+            experience={experience}
+            setExperience={setExperience}
+            location={location}
+            setLocation={setLocation}
+            workplace={workplace}
+            setWorkplace={setWorkplace}
+            reset={() => {
+              setQuery("");
+              setRole("all");
+              setLocation("");
+              setWorkplace("all");
+              setSort("newest");
+              setExperience([]);
+            }}
+          />
+          {sort === "closing" && (
+            <p className="study-muted">
+              마감일이 확인된 공고부터 표시해요. 마감일 미제공 공고는 뒤에
+              표시돼요.
+            </p>
+          )}
         </>
       )}
       {!preview && (
         <p className="public-feed-count">
           {feed
-            ? `전체 ${feed.total}개 중 ${feed.jobs.length}개 불러옴 · ${sort === "company" ? "회사명순" : "최신 등록순"}`
+            ? `전체 ${feed.total}개 중 ${feed.jobs.length}개 불러옴 · ${sort === "closing" ? "마감일순" : "최신순"}`
             : "공식 채용 페이지에서 공고를 가져오고 있어요."}{" "}
           · 검색은 전체 연동 공고에 적용됩니다. 저장 목록은 저장 당시 정보를
           보관합니다.
@@ -325,18 +317,7 @@ export function LiveJobsSection({
       <div className="public-job-grid">
         {(preview ? visible.slice(0, 3) : visible).map((job) => (
           <article className="public-job-card" key={job.id}>
-            {!preview && (
-              <div
-                className={`job-cover job-cover-${job.category}`}
-                aria-hidden="true"
-              >
-                <span>{job.company.slice(0, 1)}</span>
-                <div>
-                  {roleLabels[job.category]}
-                  <small>{job.company}</small>
-                </div>
-              </div>
-            )}
+            {!preview && <QualificationSummary />}
             <div className="public-company">
               <span className="public-company-mark" aria-hidden="true">
                 {job.company.slice(0, 1)}
@@ -348,10 +329,9 @@ export function LiveJobsSection({
               {roleLabels[job.category]}
             </span>
             <h3>
-              <a href={job.url} target="_blank" rel="noopener noreferrer">
+              <Link href={`/jobs?job=${encodeURIComponent(job.id)}`}>
                 {job.title}
-                <span className="sr-only"> (새 창)</span>
-              </a>
+              </Link>
             </h3>
             <div className="public-job-meta">
               <span>
@@ -365,7 +345,11 @@ export function LiveJobsSection({
               {job.workplace && <span>{job.workplace}</span>}
             </div>
             <div className="public-job-bottom">
-              <span>마감일 원문 확인</span>
+              <span>
+                {job.closesAt
+                  ? `${new Date(job.closesAt).toLocaleDateString("ko-KR")} 마감`
+                  : "마감일 원문 확인"}
+              </span>
               <button
                 className="icon-button"
                 aria-label={`${job.title} ${saved.includes(job.id) ? "저장 취소" : "저장"}`}
@@ -393,6 +377,14 @@ export function LiveJobsSection({
             >
               내 실제 자료와 비교하기 →
             </a>
+            {!preview && (
+              <Link
+                className="public-job-source"
+                href={`/jobs?job=${encodeURIComponent(job.id)}&view=study`}
+              >
+                지원 확인 · 스터디 보기 →
+              </Link>
+            )}
           </article>
         ))}
         {loading &&
@@ -414,6 +406,7 @@ export function LiveJobsSection({
               setRole("all");
               setLocation("");
               setWorkplace("all");
+              setExperience([]);
             }}
           >
             검색 조건 초기화

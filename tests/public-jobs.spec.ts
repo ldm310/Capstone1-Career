@@ -48,7 +48,7 @@ test("official job cards paginate, bookmark, persist, filter and link to source"
   await page.getByLabel("공고 직무").selectOption("ax");
   await expect(page.locator(".public-job-card")).toHaveCount(1);
   await expect(page.locator(".public-job-card h3")).toHaveText(
-    "Applied AI Engineer 7 (새 창)",
+    "Applied AI Engineer 7",
   );
   await page.getByLabel("전체 연동 공고 검색").fill("없는기업");
   await expect(page.getByText("조건에 맞는 공고가 없어요.")).toBeVisible();

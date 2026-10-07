@@ -9,6 +9,8 @@ export interface PublicJob {
   employment: string;
   workplace: string | null;
   postedAt: string | null;
+  closesAt?: string | null;
+  experience?: ("entry" | "experienced" | "intern" | "any")[];
   url: string;
 }
 export interface PublicJobsResponse {

@@ -1,4 +1,10 @@
-import { workplaceKey } from "@/lib/job-filters";
+import {
+  workplaceKey,
+  experienceLabels,
+  jobExperience,
+  sortPublicJobs,
+  type ExperienceKind,
+} from "@/lib/job-filters";
 import { collectedJobs } from "@/lib/server/job-feed";
 export const runtime = "nodejs";
 export async function GET(request: Request) {
@@ -7,15 +13,20 @@ export async function GET(request: Request) {
     limit = Number(params.get("limit") ?? 4),
     role = params.get("role") ?? "all";
   const query = (params.get("q") ?? "").trim().toLowerCase().slice(0, 200);
+  const jobId = params.get("id");
   const location = (params.get("location") || "")
     .trim()
     .toLowerCase()
     .slice(0, 100);
   const workplace = params.get("workplace") || "all";
   const sort = params.get("sort") || "newest";
+  const experience = (params.get("experience") || "")
+    .split(",")
+    .filter(Boolean);
   if (
     !["all", "remote", "hybrid", "on-site"].includes(workplace) ||
-    !["newest", "company"].includes(sort) ||
+    !["newest", "closing", "company"].includes(sort) ||
+    experience.some((value) => !Object.hasOwn(experienceLabels, value)) ||
     !Number.isInteger(offset) ||
     offset < 0 ||
     offset > 10000 ||
@@ -29,23 +40,23 @@ export async function GET(request: Request) {
     const feed = await collectedJobs();
     const filtered = feed.jobs.filter(
       (job) =>
+        (!jobId || job.id === jobId) &&
         (role === "all" || job.category === role) &&
         (!location || job.location.toLowerCase().includes(location)) &&
         (workplace === "all" || workplaceKey(job.workplace) === workplace) &&
+        (!experience.length ||
+          experience.some((value) =>
+            jobExperience(job).includes(value as ExperienceKind),
+          )) &&
         `${job.company} ${job.title} ${(job.skills || []).join(" ")}`
           .toLowerCase()
           .includes(query),
     );
-    filtered.sort((a, b) =>
-      sort === "company"
-        ? a.company.localeCompare(b.company, "ko")
-        : (Date.parse(b.postedAt || "") || 0) -
-          (Date.parse(a.postedAt || "") || 0),
-    );
+    const sorted = sortPublicJobs(filtered, sort);
     return Response.json(
       {
         ...feed,
-        jobs: filtered.slice(offset, offset + limit),
+        jobs: sorted.slice(offset, offset + limit),
         total: filtered.length,
         nextOffset: offset + limit < filtered.length ? offset + limit : null,
       },

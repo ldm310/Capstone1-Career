@@ -1,4 +1,11 @@
 export const featureSections = {
+  studies: {
+    path: "/studies",
+    title: "내 스터디",
+    description:
+      "같은 공고를 준비하는 나의 스터디와 성장 기록을 한곳에서 확인하세요.",
+    tabs: [["joined", "신청한 스터디"]],
+  },
   jobs: {
     path: "/jobs",
     title: "채용공고",

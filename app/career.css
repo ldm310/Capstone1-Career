@@ -98,7 +98,7 @@
 .career-workspace button:not(.plain-button),
 .auth-page form button {
   display: inline-flex;
-  gap: 12px;
+  gap: 8px;
   align-items: center;
   justify-content: center;
   background: #315a7b;

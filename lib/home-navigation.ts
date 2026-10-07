@@ -8,6 +8,14 @@ export const homeFeatures = [
     href: "/jobs",
   },
   {
+    id: "studies",
+    title: "내 스터디",
+    question: "같은 공고를 준비하는 사람들과 함께해요.",
+    detail: "참여한 스터디 · 공동 로드맵 · 진행 기록",
+    action: "내 스터디 보기",
+    href: "/studies",
+  },
+  {
     id: "skills",
     title: "내 역량 확인",
     question: "내가 가진 기술이 궁금한가요?",
