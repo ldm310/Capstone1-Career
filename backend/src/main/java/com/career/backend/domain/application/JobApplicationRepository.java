@@ -19,4 +19,11 @@ public interface JobApplicationRepository
             Long jobPostingId,
             StudyBand studyBand
     );
+
+    List<JobApplication>
+    findByJobPosting_IdAndStudyBandAndStudyMatchingConsentTrueAndIdNot(
+            Long jobPostingId,
+            StudyBand studyBand,
+            Long applicationId
+    );
 }
