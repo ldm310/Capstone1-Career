@@ -12,7 +12,7 @@ export function SkyHero() {
           <br />
           다음 기회로.
         </h1>
-        <p>내 기술을 확인하고, 원하는 직무에 필요한 준비를 시작하세요.</p>
+        <p>내 기술을 확인하고, 데이터·백엔드 직무에 필요한 준비를 시작하세요.</p>
         <div className="sky-hero-actions">
           <LinkButton href="/my-skills">
             내 역량 확인하기 <ArrowRight size={17} />

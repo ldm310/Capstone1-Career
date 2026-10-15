@@ -26,10 +26,10 @@ export type JobComparison = {
 // Hand-authored UI scenarios. These are not a scoring model or employer data.
 export const studyDemoJobs: PublicJob[] = [
   {
-    id: "study-demo-rag",
+    id: "study-demo-backend",
     company: "커리어랩 · 가상 기업",
-    title: "AI 서비스 개발자",
-    category: "ax",
+    title: "백엔드 서비스 개발자",
+    category: "backend",
     location: "서울",
     employment: "정규직",
     experience: ["entry", "any"],
@@ -37,7 +37,7 @@ export const studyDemoJobs: PublicJob[] = [
     postedAt: "2026-10-03T00:00:00+09:00",
     closesAt: "2026-10-20T18:00:00+09:00",
     url: "",
-    skills: ["Python", "RAG", "Docker"],
+    skills: ["SQL", "REST API", "Docker"],
   },
   {
     id: "study-demo-data",
@@ -54,10 +54,10 @@ export const studyDemoJobs: PublicJob[] = [
     skills: ["Python", "SQL", "Airflow"],
   },
   {
-    id: "study-demo-ml",
-    company: "모델스튜디오 · 가상 기업",
-    title: "머신러닝 엔지니어 인턴",
-    category: "ml",
+    id: "study-demo-backend-intern",
+    company: "서버스튜디오 · 가상 기업",
+    title: "백엔드 개발자 인턴",
+    category: "backend",
     location: "서울",
     employment: "인턴",
     experience: ["intern"],
@@ -65,7 +65,7 @@ export const studyDemoJobs: PublicJob[] = [
     postedAt: "2026-10-01T00:00:00+09:00",
     closesAt: "2026-10-25T18:00:00+09:00",
     url: "",
-    skills: ["Python", "PyTorch", "MLflow"],
+    skills: ["Java", "Spring Boot", "PostgreSQL"],
   },
 ];
 export function exampleComparison(

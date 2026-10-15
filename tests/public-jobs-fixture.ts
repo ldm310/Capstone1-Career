@@ -3,8 +3,8 @@ import type { PublicJob } from "../types/public-job";
 export const fixtureJobs: PublicJob[] = Array.from({ length: 7 }, (_, i) => ({
   id: `fixture-${i}`,
   company: i % 2 ? "채널코퍼레이션" : "매치그룹",
-  title: `${i === 6 ? "Applied AI" : "Machine Learning"} Engineer ${i + 1}`,
-  category: i === 6 ? "ax" : "ml",
+  title: `${i === 6 ? "Data" : "Backend"} Engineer ${i + 1}`,
+  category: i === 6 ? "data" : "backend",
   location: "서울",
   employment: "정규직",
   workplace: "하이브리드 근무",

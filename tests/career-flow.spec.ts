@@ -12,7 +12,7 @@ test("onboarding uses one source and carries target role into growth", async ({
   page,
 }) => {
   await page.goto("/onboarding");
-  await page.getByLabel("희망 직무").selectOption("ml");
+  await page.getByLabel("희망 직무").selectOption("backend");
   await page.getByRole("button", { name: "이 직무로 시작하기" }).click();
   await page.getByRole("button", { name: "GitHub 링크", exact: true }).click();
   await expect(
@@ -21,11 +21,11 @@ test("onboarding uses one source and carries target role into growth", async ({
   await page.getByRole("link", { name: "내 성장 화면으로 이동하기" }).click();
   await page.goto("/skills");
   await expect(
-    page.getByRole("heading", { name: "PyTorch", exact: true }),
+    page.getByRole("heading", { name: "REST API", exact: true }),
   ).toBeVisible();
   await page.reload();
   await expect(
-    page.getByRole("heading", { name: "PyTorch", exact: true }),
+    page.getByRole("heading", { name: "REST API", exact: true }),
   ).toBeVisible();
 });
 
@@ -34,11 +34,9 @@ test("initial evidence is not rewarded and next task shows fixed points", async 
 }) => {
   await page.goto("/dashboard");
   await expect(page.locator(".growth-stats")).toContainText("0점");
-  const card = page
-    .locator(".growth-skill")
-    .filter({
-      has: page.getByRole("heading", { name: "Docker", exact: true }),
-    });
+  const card = page.locator(".growth-skill").filter({
+    has: page.getByRole("heading", { name: "Docker", exact: true }),
+  });
   await expect(card).toContainText("LV1 · 기초 사용");
   await expect(card).toContainText("완료 확인 후 20점");
 });
@@ -51,9 +49,7 @@ test("job analyzer matches samples, validates input, and has an empty state", as
   await expect(page.locator(".form-error[role=alert]")).toBeVisible();
   await page.getByLabel("채용공고 링크 또는 기업명").fill("NAVER");
   await page.getByRole("button", { name: "분석하기", exact: true }).click();
-  await expect(page.locator(".analyzed-job h2")).toHaveText(
-    "AI·머신러닝 엔지니어",
-  );
+  await expect(page.locator(".analyzed-job h2")).toHaveText("백엔드 엔지니어");
   await expect(page.locator(".requirement-row")).toHaveCount(4);
   await page.getByLabel("채용공고 링크 또는 기업명").fill("Unlisted Company");
   await page.getByRole("button", { name: "분석하기", exact: true }).click();
@@ -64,18 +60,16 @@ test("job analyzer matches samples, validates input, and has an empty state", as
     .getByLabel("채용공고 링크 또는 기업명")
     .fill("https://www.lgcns.com/careers/demo");
   await page.getByRole("button", { name: "분석하기", exact: true }).click();
-  await expect(page.locator(".analyzed-job h2")).toHaveText("AX·LLM 개발자");
+  await expect(page.locator(".analyzed-job h2")).toHaveText("백엔드 개발자");
 });
 
 test("skill correction is separate from level verification and rewards", async ({
   page,
 }) => {
   await page.goto("/skills");
-  const card = page
-    .locator(".growth-skill")
-    .filter({
-      has: page.getByRole("heading", { name: "PostgreSQL", exact: true }),
-    });
+  const card = page.locator(".growth-skill").filter({
+    has: page.getByRole("heading", { name: "PostgreSQL", exact: true }),
+  });
   await card.getByRole("button").click();
   await expect(page.getByRole("dialog")).toContainText("postgres");
   await page.getByRole("button", { name: "결과 확인했어요" }).click();
@@ -106,11 +100,11 @@ test("application detail, filtering and local record", async ({ page }) => {
   await page.getByRole("button", { name: "최종 전형", exact: true }).click();
   await expect(page.locator(".application-table tbody tr")).toHaveCount(1);
   await expect(
-    page.getByRole("button", { name: /toss AI Application Engineer/ }),
+    page.getByRole("button", { name: /toss Backend Application Engineer/ }),
   ).toBeVisible();
   await page.reload();
   await expect(
-    page.getByRole("button", { name: /toss AI Application Engineer/ }),
+    page.getByRole("button", { name: /toss Backend Application Engineer/ }),
   ).toBeVisible();
 });
 
@@ -156,9 +150,9 @@ test("all routes render without errors or mobile horizontal overflow", async ({
 
 test("role and period filters change market data", async ({ page }) => {
   await page.goto("/market");
-  await expect(page.getByText("387", { exact: true })).toBeVisible();
-  await page.getByLabel("희망 직무").selectOption("data");
   await expect(page.getByText("312", { exact: true })).toBeVisible();
+  await page.getByLabel("희망 직무").selectOption("backend");
+  await expect(page.getByText("250", { exact: true })).toBeVisible();
   await page.getByLabel("분석 기간").selectOption("6");
   await expect(
     page.getByText("2026년 4월~9월 · 예시 추이 데이터"),

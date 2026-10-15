@@ -1,3 +1,4 @@
+import { classifyJobRole } from "@/lib/roles";
 import { patterns } from "@/lib/skill-patterns";
 import type { PublicJob } from "@/types/public-job";
 const boards = [
@@ -15,14 +16,7 @@ function normalize(
     categories = record(raw.categories);
   const title = string(raw.text),
     location = string(categories.location);
-  if (!/engineer|scientist|엔지니어|개발자|연구원/i.test(title)) return null;
-  const category = /data|데이터/i.test(title)
-    ? "data"
-    : /machine learning|\bml\b|머신러닝|research scientist/i.test(title)
-      ? "ml"
-      : /\bai\b|\bllm\b|인공지능/i.test(title)
-        ? "ax"
-        : null;
+  const category = classifyJobRole(title);
   if (
     !category ||
     !(raw.country === "KR" || /seoul|korea|서울|한국/i.test(location))

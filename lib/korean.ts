@@ -1,8 +1,7 @@
 import type { ApplicationStage } from "@/types/career";
 export const roleLabels = {
-  ax: "AX·LLM 개발",
-  ml: "AI·머신러닝",
-  data: "데이터 엔지니어링",
+  data: "데이터",
+  backend: "백엔드",
 };
 export const stageLabels: Record<ApplicationStage, string> = {
   Applied: "지원 완료",

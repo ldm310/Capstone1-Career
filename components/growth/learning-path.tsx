@@ -17,7 +17,7 @@ export function LearningPath({
   tasks: GrowthTask[];
   onSelect: (skill: string) => void;
 }) {
-  const path = learningPaths[role] || learningPaths.ax;
+  const path = learningPaths[role] || learningPaths.data;
   const groups = [
     ...path.stages.map((s, index) => ({
       title: s.title,
@@ -27,13 +27,8 @@ export function LearningPath({
     })),
     {
       title: "배포와 확장",
-      description: "Docker는 함께 준비하고, MCP는 필요할 때 선택해요.",
-      items: [
-        path.parallel,
-        ...(role === "ax"
-          ? [{ skill: "MCP", title: "외부 도구 연결하기", optional: true }]
-          : []),
-      ],
+      description: "프로젝트를 재현할 수 있도록 실행 환경을 함께 준비해요.",
+      items: [path.parallel],
       kind: "병행 가능 · 선택 확장",
     },
   ].filter((g) => g.items.length);
@@ -202,13 +197,7 @@ export function LearningPath({
                     )
                     .join(" + ")}
                 </strong>
-                <small>
-                  {i === 1 && role === "ax"
-                    ? "문서 검색 만들기"
-                    : i === 2 && role === "ax"
-                      ? "작업 연결하기"
-                      : g.title}
-                </small>
+                <small>{g.title}</small>
               </span>
             </button>
           </li>

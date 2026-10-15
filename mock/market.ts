@@ -31,36 +31,15 @@ function dataset(
   };
 }
 export const market: Record<RoleId, MarketDataset> = {
-  ax: dataset(
+  backend: dataset(
+    ["api", "sql", "postgresql", "java", "spring", "nodejs", "docker", "git"],
+    [85, 79, 63, 61, 57, 46, 42, 40],
+    [2, 1, 3, 1, 2, 3, 4, 1],
+    250,
     [
-      "rag",
-      "langchain",
-      "docker",
-      "vector",
-      "langgraph",
-      "mcp",
-      "python",
-      "api",
-      "git",
-      "embedding",
-      "evaluation",
-    ],
-    [61, 48, 43, 38, 31, 24, 23, 20, 17, 16, 12],
-    [5, 3, 1, 6, 8, 13, 1, 2, 0, 4, 3],
-    387,
-    [
-      ["RAG", "Vector DB", "Embedding", "Hybrid Search", "Reranking"],
-      ["Agent", "LangGraph", "Tool Calling", "MCP"],
-    ],
-  ),
-  ml: dataset(
-    ["python", "pytorch", "docker", "kubernetes", "mlflow", "evaluation"],
-    [82, 68, 51, 39, 34, 29],
-    [2, 5, 1, 7, 9, 6],
-    264,
-    [
-      ["Training", "PyTorch", "Evaluation", "MLflow"],
-      ["Serving", "Docker", "Kubernetes"],
+      ["REST API", "SQL", "PostgreSQL"],
+      ["Java", "Spring Boot"],
+      ["Node.js", "Docker", "Git"],
     ],
   ),
   data: dataset(

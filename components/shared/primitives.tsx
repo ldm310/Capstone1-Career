@@ -140,9 +140,8 @@ export function RoleSelect() {
       >
         {(
           data?.roles ?? [
-            { id: "ax", short: "AX·LLM 개발자" },
-            { id: "ml", short: "AI·머신러닝 엔지니어" },
-            { id: "data", short: "데이터 엔지니어" },
+            { id: "data", short: "데이터" },
+            { id: "backend", short: "백엔드" },
           ]
         ).map((r) => (
           <option key={r.id} value={r.id}>

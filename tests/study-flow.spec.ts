@@ -5,7 +5,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { jobExperience, sortPublicJobs } from "../lib/job-filters";
 
 async function joinExample(page: Page, tier = "low") {
-  await page.goto(`/jobs?job=study-demo-rag&demo=${tier}&view=study`);
+  await page.goto(`/jobs?job=study-demo-backend&demo=${tier}&view=study`);
   await expect(
     page.getByText("지원 완료를 확인하면 스터디를 볼 수 있어요"),
   ).toBeVisible();
@@ -42,8 +42,12 @@ test("official cards remain pending; only explicitly selected examples show sati
     .getByRole("link", { name: "Middle", exact: true })
     .click();
   const first = page.locator(".public-job-card").first();
-  await expect(first.locator(".qualification-skills")).toContainText("RAG LV2");
-  await expect(first.locator(".qualification-skills")).not.toContainText("SQL");
+  await expect(first.locator(".qualification-skills")).toContainText(
+    "REST API LV2",
+  );
+  await expect(first.locator(".qualification-skills")).not.toContainText(
+    "Airflow",
+  );
   await expect(
     page.locator(".public-job-card").nth(1).locator(".qualification-skills"),
   ).toContainText("SQL LV2");
@@ -121,7 +125,7 @@ test("one member joins once, records roadmap, chat, schedule and resources, and 
   await expect(page.getByRole("link", { name: "프로젝트 결과" })).toBeVisible();
   await page.getByRole("link", { name: "내 스터디 목록", exact: true }).click();
   await expect(page.locator(".study-offer")).toHaveCount(1);
-  await page.goto("/jobs?job=study-demo-rag&demo=low&view=study");
+  await page.goto("/jobs?job=study-demo-backend&demo=low&view=study");
   await expect(page.getByRole("link", { name: "스터디 들어가기" })).toHaveCount(
     1,
   );
@@ -138,7 +142,7 @@ test("each level sees only its own offers; High has a working roadmap; no leak t
   await joinExample(page, "high");
   await expect(page.getByText("맞춤 심화 학습", { exact: true })).toBeVisible();
   await expect(page.locator(".study-roadmap li")).toHaveCount(3);
-  await page.goto("/jobs?job=study-demo-rag&demo=high&view=study");
+  await page.goto("/jobs?job=study-demo-backend&demo=high&view=study");
   await expect(page.locator(".study-offer .study-tier")).toHaveText([
     "High",
     "High",
@@ -216,7 +220,9 @@ test("study screens fit a mobile viewport and filters work with keyboard", async
   ).toEqual([]);
   await page.screenshot({ path: "work/studies-desktop.png", fullPage: true });
   await page.goto("/jobs?demo=middle");
-  await expect(page.getByText("지원 완료 · 예시", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("지원 완료 · 예시", { exact: true }),
+  ).toBeVisible();
   const menu = page.locator("summary").filter({ hasText: "채용구분" });
   await menu.press("Enter");
   await expect(page.getByLabel("경력 무관", { exact: true })).toBeVisible();

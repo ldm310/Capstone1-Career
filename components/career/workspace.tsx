@@ -168,7 +168,7 @@ export function CareerWorkspace({
     );
   const findings = currentFindings(state),
     skills = [...new Set(findings.map((f) => f.skill))],
-    targets = targetSkills[state.role] || targetSkills.ax;
+    targets = targetSkills[state.role] || targetSkills.data;
   const gaps = targets.filter(
     (s) => !findings.some((f) => f.skill === s && f.type === "implementation"),
   );

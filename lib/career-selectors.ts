@@ -68,13 +68,13 @@ export function getHeroPreview(data: CareerDataset) {
     .filter((e) => e.type === "implementation")
     .slice(0, 2);
   return {
-    market: data.market.ax.skills.filter((s) =>
-      ["rag", "vector", "mcp"].includes(s.skillId),
+    market: data.market.data.skills.filter((s) =>
+      ["sql", "python", "airflow"].includes(s.skillId),
     ),
     evidenceTitle: implemented[0]?.title ?? "Your next project",
     evidenceSkills: implemented.map((e) => skillName(data, e.skillId)),
     opportunity:
-      data.market.ax.skills.find((s) => s.skillId === "vector")?.name ??
+      data.market.data.skills.find((s) => s.skillId === "airflow")?.name ??
       "Your next skill",
   };
 }

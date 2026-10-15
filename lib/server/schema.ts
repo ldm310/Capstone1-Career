@@ -8,7 +8,7 @@ const url = z.union([
 export const mutation = z.discriminatedUnion("action", [
   z.object({
     action: z.literal("preferences"),
-    role: z.enum(["ax", "ml", "data"]),
+    role: z.enum(["data", "backend"]),
     region: z.string().max(100),
     experience: z.string().max(100),
     hours: z.number().min(1).max(60),
@@ -79,7 +79,7 @@ export const mutation = z.discriminatedUnion("action", [
           skills: z.array(text).max(100).optional(),
           company: text,
           title: text,
-          category: z.enum(["ax", "ml", "data"]),
+          category: z.enum(["data", "backend"]),
           location: text,
           employment: text,
           workplace: text.nullable(),

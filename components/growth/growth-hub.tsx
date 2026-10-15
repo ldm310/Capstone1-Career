@@ -27,14 +27,15 @@ import {
 } from "@/types/growth";
 import type { Finding } from "@/types/workspace";
 import { mergeReviews } from "@/lib/growth/model";
+import { normalizeRole } from "@/lib/roles";
 import { sample } from "@/mock/growth";
 export function GrowthHub({
   demo = false,
   preparation = false,
-  role = "ax",
+  role = "data",
   view = "overview",
   findings = [],
-  targets = ["Docker", "Python", "RAG", "Vector DB", "LangGraph"],
+  targets = ["SQL", "Python", "PostgreSQL", "Airflow", "Spark", "Docker"],
   onSources,
 }: {
   demo?: boolean;
@@ -57,7 +58,7 @@ export function GrowthHub({
   const [selected, setSelected] = useState<string | null>(null),
     [filter, setFilter] = useState("all"),
     [demoStep, setDemoStep] = useState(0),
-    [demoRole, setDemoRole] = useState("ax");
+    [demoRole, setDemoRole] = useState("data");
   useEffect(() => {
     if (demo) return;
     let active = true;
@@ -85,7 +86,7 @@ export function GrowthHub({
     if (!demo) return;
     try {
       const role = sessionStorage.getItem("career-growth-sample-role");
-      if (role) queueMicrotask(() => setDemoRole(role));
+      if (role) queueMicrotask(() => setDemoRole(normalizeRole(role)));
       const saved = sessionStorage.getItem("career-growth-sample-v1");
       if (saved) {
         const restored: GrowthState = JSON.parse(saved);
@@ -211,8 +212,7 @@ export function GrowthHub({
       ...visible.map((r) => r.skill),
       ...(demo
         ? {
-            ax: ["Docker", "Python", "RAG", "Vector DB", "LangGraph"],
-            ml: ["Python", "PyTorch", "Docker"],
+            backend: ["REST API", "SQL", "PostgreSQL", "Docker"],
             data: ["SQL", "PostgreSQL", "Airflow", "Spark"],
           }[demoRole] || targets
         : targets
@@ -340,9 +340,8 @@ export function GrowthHub({
                           );
                         }}
                       >
-                        <option value="ax">AX / LLM 엔지니어</option>
-                        <option value="ml">AI / ML 엔지니어</option>
-                        <option value="data">데이터 엔지니어</option>
+                        <option value="data">데이터</option>
+                        <option value="backend">백엔드</option>
                       </select>
                     </label>
                     <button onClick={() => setDemoStep(1)}>

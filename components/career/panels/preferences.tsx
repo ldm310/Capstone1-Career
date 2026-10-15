@@ -29,9 +29,8 @@ export function PreferencesPanel({
           <label>
             목표 직무
             <select name="role" defaultValue={state.role}>
-              <option value="ax">AX·LLM 개발자</option>
-              <option value="ml">AI·ML 엔지니어</option>
-              <option value="data">데이터 엔지니어</option>
+              <option value="data">데이터</option>
+              <option value="backend">백엔드</option>
             </select>
           </label>
           <details>

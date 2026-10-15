@@ -1,3 +1,4 @@
+import { normalizeRole } from "@/lib/roles";
 import { DatabaseSync } from "node:sqlite";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
@@ -88,7 +89,11 @@ export function workspace(id: string): Workspace {
     .prepare("SELECT data FROM workspaces WHERE user_id=?")
     .get(id) as { data: string } | undefined;
   return row
-    ? { ...emptyWorkspace, ...JSON.parse(row.data) }
+    ? {
+        ...emptyWorkspace,
+        ...JSON.parse(row.data),
+        role: normalizeRole(JSON.parse(row.data).role),
+      }
     : structuredClone(emptyWorkspace);
 }
 export function saveWorkspace(id: string, data: Workspace) {

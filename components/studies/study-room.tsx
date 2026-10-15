@@ -13,7 +13,11 @@ import {
   Send,
   Users,
 } from "lucide-react";
-import { tierLabels, type StudyOffer } from "@/lib/study-prototype";
+import {
+  studyDemoJobs,
+  tierLabels,
+  type StudyOffer,
+} from "@/lib/study-prototype";
 import { useStudies, type StudyRoom as Room } from "./study-provider";
 
 export function StudyRoom({
@@ -28,6 +32,7 @@ export function StudyRoom({
   jobTitle: string;
 }) {
   const { update } = useStudies();
+  const job = studyDemoJobs.find((item) => item.id === room.jobId);
   const [tab, setTab] = useState("roadmap");
   const [message, setMessage] = useState("");
   const [notice, setNotice] = useState("");
@@ -184,11 +189,18 @@ export function StudyRoom({
                 공유’에 모아보세요.
               </p>
               <a
-                href="https://docs.python.org/ko/3/tutorial/"
+                href={
+                  job?.category === "data"
+                    ? "https://docs.python.org/ko/3/tutorial/"
+                    : "https://www.postgresql.org/docs/current/tutorial.html"
+                }
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                Python 공식 자습서 <ExternalLink size={14} />
+                {job?.category === "data"
+                  ? "Python 공식 자습서"
+                  : "PostgreSQL 공식 자습서"}{" "}
+                <ExternalLink size={14} />
               </a>
               <a
                 href="https://docs.docker.com/get-started/"

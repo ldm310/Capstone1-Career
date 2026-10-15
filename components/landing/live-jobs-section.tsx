@@ -18,6 +18,7 @@ import {
   Search,
 } from "lucide-react";
 import type { PublicJob, PublicJobsResponse } from "@/types/public-job";
+import { isSupportedRole } from "@/lib/roles";
 import { roleLabels } from "@/lib/korean";
 const storageKey = "career-twin:saved-public-jobs:v1";
 export function LiveJobsSection({
@@ -184,6 +185,7 @@ export function LiveJobsSection({
       : (feed?.jobs ?? [])
     ).filter(
       (job) =>
+        isSupportedRole(job.category) &&
         (!savedOnly || saved.includes(job.id)) &&
         (role === "all" || job.category === role) &&
         (!experience.length ||

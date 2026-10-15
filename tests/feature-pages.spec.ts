@@ -82,7 +82,7 @@ test("catalog filters, saved-only view and comparison URL stay inside jobs", asy
   await expect(page.locator(".public-job-card")).toHaveCount(7);
   await page
     .getByRole("button", {
-      name: "Machine Learning Engineer 1 저장",
+      name: "Backend Engineer 1 저장",
       exact: true,
     })
     .click();
@@ -138,7 +138,7 @@ test("catalog loads more than one page and filters send complete query to API", 
     id: `more-${i}`,
     company: "검증 회사",
     title: `AI 개발자 ${i + 1}`,
-    category: "ml",
+    category: "backend",
     location: "서울",
     employment: "정규직",
     workplace: "하이브리드 근무",

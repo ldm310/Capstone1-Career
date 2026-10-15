@@ -1,4 +1,10 @@
 export const patterns: Record<string, RegExp> = {
+  "REST API":
+    /\brest(?:ful)?\s*api\b|@(?:Get|Post|Put|Delete)Mapping|app\.(?:get|post|put|delete)\(/i,
+  Java: /\bjava\b|public\s+class\s+\w+/i,
+  "Spring Boot": /spring[ -]?boot|@SpringBootApplication/i,
+  "Node.js": /node\.?js|require\(["'](?:express|http)["']\)/i,
+  Git: /\bgit\b|github\s+actions/i,
   PostgreSQL: /\b(?:postgresql|postgres)\b/i,
   Python: /\bpython\b|^\s*(?:from \w+ import|def \w+\()/im,
   Docker: /\bdocker\b|^FROM\s+\S+/im,

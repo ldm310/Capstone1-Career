@@ -7,6 +7,7 @@ import {
   useMemo,
   useState,
 } from "react";
+import { normalizeRole, isSupportedRole } from "@/lib/roles";
 import { MotionConfig } from "motion/react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { careerService } from "@/lib/career-service";
@@ -22,8 +23,8 @@ import type {
 const STORAGE_KEY = "career-twin:prototype:v1";
 const initialProfile: ProfileState = {
   name: "Dongmin",
-  role: "ax",
-  targetRoles: ["ax"],
+  role: "data",
+  targetRoles: ["data"],
   connections: [
     { source: "github", label: "GitHub 체험 자료", connected: false },
     { source: "cv", label: "CV", connected: false },
@@ -87,13 +88,23 @@ export function CareerProvider({ children }: { children: React.ReactNode }) {
             const saved = JSON.parse(raw);
             if (
               saved &&
-              ["ax", "ml", "data"].includes(saved.role) &&
+              typeof saved.role === "string" &&
               Array.isArray(saved.connections) &&
               Array.isArray(saved.addedEvidence) &&
               Array.isArray(saved.applications) &&
               typeof saved.name === "string"
-            )
-              setProfile({ ...initialProfile, ...saved });
+            ) {
+              setProfile({
+                ...initialProfile,
+                ...saved,
+                role: normalizeRole(saved.role),
+                targetRoles: [normalizeRole(saved.role)],
+              });
+              if (!isSupportedRole(saved.role))
+                setNotice(
+                  "직무가 데이터·백엔드로 변경되어 기본 직무를 데이터로 표시해요. 목표 직무를 확인해 주세요. 기존 자료는 유지돼요.",
+                );
+            }
           }
         } catch {
           setNotice("저장된 데이터를 읽지 못해 기본 체험로 시작합니다.");

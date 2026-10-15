@@ -1,4 +1,4 @@
-export type RoleId = "ax" | "ml" | "data";
+export type RoleId = import("@/lib/roles").SupportedRole;
 export type EvidenceType =
   "implementation" | "learning" | "career" | "certificate";
 export type EvidenceSource = "github" | "notion" | "cv" | "certificate";

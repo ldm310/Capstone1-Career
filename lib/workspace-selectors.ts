@@ -10,9 +10,17 @@ export function currentFindings(state: Workspace) {
     .flatMap((r) => r.findings);
 }
 export const targetSkills: Record<string, string[]> = {
-  ax: ["RAG", "LangGraph", "Vector DB", "Docker", "MCP", "Python"],
-  ml: ["Python", "PyTorch", "Docker", "Kubernetes", "MLflow"],
-  data: ["SQL", "Python", "Spark", "Airflow", "AWS", "Docker"],
+  data: ["SQL", "Python", "PostgreSQL", "Airflow", "Spark", "Docker"],
+  backend: [
+    "REST API",
+    "SQL",
+    "PostgreSQL",
+    "Java",
+    "Spring Boot",
+    "Node.js",
+    "Docker",
+    "Git",
+  ],
 };
 export function day(offset = 0) {
   const d = new Date();

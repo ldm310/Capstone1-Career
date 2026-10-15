@@ -77,7 +77,9 @@ export async function github(input: string) {
         x.type === "blob" &&
         x.size < 100000 &&
         !/node_modules|vendor|lock|\.env|secret|credential/i.test(x.path) &&
-        /\.(py|ts|tsx|js|json|ya?ml|md|sql|txt)$|Dockerfile$/i.test(x.path),
+        /\.(py|ts|tsx|js|java|kt|gradle|xml|json|ya?ml|md|sql|txt)$|Dockerfile$/i.test(
+          x.path,
+        ),
     )
     .sort(
       (a, b) =>

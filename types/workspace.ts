@@ -67,7 +67,7 @@ export interface Workspace {
   savedJobs: import("./public-job").PublicJob[];
 }
 export const emptyWorkspace: Workspace = {
-  role: "ax",
+  role: "data",
   region: "",
   experience: "",
   hours: 5,

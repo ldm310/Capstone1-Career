@@ -21,7 +21,7 @@ test("official job cards paginate, bookmark, persist, filter and link to source"
   );
   await page
     .getByRole("button", {
-      name: "Machine Learning Engineer 1 저장",
+      name: "Backend Engineer 1 저장",
       exact: true,
     })
     .click();
@@ -37,7 +37,7 @@ test("official job cards paginate, bookmark, persist, filter and link to source"
   await expect(page.locator(".public-job-card")).toHaveCount(1);
   await page.reload();
   await expect(
-    page.getByRole("button", { name: "Machine Learning Engineer 1 저장 취소" }),
+    page.getByRole("button", { name: "Backend Engineer 1 저장 취소" }),
   ).toHaveAttribute("aria-pressed", "true");
   await page
     .getByRole("navigation", { name: "채용공고 하위 메뉴" })
@@ -45,10 +45,10 @@ test("official job cards paginate, bookmark, persist, filter and link to source"
     .click();
   await expect(page).toHaveURL(/\/jobs$/);
   await expect(page.locator(".public-job-card")).toHaveCount(7);
-  await page.getByLabel("공고 직무").selectOption("ax");
+  await page.getByLabel("공고 직무").selectOption("data");
   await expect(page.locator(".public-job-card")).toHaveCount(1);
   await expect(page.locator(".public-job-card h3")).toHaveText(
-    "Applied AI Engineer 7",
+    "Data Engineer 7",
   );
   await page.getByLabel("전체 연동 공고 검색").fill("없는기업");
   await expect(page.getByText("조건에 맞는 공고가 없어요.")).toBeVisible();

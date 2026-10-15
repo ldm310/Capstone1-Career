@@ -33,7 +33,7 @@ export async function GET(request: Request) {
     !Number.isInteger(limit) ||
     limit < 1 ||
     limit > 24 ||
-    !["all", "ax", "ml", "data"].includes(role)
+    !["all", "data", "backend"].includes(role)
   )
     return Response.json({ error: "잘못된 조회 조건입니다." }, { status: 400 });
   try {
