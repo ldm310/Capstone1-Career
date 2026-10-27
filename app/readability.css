@@ -282,3 +282,68 @@ small,
   color: #315d80;
   white-space: nowrap;
 }
+
+/* 카드 전체 클릭: 카드 안의 대표 링크(.card-link)가 카드 전체를 덮는다.
+   저장, 원문 보기 같은 다른 버튼은 그 위에 올려 따로 누를 수 있게 둔다. */
+.card-click {
+  position: relative;
+  cursor: pointer;
+}
+.card-click .card-link {
+  position: static !important;
+  transform: none !important;
+}
+.card-click .card-link::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  z-index: 0;
+}
+.card-click .card-link:focus-visible {
+  outline: none;
+}
+.card-click:has(.card-link:focus-visible) {
+  outline: 2px solid #315d80;
+  outline-offset: 3px;
+}
+.card-click a:not(.card-link),
+.card-click button:not(.card-link),
+.card-click input,
+.card-click select,
+.card-click label {
+  position: relative;
+  z-index: 1;
+}
+.home-jobs li.card-click {
+  margin: 0 -12px;
+  padding-inline: 12px;
+  border-radius: 12px;
+  transition: background 0.2s;
+}
+.home-jobs li.card-click:hover {
+  background: #f4f8fb;
+}
+.home-jobs li.card-click:hover .home-job-more {
+  transform: translateX(3px);
+}
+.home-job-more {
+  transition: transform 0.2s;
+}
+.growth-skill.card-click {
+  transition:
+    transform 0.2s,
+    box-shadow 0.2s,
+    border-color 0.2s;
+}
+.growth-skill.card-click:hover {
+  transform: translateY(-3px);
+  border-color: #9fbfda;
+  box-shadow: 0 12px 28px #2f53751f;
+}
+@media (prefers-reduced-motion: reduce) {
+  .growth-skill.card-click:hover,
+  .home-jobs li.card-click:hover .home-job-more {
+    transform: none;
+  }
+}

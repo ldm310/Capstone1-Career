@@ -278,7 +278,7 @@ export function LiveJobsSection({
       )}
       <div className="public-job-grid">
         {(preview ? visible.slice(0, 3) : visible).map((job) => (
-          <article className="public-job-card" key={job.id}>
+          <article className="public-job-card card-click" key={job.id}>
             <div className="public-company">
               <span className="public-company-mark" aria-hidden="true">
                 {job.company.slice(0, 1)}
@@ -290,7 +290,10 @@ export function LiveJobsSection({
               {roleLabels[job.category]}
             </span>
             <h3>
-              <Link href={`/jobs?job=${encodeURIComponent(job.id)}`}>
+              <Link
+                className="card-link"
+                href={`/jobs?job=${encodeURIComponent(job.id)}`}
+              >
                 {job.title}
               </Link>
             </h3>

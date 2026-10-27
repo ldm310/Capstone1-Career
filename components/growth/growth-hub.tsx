@@ -169,7 +169,7 @@ export function GrowthHub({
                   const r = visible.find((r) => r.skill === skill);
                   const next = ((r?.level || 0) + 1) as Level;
                   return (
-                    <article className="growth-skill" key={skill}>
+                    <article className="growth-skill card-click" key={skill}>
                       <div className="growth-section-heading">
                         <h3>{skill}</h3>
                         {r?.status === "pending" && (
@@ -206,7 +206,11 @@ export function GrowthHub({
                               : "기준 준비 중"}
                         </strong>
                       </div>
-                      <button onClick={() => setSelected(skill)}>
+                      <button
+                        className="card-link"
+                        onClick={() => setSelected(skill)}
+                        aria-label={`${skill} 자세히`}
+                      >
                         자세히 <ArrowRight size={16} />
                       </button>
                     </article>

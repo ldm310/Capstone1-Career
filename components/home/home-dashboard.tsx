@@ -258,7 +258,7 @@ export function HomeDashboard() {
                     : null;
                   const kind = jobExperience(job)[0];
                   return (
-                    <li key={job.id}>
+                    <li key={job.id} className="card-click">
                       <span className="home-job-mark" aria-hidden="true">
                         {job.company.slice(0, 1)}
                       </span>
@@ -269,6 +269,7 @@ export function HomeDashboard() {
                         </small>
                         <h3>
                           <Link
+                            className="card-link"
                             href={`/jobs?job=${encodeURIComponent(job.id)}`}
                           >
                             {job.title}
@@ -306,12 +307,9 @@ export function HomeDashboard() {
                             <small>확인 필요</small>
                           </span>
                         </div>
-                        <Link
-                          className="home-job-more"
-                          href={`/jobs?job=${encodeURIComponent(job.id)}&view=compare`}
-                        >
-                          자세히 <ArrowRight size={15} />
-                        </Link>
+                        <span className="home-job-more" aria-hidden="true">
+                          <ArrowRight size={18} />
+                        </span>
                       </div>
                     </li>
                   );

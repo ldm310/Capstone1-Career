@@ -59,13 +59,18 @@ export function ExampleJobs({ tier }: { tier: StudyTier }) {
       <p className="study-muted">예시 공고 {jobs.length}개</p>
       <div className="public-job-grid">
         {jobs.map((job) => (
-          <article className="public-job-card" key={job.id}>
+          <article className="public-job-card card-click" key={job.id}>
             <QualificationSummary comparison={exampleComparison(job, tier)} />
             <div className="public-company">
               <strong>{job.company}</strong>
             </div>
             <h3>
-              <Link href={`/jobs?job=${job.id}&demo=${tier}`}>{job.title}</Link>
+              <Link
+                className="card-link"
+                href={`/jobs?job=${job.id}&demo=${tier}`}
+              >
+                {job.title}
+              </Link>
             </h3>
             <div className="public-job-meta">
               <span>
