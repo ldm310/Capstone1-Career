@@ -1,11 +1,5 @@
 import type { Dispatch, SetStateAction } from "react";
-import type {
-  Workspace,
-  Finding,
-  CareerEvent,
-  AnalysisRun,
-} from "@/types/workspace";
-import type { PublicJob } from "@/types/public-job";
+import type { Workspace, Finding } from "@/types/workspace";
 export interface ServerResult {
   workspace?: Workspace;
   url?: string;
@@ -14,8 +8,6 @@ export interface ServerResult {
 export interface PanelProps {
   state: Workspace;
   busy: boolean;
-  notice: string;
-  error: string;
   request: (
     url: string,
     body: unknown,
@@ -27,16 +19,6 @@ export interface PanelProps {
   findings: Finding[];
   skills: string[];
   targets: string[];
-  gaps: string[];
-  next: string | undefined;
-  upcoming: CareerEvent[];
-  latest: AnalysisRun | undefined;
-  previous: AnalysisRun | undefined;
-  added: Finding[];
-  removed: Finding[];
-  params: { get(name: string): string | null };
-  jobs: PublicJob[];
-  jobsError: string;
   jobSkills: string[];
   questions: { key: string; text: string; evidence: Finding | undefined }[];
   shares: string[];

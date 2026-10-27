@@ -6,8 +6,8 @@ export default function ErrorPage({ reset }: { reset: () => void }) {
     <main className="standalone">
       <EmptyState
         error
-        title="다시 한번 시도해 주세요."
-        description="화면을 불러오지 못했습니다. 다시 시도해주세요."
+        title="불러오지 못했어요."
+        description="잠시 후 다시 시도해 주세요."
         action={<Button onClick={reset}>다시 시도</Button>}
       />
     </main>

@@ -11,19 +11,6 @@
   margin: auto;
   color: #21384b;
 }
-.career-heading {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 26px;
-}
-.career-heading h1 {
-  font-size: 30px;
-  letter-spacing: var(--tracking-heading);
-  font-weight: 650;
-  margin: 12px 0;
-}
-.career-heading p,
 .career-panel p {
   color: #637585;
   line-height: 1.8;
@@ -33,26 +20,7 @@
   font-weight: 600;
   color: #315a7b;
 }
-.career-tabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  border-bottom: 1px solid #dce5ed;
-  padding-bottom: 14px;
-  margin-bottom: 24px;
-}
-.career-tabs a {
-  padding: 10px 13px;
-  font-size: 13px;
-  border-radius: 7px;
-}
-.career-tabs a[aria-current] {
-  background: #e8f0f6;
-  color: #294f6d;
-  font-weight: 650;
-}
-.career-panel,
-.career-next {
+.career-panel {
   padding: 28px;
   border: 1px solid #dce5ed;
   border-radius: 14px;
@@ -75,24 +43,6 @@
   display: flex;
   align-items: center;
   gap: 8px;
-}
-.career-next {
-  background: #f1f6fa;
-  border-color: #ccdce9;
-  padding: 34px;
-}
-.career-next h2 {
-  font-size: 30px;
-  line-height: 1.45;
-  letter-spacing: var(--tracking-heading);
-  margin: 14px 0;
-  font-weight: 650;
-}
-.career-next p {
-  max-width: 700px;
-  line-height: 1.8;
-  color: #536b7e;
-  margin-bottom: 24px;
 }
 .career-primary,
 .career-workspace button:not(.plain-button),
@@ -121,27 +71,6 @@
 }
 .career-workspace a:hover {
   text-decoration: underline;
-}
-.career-stats {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
-  margin: 22px 0;
-}
-.career-stats article {
-  background: #fff;
-  border: 1px solid #e1e8ee;
-  border-radius: 12px;
-  padding: 23px;
-}
-.career-stats strong {
-  font-size: 30px;
-  display: block;
-  font-weight: 600;
-}
-.career-stats span {
-  font-size: 12px;
-  color: #5c6e7d;
 }
 .career-two {
   display: grid;
@@ -214,17 +143,6 @@
   border-radius: 8px;
   margin-bottom: 18px;
 }
-.career-tags {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-.career-tags span {
-  padding: 6px 10px;
-  background: #edf3f8;
-  border-radius: 6px;
-  font-size: 12px;
-}
 .finding {
   padding: 22px 0;
   border-top: 1px solid #e5ebf0;
@@ -261,13 +179,6 @@
   display: flex;
   align-items: center;
   gap: 8px;
-}
-.career-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 18px;
-  align-items: center;
-  margin: 20px 0;
 }
 .career-task {
   display: grid;
@@ -351,57 +262,6 @@
   font-size: 20px;
   margin-top: 10px;
 }
-.sidebar .account-nav {
-  margin-top: 10px;
-  background: #edf3f8;
-  color: #315a7b;
-}
-.next-action-focus {
-  padding: 28px 32px;
-  border: 1px solid #cbdce9;
-  border-radius: 14px;
-  background: #f4f8fb;
-  margin-bottom: 22px;
-  display: grid;
-  grid-template-columns: 1.6fr 1fr;
-  gap: 32px;
-  align-items: center;
-}
-.next-action-focus h2 {
-  font-size: 26px;
-  font-weight: 650;
-  line-height: 1.45;
-  margin: 12px 0;
-  color: #23465f;
-}
-.next-action-focus p {
-  font-size: 13px;
-  line-height: 1.8;
-  color: #536b7e;
-}
-.next-action-focus small {
-  font-size: 12px;
-  color: #536b7e;
-}
-.next-action-focus .cta {
-  margin-top: 16px;
-}
-.data-origin-note {
-  padding: 10px 14px;
-  background: #f0f4f8;
-  font-size: 12px;
-  color: #52697c;
-  border-radius: 7px;
-  margin-bottom: 20px;
-}
-.source-real-link {
-  display: block;
-  padding: 14px;
-  background: #edf3f8;
-  border-radius: 8px;
-  font-size: 13px;
-  margin-bottom: 16px;
-}
 .intro-scene {
   display: flex;
   align-items: center;
@@ -427,27 +287,12 @@
 .intro-scene .intro-click:hover svg {
   transform: translateX(3px);
 }
-@media (min-width: 769px) {
-  .app-shell .mobile-only {
-    display: none !important;
-  }
-}
 @media (max-width: 760px) {
   .career-two {
     grid-template-columns: 1fr;
   }
-  .career-stats {
-    grid-template-columns: 1fr 1fr;
-  }
-  .career-panel,
-  .career-next {
+  .career-panel {
     padding: 20px;
-  }
-  .career-heading h1 {
-    font-size: 25px;
-  }
-  .career-next h2 {
-    font-size: 24px;
   }
   .career-task {
     grid-template-columns: 20px 1fr;
@@ -457,14 +302,6 @@
   }
   .career-row {
     flex-wrap: wrap;
-  }
-  .next-action-focus {
-    grid-template-columns: 1fr;
-    padding: 22px;
-    gap: 10px;
-  }
-  .career-heading {
-    align-items: flex-start;
   }
   .intro-scene {
     padding: 24px;
@@ -511,27 +348,6 @@
 .document-line > span {
   min-width: 0;
   flex: 1;
-}
-.app-shell .nav-item.active {
-  background: #eaf1f7;
-  color: #315a7b;
-}
-.app-shell .sidebar-tip {
-  background: #f3f7fa;
-  border-color: #dfe8ef;
-}
-.app-shell .sidebar-tip strong,
-.app-shell .sidebar-tip > a {
-  color: #315a7b;
-}
-.app-shell {
-  background: #f7f9fb;
-}
-.next-action-focus .cta + p {
-  margin-top: 12px;
-}
-.dashboard-gap-panel {
-  margin-bottom: 24px;
 }
 
 /* Growth journeys share the same structure in personal and sample workspaces. */
@@ -585,54 +401,6 @@
 .growth-hub :focus-visible {
   outline: 3px solid #578eb2;
   outline-offset: 3px;
-}
-.growth-welcome {
-  padding: 32px;
-  border-radius: 20px;
-  background: #edf4f8;
-  border: 1px solid #dae6ee;
-}
-.growth-steps {
-  display: flex;
-  gap: 20px;
-  padding: 0;
-  list-style: none;
-  margin: 26px 0;
-  flex-wrap: wrap;
-}
-.growth-steps li {
-  display: flex;
-  gap: 9px;
-  align-items: center;
-  font-size: 14px;
-}
-.growth-steps li > span {
-  background: #fff;
-  border: 1px solid #b9ccda;
-  border-radius: 50%;
-  width: 28px;
-  height: 28px;
-  display: grid;
-  place-items: center;
-}
-.growth-stats {
-  display: flex;
-  gap: 48px;
-  margin: 28px 0;
-}
-.growth-stats > div {
-  display: grid;
-  gap: 5px;
-}
-.growth-stats strong {
-  font-size: 30px;
-}
-.growth-stats span {
-  font-size: 13px;
-}
-.growth-stats small {
-  font-size: 14px;
-  margin-left: 5px;
 }
 .growth-section-heading {
   display: flex;
@@ -745,49 +513,6 @@
   background: #f7f9fb;
   border-radius: 10px;
 }
-.growth-ranking > div {
-  display: grid;
-  grid-template-columns: 45px 1fr auto;
-  gap: 16px;
-  align-items: center;
-  padding: 16px;
-  border-bottom: 1px solid #e0e7ed;
-}
-.growth-ranking small {
-  display: block;
-}
-.growth-ranking .mine {
-  background: #edf4fa;
-}
-.growth-demo {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  flex-wrap: wrap;
-  border: 1px solid #c9dce9;
-  background: #f4f8fb;
-  border-radius: 12px;
-  padding: 15px;
-  font-size: 13px;
-}
-.growth-demo-step {
-  background: white;
-  border-radius: 12px;
-  padding: 22px;
-  display: grid;
-  gap: 15px;
-}
-.growth-source-options {
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-.growth-source-options button {
-  flex: 1;
-  min-width: 160px;
-  flex-direction: column;
-  padding: 22px;
-}
 .growth-detail {
   position: fixed;
   inset: 0;
@@ -827,21 +552,6 @@
   .growth-cards {
     grid-template-columns: 1fr;
   }
-  .growth-welcome {
-    padding: 20px;
-  }
-  .growth-stats {
-    gap: 24px;
-  }
-  .growth-stats strong {
-    font-size: 25px;
-  }
-  .growth-steps {
-    gap: 12px;
-  }
-  .growth-steps li {
-    font-size: 12px;
-  }
   .growth-section-heading {
     flex-wrap: wrap;
   }
@@ -853,9 +563,6 @@
   }
   .growth-detail {
     padding: 14px;
-  }
-  .growth-ranking > div {
-    gap: 9px;
   }
   .growth-levels {
     flex-direction: column;
@@ -898,10 +605,4 @@ dialog.growth-detail::backdrop {
 }
 .growth-hub .career-panel {
   margin: 0;
-}
-.growth-welcome h2 {
-  margin: 8px 0;
-}
-.growth-hub .growth-demo {
-  margin-bottom: 0;
 }

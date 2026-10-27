@@ -1,0 +1,284 @@
+/* Readability layer: loaded last so it can raise text size and contrast
+   without touching each component's own stylesheet. */
+:root {
+  --read-text: #1f3445;
+  --read-muted: #4a6072;
+  --read-subtle: #5a6f80;
+}
+body {
+  color: var(--read-text);
+  font-size: 15px;
+  line-height: 1.7;
+}
+
+/* Headings: clearer hierarchy. */
+.feature-page-heading h1 {
+  font-size: clamp(28px, 4vw, 36px);
+  line-height: 1.3;
+}
+.feature-page-heading p {
+  font-size: 15px;
+  color: var(--read-muted);
+  margin-top: 8px;
+}
+.career-panel h2,
+.learning-path h2,
+.public-jobs-heading h2,
+.home-section-heading h2 {
+  font-size: 22px;
+  line-height: 1.4;
+}
+.career-panel h3,
+.study-requirements h3 {
+  font-size: 17px;
+  line-height: 1.5;
+}
+
+/* Body copy: darker, comfortable line length. */
+.career-panel p,
+.growth-hub p,
+.study-requirements p,
+.learning-path p,
+.study-muted,
+.public-job-empty p {
+  color: var(--read-muted);
+  font-size: 15px;
+  line-height: 1.75;
+  max-width: 68ch;
+}
+
+/* Small text: never below 13px, with enough contrast. */
+small,
+.career-panel small,
+.growth-hub small,
+.live-label,
+.growth-tag,
+.public-job-meta,
+.public-job-bottom,
+.public-feed-count,
+.public-source-note,
+.public-jobs-disclosure,
+.feature-breadcrumb,
+.qualification-summary p,
+.study-requirement-row small {
+  font-size: 13px;
+  color: var(--read-subtle);
+}
+.home-feature-card small {
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--read-subtle);
+}
+
+/* Form labels and controls. */
+.career-panel label,
+.learning-path label {
+  font-size: 14px;
+  color: var(--read-text);
+}
+.career-panel input:not([type="checkbox"]):not([type="radio"]),
+.career-panel select,
+.career-panel textarea {
+  font-size: 15px;
+}
+
+/* Tabs: larger tap targets. */
+.feature-tabs a,
+.study-detail-tabs a {
+  font-size: 15px;
+  padding-block: 14px;
+}
+
+/* Lists and rows: more breathing room. */
+.study-requirement-row,
+.career-row,
+.career-task {
+  padding-block: 14px;
+}
+.finding + .finding {
+  margin-top: 16px;
+}
+.public-job-card h3 {
+  font-size: 17px;
+  line-height: 1.45;
+}
+.dummy-label {
+  margin-left: auto;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: #eef3f7;
+  color: #4a6072;
+  font-size: 13px;
+  font-weight: 600;
+}
+.sign-in-main {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding-block: 56px;
+}
+.sign-in-main .career-workspace {
+  width: min(100%, 420px);
+  margin: 0;
+}
+.sign-in-panel {
+  width: 100%;
+}
+.sign-in-demo button {
+  width: 100%;
+}
+.sign-in-panel h1 {
+  font-size: 26px;
+  margin-bottom: 20px;
+}
+.sign-in-panel form {
+  display: grid;
+  gap: 16px;
+}
+.sign-in-panel label {
+  display: grid;
+  gap: 6px;
+}
+.sign-in-demo {
+  margin-top: 24px;
+  padding: 16px;
+  border-radius: 10px;
+  background: #f1f6fa;
+  border: 1px solid #dce7f0;
+}
+.sign-in-demo p {
+  margin: 6px 0 12px;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 14px;
+}
+.header-user {
+  font-size: 14px;
+  color: var(--read-muted);
+  white-space: nowrap;
+}
+.header-login {
+  font-size: 14px;
+  font-weight: 600;
+  color: #315d80;
+  background: none;
+  border: 0;
+  padding: 8px 4px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+@media (max-width: 640px) {
+  .header-user {
+    display: none;
+  }
+}
+.job-posting-section + .job-posting-section {
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid #e3eaf1;
+}
+.job-posting-section h3 {
+  margin-bottom: 10px;
+}
+.job-posting-section ul {
+  display: grid;
+  gap: 8px;
+  padding-left: 20px;
+  list-style: disc;
+  color: var(--read-text);
+  line-height: 1.7;
+}
+.applicant-comparison {
+  margin-top: 8px;
+}
+.applicant-headline {
+  font-size: 16px;
+  color: var(--read-text);
+  margin-top: 4px;
+}
+.applicant-headline b {
+  font-weight: 700;
+}
+.applicant-headline .is-passed {
+  color: #2a74c0;
+}
+.applicant-headline .is-me {
+  color: #c23a52;
+}
+.applicant-stats {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  border-top: 1px solid #e3eaf1;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.applicant-stats li {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 16px 8px;
+  text-align: center;
+  border-bottom: 1px solid #eef2f6;
+}
+.applicant-stats li + li {
+  border-left: 1px solid #eef2f6;
+}
+.applicant-stats li:nth-child(5n + 1) {
+  border-left: 0;
+}
+.applicant-stats strong {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--read-text);
+}
+.applicant-stats li.is-behind strong {
+  color: #c23a52;
+}
+.applicant-stats span {
+  font-size: 13px;
+  color: var(--read-muted);
+}
+.applicant-stats small {
+  font-size: 12px;
+}
+@media (max-width: 760px) {
+  .applicant-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .applicant-stats li:nth-child(5n + 1) {
+    border-left: 1px solid #eef2f6;
+  }
+  .applicant-stats li:nth-child(odd) {
+    border-left: 0;
+  }
+}
+.applicant-comparison .study-muted {
+  margin-top: 2px;
+  font-size: 13px;
+}
+.applicant-comparison .applicant-radar {
+  margin: 0;
+}
+.job-compare-source {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 20px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #315d80;
+}
+.original-missing {
+  font-size: 14px;
+  color: #6b4a2a;
+}
+.job-original-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #315d80;
+  white-space: nowrap;
+}

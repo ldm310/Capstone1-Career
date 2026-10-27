@@ -88,13 +88,12 @@ export function workspace(id: string): Workspace {
   const row = db()
     .prepare("SELECT data FROM workspaces WHERE user_id=?")
     .get(id) as { data: string } | undefined;
-  return row
-    ? {
-        ...emptyWorkspace,
-        ...JSON.parse(row.data),
-        role: normalizeRole(JSON.parse(row.data).role),
-      }
-    : structuredClone(emptyWorkspace);
+  if (!row) return structuredClone(emptyWorkspace);
+  // 지원 기록, 일정은 더 이상 쓰지 않으므로 예전 데이터에서 걸러낸다.
+  const { events, applications, ...data } = JSON.parse(row.data);
+  void events;
+  void applications;
+  return { ...emptyWorkspace, ...data, role: normalizeRole(data.role) };
 }
 export function saveWorkspace(id: string, data: Workspace) {
   db()

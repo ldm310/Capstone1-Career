@@ -5,59 +5,12 @@ body {
   word-break: keep-all;
   overflow-wrap: anywhere;
 }
-.hero h1 {
-  font-size: clamp(42px, 4.6vw, 68px);
-  line-height: 1.22;
-  letter-spacing: var(--tracking-heading);
-}
-.hero-description {
-  font-size: 20px;
-}
-.hero-subcopy {
-  font-size: 16px;
-  line-height: 1.9;
-}
-.eyebrow,
-.hero-eyebrow {
+.eyebrow {
   letter-spacing: var(--tracking-label);
-}
-.section-heading h2 {
-  font-size: clamp(30px, 3.6vw, 48px);
-  line-height: 1.4;
-  letter-spacing: var(--tracking-heading);
-}
-.page-heading h1 {
-  font-size: clamp(27px, 3vw, 36px);
-  line-height: 1.4;
-  letter-spacing: var(--tracking-heading);
-}
-.page-heading p,
-.panel-header p,
-.small-copy,
-.field-label,
-.sidebar-nav a {
-  font-size: 14px;
-  line-height: 1.75;
-}
-.micro-copy,
-.chart-footnote,
-.evidence-kind,
-.evidence-source-footer,
-.summary-note,
-.summary-card p,
-.demo-badge {
-  font-size: 12px;
-  line-height: 1.7;
-}
-.panel-header h2 {
-  font-size: 18px;
 }
 .cta {
   white-space: normal;
   text-align: center;
-}
-.source-strip > span {
-  min-width: 180px;
 }
 .public-jobs {
   padding-block: 86px;
@@ -96,26 +49,10 @@ body {
   border-bottom: 1px solid #dfe7e2;
   padding-bottom: 16px;
 }
-.public-job-tabs,
 .public-job-filters {
   display: flex;
   align-items: center;
   gap: 20px;
-}
-.public-job-tabs button {
-  padding: 12px 0;
-  border-bottom: 3px solid transparent;
-  font-size: 16px;
-  font-weight: 650;
-  color: #68736d;
-}
-.public-job-tabs button[aria-pressed="true"] {
-  color: #15803d;
-  border-color: #15803d;
-}
-.public-job-tabs span {
-  margin-left: 4px;
-  font-size: 12px;
 }
 .public-job-filters select,
 .public-job-filters label {
@@ -183,11 +120,6 @@ body {
   height: 34px;
   font-size: 17px;
   font-weight: 800;
-}
-.official-label {
-  margin-left: auto;
-  color: #287448;
-  font-size: 12px;
 }
 .public-job-category {
   font-size: 12px;
@@ -278,11 +210,6 @@ body {
   font-size: 12px;
   line-height: 1.8;
 }
-.public-job-skeleton {
-  height: 320px;
-  border-radius: 18px;
-  background: #f0f4f1;
-}
 .public-job-empty {
   text-align: center;
   background: #f7faf8;
@@ -296,13 +223,6 @@ body {
   color: #637168;
   font-size: 14px;
   line-height: 1.8;
-}
-.workspace-main .public-jobs {
-  width: 100%;
-  padding-block: 32px;
-}
-.workspace-main .public-job-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 @media (max-width: 1100px) {
   .public-job-grid {
@@ -320,8 +240,7 @@ body {
   .public-jobs {
     padding-block: 48px;
   }
-  .public-job-grid,
-  .workspace-main .public-job-grid {
+  .public-job-grid {
     grid-template-columns: 1fr;
   }
   .public-job-card {
@@ -341,18 +260,6 @@ body {
   .public-job-filters select {
     max-width: 100%;
   }
-  .hero h1 {
-    font-size: clamp(36px, 9vw, 50px);
-  }
-  .hero-subcopy {
-    font-size: 14px;
-  }
-  .source-strip > span {
-    min-width: 0;
-  }
-  .page-heading h1 {
-    font-size: 27px;
-  }
   .public-job-more button {
     max-width: 100%;
   }
@@ -366,9 +273,6 @@ body {
   }
 }
 
-/* Native controls keep keyboard/mobile behavior with a consistent chevron. */
-.select-wrap select,
-select.native-select,
 .public-job-filters select {
   appearance: none;
   -webkit-appearance: none;
@@ -378,11 +282,6 @@ select.native-select,
   background-size: 16px 16px;
   background-repeat: no-repeat;
   line-height: 1.5;
-}
-.source-document-icon {
-  flex: 0 0 24px;
-  width: 24px;
-  height: 24px;
 }
 .icon-button {
   display: inline-flex;
@@ -396,16 +295,11 @@ svg:is(
   flex-shrink: 0;
   vertical-align: middle;
 }
-.cta > svg,
-.arrow-link > svg,
-.text-button > svg,
-.expand-evidence > svg {
+.cta > svg {
   display: block;
   flex-shrink: 0;
 }
 @media (forced-colors: active) {
-  .select-wrap select,
-  select.native-select,
   .public-job-filters select {
     appearance: auto;
     background-image: none;

@@ -3,7 +3,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { ArrowRight, ChevronDown, Plus } from "lucide-react";
 import { learningPaths } from "@/lib/growth/learning-path";
-import { levelNames, rewards, requirement } from "@/lib/growth/catalog";
+import { levelNames, requirement } from "@/lib/growth/catalog";
 import type { SkillReview, GrowthTask, Level } from "@/types/growth";
 
 export function LearningPath({
@@ -23,13 +23,13 @@ export function LearningPath({
       title: s.title,
       description: s.description,
       items: s.items.filter((i) => i.skill !== "MCP"),
-      kind: index === 0 ? "기초 준비" : "이후 준비",
+      kind: index === 0 ? "기초" : "심화",
     })),
     {
       title: "배포와 확장",
-      description: "프로젝트를 재현할 수 있도록 실행 환경을 함께 준비해요.",
+      description: "실행 환경을 함께 준비해요.",
       items: [path.parallel],
-      kind: "병행 가능 · 선택 확장",
+      kind: "병행, 선택",
     },
   ].filter((g) => g.items.length);
   const [choice, setChoice] = useState("");
@@ -55,7 +55,7 @@ export function LearningPath({
       : [
           ["기초 사용", requirement(item.skill, 1)],
           ["프로젝트 적용", requirement(item.skill, 2)],
-          ["개선·문제 해결", requirement(item.skill, 3)],
+          ["개선, 문제 해결", requirement(item.skill, 3)],
         ];
   const selectedDetail = (
     <div className="focus-task" aria-live="polite">
@@ -67,11 +67,7 @@ export function LearningPath({
           <div>
             <span className="learning-path-label">{item.skill}</span>
             <h3>{item.title}</h3>
-            <p>
-              {groups[groupIndex].description}
-              <br />
-              작은 결과물을 직접 만들며 기술을 익혀보세요.
-            </p>
+            <p>{groups[groupIndex].description}</p>
           </div>
         </div>
         {groups[groupIndex].items.length > 1 && (
@@ -87,7 +83,7 @@ export function LearningPath({
                 onClick={() => setChoice(x.skill)}
               >
                 {x.skill}
-                {x.optional ? " · 선택" : ""}
+                {x.optional ? " (선택)" : ""}
               </button>
             ))}
           </div>
@@ -113,33 +109,25 @@ export function LearningPath({
           <small>현재 수준</small>
           <strong>
             {review?.level
-              ? `LV${review.level} · ${levelNames[review.level]}`
+              ? `LV${review.level} ${levelNames[review.level]}`
               : "자료 확인 필요"}
           </strong>
-          <p>
-            {review?.level
-              ? "수준 확인만으로 포인트가 지급되지는 않아요."
-              : "아직 자료를 확인하지 못했어요."}
-          </p>
         </div>
         <div className="focus-next">
-          <small>{task ? "진행 중인 과제" : "다음 과제"}</small>
+          <small>{task ? "진행 중 과제" : "다음 과제"}</small>
           <div>
             <strong>
               {task
-                ? `LV${task.level} · ${levelNames[task.level]}`
+                ? `LV${task.level} ${levelNames[task.level]}`
                 : next <= 3
-                  ? `LV${next} · ${levelNames[next]}`
-                  : "LV3까지 확인했어요"}
+                  ? `LV${next} ${levelNames[next]}`
+                  : "LV3 완료"}
             </strong>
-            {next <= 3 && (
-              <small>완료 확인 후 {task?.reward ?? rewards[next]}점</small>
-            )}
           </div>
         </div>
         {task ? (
-          <Link className="focus-task-cta" href="/preparation?tab=tasks">
-            과제 이어서 하기 <ArrowRight size={16} />
+          <Link className="focus-task-cta" href="/my-skills?tab=tasks">
+            이어서 하기 <ArrowRight size={16} />
           </Link>
         ) : (
           <button
@@ -147,7 +135,7 @@ export function LearningPath({
             type="button"
             onClick={() => onSelect(item.skill)}
           >
-            {next <= 3 ? "과제 확인하기" : "근거 확인하기"}{" "}
+            {next <= 3 ? "과제 보기" : "근거 보기"}{" "}
             <ArrowRight size={16} aria-hidden="true" />
           </button>
         )}
@@ -159,17 +147,17 @@ export function LearningPath({
       <div className="learning-path-heading">
         <div>
           <div className="learning-path-title">
-            <h2 id="learning-path-title">내게 맞는 학습 경로</h2>
-            <span className="learning-path-label">기본 경로 · {path.role}</span>
+            <h2 id="learning-path-title">학습 경로</h2>
+            <span className="learning-path-label">{path.role}</span>
           </div>
           <p>
             {reviews.length
-              ? "자료에서 확인한 수준을 함께 보여드려요. 익숙한 기술은 건너뛰고 필요한 준비를 선택하세요."
-              : "아직 자료를 확인하지 못했어요. 자료를 추가하면 현재 수준을 함께 확인할 수 있어요."}
+              ? "익숙한 기술은 건너뛰어도 돼요."
+              : "자료를 추가하면 현재 수준이 표시돼요."}
           </p>
         </div>
-        <Link className="learning-path-source" href="/my-skills">
-          <Plus size={16} aria-hidden="true" /> 내 자료 추가하기
+        <Link className="learning-path-source" href="/my-data">
+          <Plus size={16} aria-hidden="true" /> 자료 추가
         </Link>
       </div>
       <ol className="focus-path-steps" aria-label="추천 준비 순서">
@@ -225,7 +213,7 @@ export function LearningPath({
                 <span className="focus-later-label">{g.kind}</span>
                 <strong>{g.title}</strong>
                 <span className="focus-later-skills">
-                  {g.items.map((x) => x.skill).join(" · ")}
+                  {g.items.map((x) => x.skill).join(", ")}
                 </span>
                 <span className="focus-later-description">{g.description}</span>
                 <ChevronDown

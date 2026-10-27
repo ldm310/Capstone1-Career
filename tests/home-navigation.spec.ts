@@ -6,19 +6,18 @@ test("home destinations are readable, accessible and responsive", async ({
   page,
 }) => {
   await mockPublicJobs(page);
-  await page.goto("/#features");
-  const destinations = [
-    "/jobs",
-    "/my-skills",
-    "/preparation",
-    "/application-tracker",
-    "/growth",
-  ];
+  await page.goto("/#market-preview");
+  const destinations = ["/my-data", "/my-skills", "/jobs", "/my-skills"];
+  await expect(page.locator(".home-stats a")).toHaveCount(destinations.length);
   for (const [index, href] of destinations.entries())
-    await expect(page.locator(".home-feature-card").nth(index)).toHaveAttribute(
+    await expect(page.locator(".home-stats a").nth(index)).toHaveAttribute(
       "href",
       href,
     );
+  await expect(
+    page.getByRole("heading", { name: "추천 공고", exact: true }),
+  ).toBeVisible();
+  await expect(page.locator(".home-jobs li")).toHaveCount(3);
   for (const width of [1440, 1024, 768, 390, 320]) {
     await page.setViewportSize({ width, height: 900 });
     expect(
@@ -26,13 +25,16 @@ test("home destinations are readable, accessible and responsive", async ({
         () => document.documentElement.scrollWidth <= innerWidth,
       ),
     ).toBe(true);
-    for (const card of await page.locator(".home-feature-card").all()) {
+    for (const card of await page.locator(".home-stats a").all()) {
       expect(
         await card.evaluate((el) => el.scrollWidth <= el.clientWidth),
       ).toBe(true);
     }
   }
   await page.setViewportSize({ width: 1440, height: 1000 });
+  await expect(
+    page.getByRole("navigation", { name: "주 메뉴" }).getByRole("link"),
+  ).toHaveText(["홈", "채용공고", "내 역량", "내 자료"]);
   const audit = await new AxeBuilder({ page })
     .withTags(["wcag2a", "wcag2aa", "wcag21aa"])
     .analyze();

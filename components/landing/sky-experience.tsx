@@ -145,9 +145,6 @@ export function SkyExperience({ children }: { children: React.ReactNode }) {
                   쌓아온 경험이,
                   <br className="intro-mobile-break" /> 더 넓은 가능성으로.
                 </span>
-                <span className="intro-description">
-                  나의 기록에서 발견하는 다음 커리어
-                </span>
               </motion.span>
               <button
                 ref={enterRef}
@@ -156,12 +153,10 @@ export function SkyExperience({ children }: { children: React.ReactNode }) {
                 onClick={enter}
               >
                 <span className="intro-click-link">
-                  나의 Career 만나보기
+                  시작하기
                   <ArrowRight size={22} strokeWidth={1.6} aria-hidden="true" />
                 </span>
-                <span className="intro-keyboard">
-                  Enter 키로도 시작할 수 있어요
-                </span>
+                <span className="intro-keyboard">Enter로 시작</span>
               </button>
               <span className="intro-bottom">
                 EXPERIENCE BECOMES POSSIBILITY <ArrowDown size={13} />

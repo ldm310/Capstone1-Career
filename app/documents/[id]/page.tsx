@@ -16,12 +16,9 @@ export default async function Document({
   if (!row) notFound();
   return (
     <main className="document-reader">
-      <Link href="/career?tab=sources">← 내 자료로 돌아가기</Link>
+      <Link href="/my-data">← 내 자료</Link>
       <h1>{row.name}</h1>
-      <p>
-        업로드한 문서에서 추출한 텍스트입니다. 스캔·레이아웃에 따라 원문과
-        차이가 있을 수 있습니다.
-      </p>
+      <p>추출한 텍스트라 원문과 다를 수 있어요.</p>
       <a href={`/api/documents/${id}`}>원본 내려받기</a>
       <div>
         {row.text.split("\n").map((line, index) => (

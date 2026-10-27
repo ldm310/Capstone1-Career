@@ -22,8 +22,7 @@ export function mergeReviews(
           original: f.skill,
           level: null,
           status: "pending",
-          reason:
-            "자료에서 기술 관련 내용을 찾았어요. 언급만으로 수준을 확정하지 않아요.",
+          reason: "자료에서 찾은 기술이에요. 수준은 아직 확인 전이에요.",
           evidenceIds: [f.id],
         } satisfies SkillReview);
     }

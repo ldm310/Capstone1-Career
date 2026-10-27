@@ -28,7 +28,7 @@ test("official job cards paginate, bookmark, persist, filter and link to source"
 
   await expect(page.locator(".public-job-card")).toHaveCount(7);
   await expect(
-    page.getByText("현재 제공되는 공고를 모두 확인했어요."),
+    page.getByText("모든 공고를 확인했어요."),
   ).toBeVisible();
   await page
     .getByRole("navigation", { name: "채용공고 하위 메뉴" })
@@ -53,7 +53,7 @@ test("official job cards paginate, bookmark, persist, filter and link to source"
   await page.getByLabel("전체 연동 공고 검색").fill("없는기업");
   await expect(page.getByText("조건에 맞는 공고가 없어요.")).toBeVisible();
 });
-test("job errors retry and partial availability remains explicit", async ({
+test("job errors retry and unavailable sources stay hidden", async ({
   page,
 }) => {
   let failed = true;
@@ -74,9 +74,7 @@ test("job errors retry and partial availability remains explicit", async ({
   await expect(page.locator(".public-job-empty[role=alert]")).toBeVisible();
   failed = false;
   await page.getByRole("button", { name: "다시 시도", exact: true }).click();
-  await expect(
-    page.getByText(/매치그룹 공고는 일시적으로 연결되지 않았어요/),
-  ).toBeVisible();
+  await expect(page.getByText(/공고를 불러오지 못했어요/)).toHaveCount(0);
   await expect(page.getByText("조건에 맞는 공고가 없어요.")).toBeVisible();
 });
 test("public jobs API rejects invalid filters before contacting sources", async ({

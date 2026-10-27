@@ -29,23 +29,6 @@ export interface CareerTask {
   date: string;
   done: boolean;
 }
-export interface CareerEvent {
-  id: string;
-  title: string;
-  date: string;
-  type: string;
-}
-export interface CareerApplication {
-  id: string;
-  company: string;
-  title: string;
-  url: string;
-  stage: string;
-  date: string;
-  resumeId: string;
-  snapshot: string[];
-  notes: string;
-}
 export interface CareerDocument {
   id: string;
   name: string;
@@ -60,8 +43,6 @@ export interface Workspace {
   runs: AnalysisRun[];
   job: JobAnalysis | null;
   tasks: CareerTask[];
-  events: CareerEvent[];
-  applications: CareerApplication[];
   documents: CareerDocument[];
   answers: Record<string, string>;
   savedJobs: import("./public-job").PublicJob[];
@@ -75,8 +56,6 @@ export const emptyWorkspace: Workspace = {
   runs: [],
   job: null,
   tasks: [],
-  events: [],
-  applications: [],
   documents: [],
   answers: {},
   savedJobs: [],

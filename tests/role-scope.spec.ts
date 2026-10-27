@@ -45,18 +45,18 @@ test("two roles persist through real guest preferences and drive preparation", a
   request,
 }) => {
   expect((await request.get("/api/jobs?role=ax")).status()).toBe(400);
-  await page.goto("/my-skills");
+  await page.goto("/my-data");
   const role = page.getByRole("combobox", { name: "목표 직무", exact: true });
   await expect(role.locator("option")).toHaveText(["데이터", "백엔드"]);
   await role.selectOption("backend");
   const saved = page.waitForResponse(
     (r) => r.url().endsWith("/api/career") && r.request().method() === "POST",
   );
-  await page.getByRole("button", { name: "준비 조건 저장" }).click();
+  await page.getByRole("button", { name: "저장", exact: true }).click();
   expect((await saved).ok()).toBe(true);
   await page.reload();
   await expect(role).toHaveValue("backend");
-  await page.goto("/preparation");
+  await page.goto("/my-skills?tab=next");
   await expect(page.locator(".learning-path")).toContainText("REST API");
   await expect(page.locator(".learning-path")).not.toContainText("MCP");
   await page.goto("/jobs");

@@ -55,7 +55,7 @@ export function CatalogFilters({
               />
             </label>
           ))}
-          <p>복수 선택할 수 있어요. 구분이 확인된 공고만 표시돼요.</p>
+          <p>여러 개 선택할 수 있어요.</p>
         </fieldset>
       </details>
       <details className="recruit-filter-popover recruit-detail-filter">

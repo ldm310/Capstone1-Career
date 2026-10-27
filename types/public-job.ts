@@ -1,4 +1,4 @@
-import type { RoleId } from "./career";
+import type { SupportedRole as RoleId } from "@/lib/roles";
 export interface PublicJob {
   id: string;
   skills?: string[];
@@ -12,6 +12,12 @@ export interface PublicJob {
   closesAt?: string | null;
   experience?: ("entry" | "experienced" | "intern" | "any")[];
   url: string;
+  dummy?: boolean;
+  posting?: PostingSection[];
+}
+export interface PostingSection {
+  title: string;
+  items: string[];
 }
 export interface PublicJobsResponse {
   jobs: PublicJob[];

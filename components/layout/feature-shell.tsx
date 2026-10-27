@@ -49,8 +49,7 @@ export function FeatureShell({ children }: { children: React.ReactNode }) {
         </div>
       </main>
       <footer className="home-footer home-width">
-        <Link href="/">Career 홈으로</Link>
-        <span>경험에서 시작하는 다음 커리어</span>
+        <Link href="/">Career</Link>
       </footer>
     </div>
   );

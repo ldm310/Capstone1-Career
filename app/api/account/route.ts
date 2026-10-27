@@ -11,11 +11,14 @@ import {
   rateLimit,
   jsonBody,
   failure,
+  isGuest,
 } from "@/lib/server/store";
+import { demoAccount, ensureDemoAccount } from "@/lib/server/demo-account";
 export const runtime = "nodejs";
 export async function GET() {
+  const current = (await user()) || null;
   return Response.json(
-    { user: (await user()) || null },
+    { user: current, guest: current ? isGuest(current.id) : false },
     { headers: { "Cache-Control": "no-store" } },
   );
 }
@@ -38,6 +41,7 @@ export async function POST(req: Request) {
       .parse(body);
     const email = input.email.toLowerCase();
     rateLimit("auth:" + email);
+    if (email === demoAccount.email) ensureDemoAccount();
     const found = db()
       .prepare("SELECT * FROM users WHERE email=?")
       .get(email) as { id: string; password: string } | undefined;

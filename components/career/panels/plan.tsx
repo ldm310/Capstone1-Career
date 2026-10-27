@@ -1,6 +1,5 @@
 "use client";
 import type { PanelProps } from "./types";
-import Link from "next/link";
 import { day } from "@/lib/workspace-selectors";
 import { id } from "./helpers";
 export function PlanPanel({
@@ -25,11 +24,8 @@ export function PlanPanel({
 >) {
   return (
     <section className="career-panel">
-      <h2>주간 준비 계획</h2>
-      <p>
-        부족한 기술마다 학습·구현·근거 정리로 나눕니다. 각 활동은 1시간 단위
-        초안이며 실제 난이도에 맞게 날짜를 조정하세요.
-      </p>
+      <h2>주간 계획</h2>
+      <p>부족한 기술을 학습, 구현, 정리로 나눠요.</p>
       <button
         disabled={busy}
         onClick={() => {
@@ -44,7 +40,7 @@ export function PlanPanel({
             .flatMap((skill) => [
               `${skill} 공식 문서 읽고 메모하기`,
               `${skill}을 프로젝트에 구현하기`,
-              `${skill} 코드·설명 근거 정리하기`,
+              `${skill} 코드, 설명 근거 정리하기`,
             ])
             .map((title, i) => ({
               id: id(),
@@ -56,9 +52,7 @@ export function PlanPanel({
               done: false,
             }));
           if (!created.length) {
-            setNotice(
-              "선택한 기술에 코드 근거가 있습니다. 공고를 비교해 새로운 준비 항목을 찾아보세요.",
-            );
+            setNotice("모든 기술에 코드 근거가 있어요.");
             return;
           }
           const filtered = created.filter(
@@ -69,14 +63,14 @@ export function PlanPanel({
             filtered.some((t) => t.date > state.targetDate)
           ) {
             setError(
-              "계획이 목표 지원일을 넘습니다. 주당 시간을 늘리거나 목표 지원일을 조정해 주세요.",
+              "목표 지원일을 넘어요. 주당 시간이나 날짜를 조정해 주세요.",
             );
             return;
           }
           void save("tasks", { tasks: [...state.tasks, ...filtered] });
         }}
       >
-        준비 조건으로 계획 추가
+        계획 추가
       </button>
       {state.tasks.map((task) => (
         <div className="career-task" key={task.id}>
@@ -119,11 +113,6 @@ export function PlanPanel({
           </button>
         </div>
       ))}
-      <p>
-        활동 체크만으로 검증 근거를 만들지 않습니다. 완료 후 자료를 다시 분석해
-        변화를 확인하세요.
-      </p>
-      <Link href="/my-skills">구현한 자료 다시 분석하기 →</Link>
     </section>
   );
 }

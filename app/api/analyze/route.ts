@@ -10,6 +10,7 @@ import {
   rateLimit,
 } from "@/lib/server/store";
 import { github, jobAnalysis } from "@/lib/server/analyze";
+import { dummyJobs, postingText } from "@/lib/dummy-jobs";
 export const runtime = "nodejs";
 export async function POST(req: Request) {
   try {
@@ -27,12 +28,19 @@ export async function POST(req: Request) {
       })
       .parse(await jsonBody(req));
     if (input.kind === "job") {
-      const job = await jobAnalysis(
-        input.url,
-        input.text,
-        input.company,
-        input.title,
-      );
+      // 더미 공고는 원문이 없으므로 준비된 본문으로 분석한다.
+      const dummy = dummyJobs.find((j) => j.url === input.url);
+      const job = dummy
+        ? {
+            ...(await jobAnalysis(
+              "",
+              postingText(dummy.posting),
+              dummy.company,
+              dummy.title,
+            )),
+            url: dummy.url,
+          }
+        : await jobAnalysis(input.url, input.text, input.company, input.title);
       const state = workspace(u.id);
       state.job = job;
       saveWorkspace(u.id, state);

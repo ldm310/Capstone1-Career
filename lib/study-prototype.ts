@@ -1,4 +1,4 @@
-import type { PublicJob } from "@/types/public-job";
+import type { PostingSection, PublicJob } from "@/types/public-job";
 
 export type StudyTier = "low" | "middle" | "high";
 export const tierLabels: Record<StudyTier, string> = {
@@ -15,7 +15,6 @@ export type Requirement = {
   text: string;
   skill?: string;
   satisfied: boolean;
-  evidence: string;
   level?: 1 | 2 | 3;
 };
 export type JobComparison = {
@@ -37,6 +36,7 @@ export const studyDemoJobs: PublicJob[] = [
     postedAt: "2026-10-03T00:00:00+09:00",
     closesAt: "2026-10-20T18:00:00+09:00",
     url: "",
+    dummy: true,
     skills: ["SQL", "REST API", "Docker"],
   },
   {
@@ -51,6 +51,7 @@ export const studyDemoJobs: PublicJob[] = [
     postedAt: "2026-10-02T00:00:00+09:00",
     closesAt: "2026-10-15T18:00:00+09:00",
     url: "",
+    dummy: true,
     skills: ["Python", "SQL", "Airflow"],
   },
   {
@@ -65,6 +66,7 @@ export const studyDemoJobs: PublicJob[] = [
     postedAt: "2026-10-01T00:00:00+09:00",
     closesAt: "2026-10-25T18:00:00+09:00",
     url: "",
+    dummy: true,
     skills: ["Java", "Spring Boot", "PostgreSQL"],
   },
 ];
@@ -91,9 +93,6 @@ export function exampleComparison(
     ...(satisfied && skill
       ? { level: exampleLevels[tier][skills.indexOf(skill)] ?? 1 }
       : {}),
-    evidence: satisfied
-      ? "예시 프로젝트 자료에서 해당 경험을 확인했어요."
-      : "체험 시나리오에서 해당 조건을 충족하지 않는 것으로 설정했어요.",
   });
   return {
     required: [
@@ -116,12 +115,8 @@ export function exampleComparison(
     ],
   };
 }
-export function qualificationLabel(comparison?: JobComparison) {
-  return !comparison
-    ? "판정 대기"
-    : comparison.required.every((r) => r.satisfied)
-      ? "만족"
-      : "불만족";
+export function qualificationLabel(comparison: JobComparison) {
+  return comparison.required.every((r) => r.satisfied) ? "만족" : "불만족";
 }
 export function matchingSkills(comparison: JobComparison) {
   return [
@@ -132,83 +127,42 @@ export function matchingSkills(comparison: JobComparison) {
     ).values(),
   ];
 }
-export type StudyOffer = {
-  id: string;
-  jobId: string;
-  tier: StudyTier;
-  title: string;
-  description: string;
-  roadmap: { title: string; outcome: string }[];
-};
-export function studyOffers(job: PublicJob, tier: StudyTier): StudyOffer[] {
-  const [first = "기초 기술", second = "프로젝트 기술", third = "실행 환경"] =
-    job.skills ?? [];
-  const topics =
-    tier === "low"
-      ? [
-          {
-            title: `${first} 기본 기능 실행`,
-            outcome: "작은 예제를 실행하고 입력과 결과를 기록해요.",
-          },
-          {
-            title: `${second} 기능 연결`,
-            outcome: "기존 프로젝트에 기능을 연결하고 실행 방법을 정리해요.",
-          },
-          {
-            title: "프로젝트 적용 결과 공유",
-            outcome: "정상·실패 사례를 테스트하고 서로의 결과를 확인해요.",
-          },
-        ]
-      : tier === "middle"
-        ? [
-            {
-              title: `${second} 현재 결과 측정`,
-              outcome: "평가할 사례와 측정 조건을 함께 정해요.",
-            },
-            {
-              title: "문제 원인 확인·개선",
-              outcome: "발견한 문제를 수정하고 같은 조건에서 전후를 비교해요.",
-            },
-            {
-              title: `${third} 실행·재현 점검`,
-              outcome: "실행 환경과 결과의 한계를 문서로 남겨요.",
-            },
-          ]
-        : [
-            {
-              title: `${second} 심화 목표 정하기`,
-              outcome: "공고와 내 프로젝트를 바탕으로 개선할 문제를 선택해요.",
-            },
-            {
-              title: "대안 비교 실험",
-              outcome: "여러 접근법의 품질·속도·비용을 비교해요.",
-            },
-            {
-              title: "설계 검토·결과 공유",
-              outcome: "선택 이유와 한계를 설명하고 재현 자료를 공유해요.",
-            },
-          ];
+// 예시 공고 본문: exampleComparison과 같은 조건을 공고 형식으로 보여준다.
+export function examplePosting(job: PublicJob): PostingSection[] {
+  const [first = "", second = "", third = ""] = job.skills ?? [];
   return [
     {
-      id: `${job.id}:${tier}:project`,
-      jobId: job.id,
-      tier,
-      title: `${second} 프로젝트 함께 준비하기`,
-      description: `${first}·${second} 중심으로 공고에 필요한 경험을 준비해요.`,
-      roadmap: topics,
+      title: "주요 업무",
+      items:
+        job.category === "data"
+          ? ["데이터 수집, 적재 파이프라인 개발", "배치 작업 운영과 품질 관리"]
+          : ["서비스 API 개발과 운영", "데이터베이스 설계와 성능 개선"],
     },
     {
-      id: `${job.id}:${tier}:evidence`,
-      jobId: job.id,
-      tier,
-      title: `${first} 구현과 검증 스터디`,
-      description: "작은 작업부터 시작해 실행 결과와 설명을 함께 정리해요.",
-      roadmap: [
-        {
-          title: `${first} 프로젝트 점검`,
-          outcome: "보유한 구현과 추가로 확인할 결과를 구분해요.",
-        },
-        ...topics.slice(1),
+      title: "자격요건",
+      items: [
+        `${first} 활용 경험`,
+        `${second} 프로젝트 경험`,
+        job.category === "data"
+          ? "실무 경력 2년 이상"
+          : "프로젝트 결과 설명 가능",
+      ],
+    },
+    {
+      title: "우대사항",
+      items: [
+        `${first} 테스트 작성`,
+        `${second} 개선 경험`,
+        `${third} 활용 경험`,
+        "기술 문서 작성 경험",
+        "오픈소스 기여 경험",
+      ],
+    },
+    {
+      title: "근무 조건",
+      items: [
+        `${job.location}, ${job.workplace ?? "근무 방식 협의"}`,
+        job.employment,
       ],
     },
   ];

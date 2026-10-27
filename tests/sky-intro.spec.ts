@@ -38,9 +38,10 @@ test("sky intro enters with keyboard, restores focus, remembers and replays", as
   await enter.press("Escape");
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await page
-    .getByRole("link", { name: "내 역량 확인하기", exact: true })
+    .getByRole("link", { name: "시작하기", exact: true })
+    .first()
     .click();
-  await expect(page).toHaveURL(/my-skills/);
+  await expect(page).toHaveURL(/my-data/);
 });
 test("mouse parallax, animated reveal and mobile tap", async ({ page }) => {
   await mockPublicJobs(page);
@@ -78,5 +79,5 @@ test("in-page links skip the intro", async ({ page }) => {
   await mockPublicJobs(page);
   await page.goto("/#market-preview");
   await expect(page.getByRole("dialog")).toHaveCount(0);
-  await expect(page.locator(".public-job-card")).toHaveCount(3);
+  await expect(page.locator(".home-jobs li")).toHaveCount(3);
 });

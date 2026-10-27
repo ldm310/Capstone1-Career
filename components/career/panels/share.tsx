@@ -22,12 +22,8 @@ export function SharePanel({
 >) {
   return (
     <section className="career-panel">
-      <h2>공개할 근거만 골라 공유하기</h2>
-      <p>
-        선택한 기술·자료 이름·발췌문·이름이 공개됩니다. 이력서 원본, Notion
-        비공개 링크, 지원 기록은 공개하지 않습니다. 민감한 발췌문이 없는지
-        아래에서 확인하세요.
-      </p>
+      <h2>포트폴리오 공유</h2>
+      <p>선택한 근거만 공개돼요. 이력서 원본은 공개되지 않아요.</p>
       {findings.map((f) => (
         <label className="share-choice" key={f.id}>
           <input
@@ -41,26 +37,24 @@ export function SharePanel({
           />
           <span>
             <strong>
-              {f.skill} · {f.title}
+              {f.skill} - {f.title}
             </strong>
             <pre>{f.quote}</pre>
           </span>
         </label>
       ))}
-      {!findings.length && (
-        <p>자료 분석 후 공유할 근거를 선택할 수 있습니다.</p>
-      )}
+      {!findings.length && <p>자료를 분석하면 근거를 고를 수 있어요.</p>}
       <button
         disabled={busy || !selected.length}
         onClick={async () => {
           const data = await request("/api/share", { ids: selected });
           if (data?.url) {
             setShares((s) => [data.url!.split("/").pop()!, ...s]);
-            setNotice("선택한 근거로 공유 링크를 만들었습니다.");
+            setNotice("공유 링크를 만들었어요.");
           }
         }}
       >
-        선택한 {selected.length}개 근거 공개 링크 만들기
+        공유 링크 만들기 ({selected.length})
       </button>
       <h3>공개 중인 링크</h3>
       {shares.map((token) => (
@@ -73,10 +67,10 @@ export function SharePanel({
               await navigator.clipboard.writeText(
                 `${location.origin}/share/${token}`,
               );
-              setNotice("링크를 복사했습니다.");
+              setNotice("링크를 복사했어요.");
             }}
           >
-            링크 복사
+            복사
           </button>
           <button
             disabled={busy}
@@ -89,10 +83,7 @@ export function SharePanel({
           </button>
         </div>
       ))}
-      <small>
-        공유 링크는 생성 시점의 사본입니다. 업데이트하려면 새 링크를 만들고 이전
-        링크를 중단하세요.
-      </small>
+      <small>링크는 만든 시점의 사본이에요.</small>
     </section>
   );
 }

@@ -1,13 +1,37 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { ArrowUpRight, Menu, X } from "lucide-react";
 import { Logo, LinkButton } from "@/components/shared/primitives";
 import { homeFeatures } from "@/lib/home-navigation";
 export function Header() {
   const pathname = usePathname();
+  const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [account, setAccount] = useState<string | null>(null);
+  useEffect(() => {
+    let active = true;
+    fetch("/api/account")
+      .then((r) => r.json())
+      .then((d) => {
+        if (active) setAccount(d.user && !d.guest ? d.user.name : null);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [pathname]);
+  async function logout() {
+    await fetch("/api/account", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "logout" }),
+    });
+    setAccount(null);
+    router.push("/");
+    router.refresh();
+  }
   return (
     <header className="site-header">
       <div className="site-header-inner">
@@ -16,6 +40,13 @@ export function Header() {
           aria-label="주 메뉴"
           className={open ? "header-nav open" : "header-nav"}
         >
+          <Link
+            href="/"
+            aria-current={pathname === "/" ? "page" : undefined}
+            onClick={() => setOpen(false)}
+          >
+            홈
+          </Link>
           {homeFeatures.map((feature) => (
             <Link
               key={feature.id}
@@ -28,10 +59,19 @@ export function Header() {
           ))}
         </nav>
         <div className="header-actions">
-          <Link className="sign-in" href="/growth">
-            바로 둘러보기
-          </Link>
-          <LinkButton href="/my-skills">
+          {account ? (
+            <>
+              <span className="header-user">{account}님</span>
+              <button className="header-login" onClick={() => void logout()}>
+                로그아웃
+              </button>
+            </>
+          ) : (
+            <Link className="header-login" href="/sign-in">
+              로그인
+            </Link>
+          )}
+          <LinkButton href="/my-data">
             시작하기 <ArrowUpRight size={15} />
           </LinkButton>
           <button

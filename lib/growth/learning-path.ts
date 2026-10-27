@@ -22,8 +22,7 @@ export const learningPaths: Record<string, LearningPath> = {
       },
       {
         title: "프로젝트 만들기",
-        description:
-          "서버와 데이터베이스를 연결해요. 구현 언어·프레임워크는 선택할 수 있어요.",
+        description: "서버와 데이터베이스를 연결해요.",
         items: [
           { skill: "PostgreSQL", title: "데이터 저장과 트랜잭션 적용하기" },
           { skill: "REST API", title: "입력 검증과 오류 처리 구현하기" },
@@ -31,8 +30,7 @@ export const learningPaths: Record<string, LearningPath> = {
       },
       {
         title: "기능 확장하기",
-        description:
-          "목표 공고와 프로젝트에 맞는 구현 도구를 선택해요. 모두 배울 필요는 없어요.",
+        description: "공고에 맞는 도구를 하나 골라요.",
         items: [
           {
             skill: "Spring Boot",

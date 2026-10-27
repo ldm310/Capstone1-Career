@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
 import { Geist, Geist_Mono } from "next/font/google";
-import { CareerProvider } from "@/components/shared/career-provider";
 import "./globals.css";
 import "./korean.css";
 import "./career.css";
@@ -22,11 +21,10 @@ const geistMono = Geist_Mono({
 });
 export const metadata: Metadata = {
   title: {
-    default: "Career — 내 경험에서 시작하는 다음 커리어",
+    default: "Career - 경험에서 시작하는 커리어",
     template: "%s | Career",
   },
-  description:
-    "GitHub·PDF·Markdown에서 내 기술을 확인하고, 공고와 비교하며 단계별 과제로 다음 커리어를 준비하세요.",
+  description: "GitHub, PDF, Markdown에서 내 기술을 찾고 공고와 비교해요.",
 };
 export default function RootLayout({
   children,
@@ -38,9 +36,7 @@ export default function RootLayout({
       lang="ko"
       className={`${geistSans.variable} ${geistMono.variable} ${careerFont.variable}`}
     >
-      <body>
-        <CareerProvider>{children}</CareerProvider>
-      </body>
+      <body>{children}</body>
     </html>
   );
 }

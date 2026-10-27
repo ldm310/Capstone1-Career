@@ -8,10 +8,7 @@ export function PreferencesPanel({
 }: Pick<PanelProps, "state" | "busy" | "save">) {
   return (
     <section className="career-panel">
-      <h2>어떤 직무를 준비하고 있나요?</h2>
-      <p>
-        목표 직무를 선택하세요. 지역이나 준비 일정은 나중에 입력해도 괜찮아요.
-      </p>
+      <h2>준비 조건</h2>
       <form
         onSubmit={async (e) => {
           e.preventDefault();
@@ -34,21 +31,21 @@ export function PreferencesPanel({
             </select>
           </label>
           <details>
-            <summary>지역·준비 시간 추가하기 (선택)</summary>
+            <summary>지역, 준비 시간 (선택)</summary>
             <label>
               희망 지역
               <input
                 name="region"
                 defaultValue={state.region}
-                placeholder="예: 서울 / 비우면 전체"
+                placeholder="예: 서울"
               />
             </label>
             <label>
-              경력·준비 상황
+              경력
               <input
                 name="experience"
                 defaultValue={state.experience}
-                placeholder="예: 신입 / 백엔드 2년"
+                placeholder="예: 신입"
               />
             </label>
             <label>
@@ -72,7 +69,7 @@ export function PreferencesPanel({
             </label>
           </details>
         </div>
-        <button disabled={busy}>준비 조건 저장</button>
+        <button disabled={busy}>저장</button>
       </form>
     </section>
   );

@@ -232,10 +232,6 @@
 .focus-later summary::-webkit-details-marker {
   display: none;
 }
-.focus-later-icon {
-  display: flex;
-  color: #315e82;
-}
 .focus-later-label {
   background: #f0f5fa;
   color: #365b78;
@@ -255,14 +251,6 @@
 details[open] .focus-chevron {
   transform: rotate(180deg);
 }
-.focus-later-content {
-  padding: 0 18px 16px;
-}
-.focus-later-content p {
-  font-size: 13px;
-  margin-bottom: 10px;
-}
-.growth-hub .learning-path .focus-later-content button,
 .growth-hub .learning-path .focus-skill-picker button {
   background: white;
   color: #294d68;
@@ -379,9 +367,6 @@ details[open] .focus-chevron {
 }
 .growth-hub .focus-later details {
   margin: 0;
-}
-.growth-hub .focus-later-content p {
-  margin-bottom: 10px;
 }
 .growth-hub .focus-task-status small {
   line-height: 1.5;

@@ -41,7 +41,7 @@ async function getJson(url: string, headers: Record<string, string> = {}) {
   });
   if (!res.ok)
     throw new Error(
-      `원본 서비스 조회 실패 (${res.status}). URL·공유 권한·호출 한도를 확인하세요.`,
+      `원본 서비스 조회 실패 (${res.status}). URL, 공유 권한, 호출 한도를 확인하세요.`,
     );
   return res.json();
 }
@@ -155,6 +155,38 @@ const plain = (s: string) =>
     .replace(/<[^>]+>/g, " ")
     .replace(/&nbsp;/g, " ")
     .replace(/&amp;/g, "&");
+function leverParts(urlString: string) {
+  const url = new URL(urlString);
+  const parts = url.pathname.split("/").filter(Boolean);
+  if (
+    url.protocol !== "https:" ||
+    url.hostname !== "jobs.lever.co" ||
+    parts.length !== 2 ||
+    !parts.every((x) => /^[\w-]+$/.test(x))
+  )
+    throw new Error("Lever 공고 URL만 불러올 수 있어요.");
+  return parts;
+}
+// Lever 공고 원문을 섹션 제목과 항목 목록으로 바꾼다.
+export async function leverPosting(urlString: string) {
+  const [site, id] = leverParts(urlString);
+  const data = await getJson(
+    `https://api.lever.co/v0/postings/${site}/${id}?mode=json`,
+  );
+  const lines = (s: string) =>
+    plain(s.replace(/<\/li>/g, "\n"))
+      .split("\n")
+      .map((x) => x.trim())
+      .filter(Boolean);
+  return [
+    { title: "소개", items: lines(data.descriptionPlain || "") },
+    ...(data.lists || []).map((l: { text: string; content: string }) => ({
+      title: l.text,
+      items: lines(l.content),
+    })),
+    { title: "기타", items: lines(data.additionalPlain || "") },
+  ].filter((s) => s.items.length);
+}
 export async function jobAnalysis(
   urlString: string,
   textInput: string,
@@ -206,11 +238,16 @@ export async function jobAnalysis(
   const required = new Set<string>(),
     preferred = new Set<string>();
   for (const section of sections) {
-    const destination = /우대|preferred|nice.to.have|bonus/i.test(section.title)
-      ? preferred
-      : /필수|자격|requirement|qualification|must/i.test(section.title)
-        ? required
-        : null;
+    const destination =
+      /우대|더 좋|있으면 좋|preferred|nice.to.have|bonus|plus/i.test(
+        section.title,
+      )
+        ? preferred
+        : /필수|자격|필요한|경력과 역량|requirement|qualification|must/i.test(
+              section.title,
+            )
+          ? required
+          : null;
     if (destination)
       for (const [skill, regex] of Object.entries(patterns))
         if (regex.test(section.text)) destination.add(skill);

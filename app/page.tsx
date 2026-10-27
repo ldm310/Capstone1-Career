@@ -1,24 +1,20 @@
 import { Header } from "@/components/layout/header";
 import { SkyExperience } from "@/components/landing/sky-experience";
-import { SkyHero } from "@/components/landing/sky-hero";
-import { FeatureNavigation } from "@/components/landing/feature-navigation";
-import { LiveJobsSection } from "@/components/landing/live-jobs-section";
-import Link from "next/link";
+import { HomeDashboard } from "@/components/home/home-dashboard";
 import "./sky.css";
 import "./home.css";
 import "./feature-pages.css";
+import "./dashboard.css";
+import "./readability.css";
 export default function Home() {
   return (
     <SkyExperience>
       <Header />
       <main>
-        <SkyHero />
-        <FeatureNavigation />
-        <LiveJobsSection />
+        <HomeDashboard />
       </main>
       <footer className="home-footer home-width">
-        <span>Career · 경험에서 시작하는 다음 커리어</span>
-        <Link href="/dashboard">예시로 둘러보기 ↗</Link>
+        <span>Career</span>
       </footer>
     </SkyExperience>
   );

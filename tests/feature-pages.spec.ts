@@ -2,50 +2,26 @@ import { test, expect } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { mockPublicJobs } from "./public-jobs-fixture";
 
-test("home previews are compact and each card opens its independent section", async ({
+test("each header menu opens its independent section", async ({
   page,
 }) => {
   await mockPublicJobs(page);
-  await page.goto("/#features");
-  await expect(page.locator(".public-job-card")).toHaveCount(3);
-  await expect(page.getByLabel("공고 직무")).toHaveCount(0);
   const sections = [
+    ["채용공고", "/jobs", "채용공고", ["전체 공고", "저장한 공고"]],
     [
-      "공고 찾아보기",
-      "/jobs",
-      "채용공고",
-      ["전체 공고", "저장한 공고", "내 역량과 비교"],
-    ],
-    [
-      "내 자료로 시작하기",
+      "내 역량",
       "/my-skills",
-      "내 역량 확인",
-      ["자료 추가", "분석 결과·근거", "포트폴리오 공유"],
+      "내 역량",
+      ["분석 결과", "추천 과제", "진행 중 과제", "주간 계획", "면접 준비"],
     ],
-    [
-      "필요한 준비 보기",
-      "/preparation",
-      "취업 준비",
-      ["다음 과제 찾기", "진행 중인 과제", "주간 계획", "면접 준비"],
-    ],
-    [
-      "지원 기록 보기",
-      "/application-tracker",
-      "지원 관리",
-      ["지원·이력서", "일정·마감"],
-    ],
-    [
-      "성장 기록 보기",
-      "/growth",
-      "성장 대시보드",
-      ["성장 현황", "완료·포인트 내역", "성장 랭킹"],
-    ],
+    ["내 자료", "/my-data", "내 자료", ["자료 추가", "포트폴리오 공유"]],
   ] as const;
   for (const [action, url, title, tabs] of sections) {
-    await page.goto("/#features");
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.goto("/#market-preview");
     await page
-      .locator(".home-feature-card")
-      .filter({ hasText: action })
+      .getByRole("navigation", { name: "주 메뉴" })
+      .getByRole("link", { name: action, exact: true })
       .click();
     await expect(page).toHaveURL(new RegExp(url + "$"));
     await expect(
@@ -101,34 +77,62 @@ test("catalog filters, saved-only view and comparison URL stay inside jobs", asy
   await expect(page.locator(".public-job-card")).toHaveCount(0);
   await page.getByRole("button", { name: "필터 초기화" }).click();
   await expect(page.locator(".public-job-card")).toHaveCount(1);
-  await page.getByRole("link", { name: "내 실제 자료와 비교하기 →" }).click();
-  await expect(page).toHaveURL(/\/jobs\?tab=jobs&url=/);
-  await expect(
-    page.getByRole("heading", { name: "공고의 요구 조건과 내 근거 비교" }),
-  ).toBeVisible();
-  await expect(page.getByLabel("공고 URL")).toHaveValue(
-    "https://jobs.lever.co/zoyi/fixture-0",
+  await page.route("**/api/analyze", (route) =>
+    route.fulfill({
+      json: {
+        workspace: {
+          runs: [],
+          job: {
+            id: "a",
+            company: "매치그룹",
+            title: "Backend Engineer 1",
+            url: "https://jobs.lever.co/zoyi/fixture-0",
+            required: ["SQL"],
+            preferred: ["Docker"],
+            unknown: [],
+            text: "자격요건\nSQL",
+          },
+        },
+      },
+    }),
   );
+  await page.getByRole("link", { name: "역량 비교 →" }).click();
+  await expect(page).toHaveURL(/\/jobs\?job=fixture-0&view=compare$/);
+  await expect(
+    page
+      .getByRole("navigation", { name: "공고 상세 메뉴" })
+      .getByRole("link"),
+  ).toHaveText(["공고 내용", "역량 비교"]);
+  // The comparison runs on its own, without pressing a button.
+  await expect(page.locator(".job-compare-group h4")).toHaveText([
+    "필수",
+    "우대",
+  ]);
 });
 
-test("old links preserve destination and unrelated tabs cannot leak into sections", async ({
+test("old links preserve destination and removed sections are gone", async ({
   page,
 }) => {
   await mockPublicJobs(page);
-  await page.goto("/career?tab=schedule");
-  await expect(page).toHaveURL(/\/application-tracker\?tab=schedule$/);
-  await expect(
-    page.getByRole("heading", { level: 1, name: "지원 관리" }),
-  ).toBeVisible();
+  await page.goto("/career?tab=plan");
+  await expect(page).toHaveURL(/\/my-skills\?tab=plan$/);
+  await page.goto("/career?tab=sources");
+  await expect(page).toHaveURL(/\/my-data$/);
   await page.goto("/my-skills?tab=schedule");
   await expect(
-    page.getByRole("heading", { name: "지금까지 해온 것을 알려주세요" }),
+    page.getByRole("heading", { name: "찾은 기술", exact: true }),
   ).toBeVisible();
-  await expect(
-    page
-      .getByRole("navigation", { name: "내 역량 확인 하위 메뉴" })
-      .getByRole("link", { name: "일정·마감" }),
-  ).toHaveCount(0);
+  for (const url of [
+    "/studies",
+    "/application-tracker",
+    "/growth",
+    "/preparation",
+    "/dashboard",
+    "/applications",
+  ]) {
+    const response = await page.goto(url);
+    expect(response?.status(), url).toBe(404);
+  }
 });
 
 test("catalog loads more than one page and filters send complete query to API", async ({
@@ -162,7 +166,7 @@ test("catalog loads more than one page and filters send complete query to API", 
   });
   await page.goto("/jobs");
   await expect(page.locator(".public-job-card")).toHaveCount(12);
-  await page.getByRole("button", { name: "새로운 공고 더보기" }).click();
+  await page.getByRole("button", { name: "더보기", exact: true }).click();
   await expect(page.locator(".public-job-card")).toHaveCount(17);
   const request = page.waitForRequest(
     (r) =>

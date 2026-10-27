@@ -16,9 +16,10 @@ export async function mockPublicJobs(page: Page) {
     const p = new URL(route.request().url()).searchParams;
     const offset = Number(p.get("offset")),
       limit = Number(p.get("limit")),
-      role = p.get("role");
-    const jobs = fixtureJobs.filter(
-      (job) => role === "all" || job.category === role,
+      role = p.get("role"),
+      id = p.get("id");
+    const jobs = fixtureJobs.filter((job) =>
+      id ? job.id === id : role === "all" || job.category === role,
     );
     await route.fulfill({
       json: {

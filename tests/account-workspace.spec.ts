@@ -15,8 +15,11 @@ test("account data is isolated, persists across sessions, links documents, compa
     data: { action: "register", email, password, name: "검증 사용자" },
   });
   await page.goto("/career");
-  await expect(page).toHaveURL(/\/growth/);
-  await expect(page.getByText(/검증 사용자님의 공간/)).toBeVisible();
+  await expect(page).toHaveURL(/\/my-skills$/);
+  await expect(
+    page.getByRole("heading", { level: 1, name: "내 역량" }),
+  ).toBeVisible();
+  await expect(page.getByText("게스트 공간, 7일 보관")).toHaveCount(0);
   const audit = await new AxeBuilder({ page })
     .withTags(["wcag2a", "wcag2aa", "wcag21aa"])
     .analyze();
@@ -56,41 +59,11 @@ test("account data is isolated, persists across sessions, links documents, compa
   const analyzed = (await job.json()).workspace;
   expect(analyzed.job.required).toContain("Python");
   expect(analyzed.job.preferred).toContain("Docker");
-  const record = await api.post("/api/career", {
-    headers,
-    data: {
-      action: "applications",
-      applications: [
-        {
-          id: randomUUID(),
-          company: "테스트 기업",
-          title: "개발자",
-          url: "",
-          stage: "지원 준비",
-          date: "2026-09-26",
-          resumeId: doc,
-          snapshot: ["Python"],
-          notes: "테스트",
-        },
-      ],
-    },
-  });
-  expect(record.ok()).toBeTruthy();
-  const event = await api.post("/api/career", {
-    headers,
-    data: {
-      action: "events",
-      events: [
-        {
-          id: randomUUID(),
-          title: "면접",
-          date: "2026-10-01T14:00",
-          type: "면접",
-        },
-      ],
-    },
-  });
-  expect(event.ok()).toBeTruthy();
+  for (const data of [
+    { action: "applications", applications: [] },
+    { action: "events", events: [] },
+  ])
+    expect((await api.post("/api/career", { headers, data })).ok()).toBeFalsy();
   const second = await browser.newContext();
   await second.request.post(`${baseURL}/api/account`, {
     headers,
@@ -98,7 +71,7 @@ test("account data is isolated, persists across sessions, links documents, compa
   });
   expect(
     (await (await second.request.get(`${baseURL}/api/career`)).json()).workspace
-      .applications,
+      .documents,
   ).toHaveLength(1);
   const stranger = await browser.newContext();
   expect((await stranger.request.get(`${baseURL}/api/career`)).status()).toBe(
@@ -144,7 +117,7 @@ test("account data is isolated, persists across sessions, links documents, compa
       })
     ).ok(),
   ).toBeFalsy();
-  await page.goto("/career?tab=sources");
+  await page.goto("/my-data");
   await expect(
     page.getByText("my-resume.md", { exact: true }).first(),
   ).toBeVisible();
@@ -158,7 +131,7 @@ test("account data is isolated, persists across sessions, links documents, compa
   await stranger.close();
 });
 
-test("weekly plan, schedule export, interview and account views work on desktop and mobile", async ({
+test("weekly plan, interview and account views work on desktop and mobile", async ({
   page,
   baseURL,
 }) => {
@@ -171,9 +144,8 @@ test("weekly plan, schedule export, interview and account views work on desktop 
       name: "계획 검증",
     },
   });
-  await page.goto("/career?tab=plan");
-  await page.getByText("기존 준비 계획", { exact: true }).click();
-  await page.getByRole("button", { name: "준비 조건으로 계획 추가" }).click();
+  await page.goto("/my-skills?tab=plan");
+  await page.getByRole("button", { name: "계획 추가", exact: true }).click();
   await expect(page.locator(".career-task")).toHaveCount(18);
   await page.locator(".career-task input[type=checkbox]").first().check();
   await expect(
@@ -183,17 +155,7 @@ test("weekly plan, schedule export, interview and account views work on desktop 
   await expect(
     page.locator(".career-task input[type=checkbox]").first(),
   ).toBeChecked();
-  await page.goto("/career?tab=schedule");
-  await page.getByLabel("일정 이름").fill("회사 면접");
-  await page.getByLabel("날짜·시간").fill("2026-10-02T10:30");
-  await page.getByRole("button", { name: "일정 추가", exact: true }).click();
-  await expect(page.getByText("회사 면접", { exact: true })).toBeVisible();
-  const downloadPromise = page.waitForEvent("download");
-  await page.getByRole("button", { name: /캘린더에 추가할 파일/ }).click();
-  expect((await downloadPromise).suggestedFilename()).toBe(
-    "career-schedule.ics",
-  );
-  await page.goto("/career?tab=interview");
+  await page.goto("/my-skills?tab=interview");
   await page
     .locator("textarea")
     .first()
@@ -204,14 +166,13 @@ test("weekly plan, schedule export, interview and account views work on desktop 
     "실제 경험을 바탕으로 답변을 정리했습니다.",
   );
   for (const tab of [
-    "overview",
     "sources",
-    "jobs",
-    "plan",
-    "schedule",
-    "applications",
-    "interview",
     "share",
+    "skills",
+    "tasks",
+    "plan",
+    "interview",
+    "jobs",
   ]) {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(legacyDestination(tab));
@@ -227,11 +188,10 @@ test("weekly plan, schedule export, interview and account views work on desktop 
     headers: { Origin: baseURL! },
     data: { action: "logout" },
   });
-  await page.reload();
-  await expect(
-    page.getByText(/로그인 없이 이용 중 · 게스트 공간/),
-  ).toBeVisible();
+  await page.goto("/my-data");
+  await expect(page.getByText("게스트 공간, 7일 보관")).toBeVisible();
   const guest = await (await page.request.get("/api/career")).json();
   expect(guest.guest).toBe(true);
-  expect(guest.workspace.events).toHaveLength(0);
+  expect(guest.workspace).not.toHaveProperty("events");
+  expect(guest.workspace).not.toHaveProperty("applications");
 });

@@ -6,12 +6,13 @@ export interface SkillReview {
   status: "pending" | "confirmed" | "edited" | "excluded" | "appeal";
   reason: string;
   evidenceIds: string[];
+  // 1~100 기술 점수. 없으면 단계와 근거로 계산한다.
+  score?: number;
 }
 export interface GrowthTask {
   id: string;
   skill: string;
   level: Level;
-  reward: number;
   baseline: Level | null;
   baselineEvidence: string[];
   startedAt: string;
@@ -24,33 +25,11 @@ export interface GrowthTask {
     feedback: string;
   }[];
 }
-export interface Reward {
-  id: string;
-  taskId: string;
-  skill: string;
-  level: Level;
-  points: number;
-  at: string;
-  reason: string;
-}
 export interface GrowthState {
   reviews: SkillReview[];
   tasks: GrowthTask[];
-  rewards: Reward[];
-  publicRanking: boolean;
-  nickname: string;
-}
-export interface RankingRow {
-  id: string;
-  nickname: string;
-  points: number;
-  completed: number;
-  rank: number;
 }
 export const emptyGrowth: GrowthState = {
   reviews: [],
   tasks: [],
-  rewards: [],
-  publicRanking: false,
-  nickname: "",
 };
