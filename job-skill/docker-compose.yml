@@ -1,0 +1,25 @@
+# 로컬 개발용 PostgreSQL (채용공고 역량 추출 DB)
+# 실행: docker compose up -d            (이 폴더에서)
+# 비밀번호는 .env 의 POSTGRES_PASSWORD 에 적는다(.env 는 저장소에 올리지 않음, .env.example 참고).
+# 내 컴퓨터(127.0.0.1)에서만 접속되고, 원래 설치된 PostgreSQL(5432)과 겹치지 않게 5433 포트를 쓴다.
+services:
+  db:
+    image: postgres:17.6
+    container_name: jobskill-db
+    environment:
+      POSTGRES_DB: jobskill
+      POSTGRES_USER: jobskill
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?.env 에 POSTGRES_PASSWORD 를 적어 주세요}
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - jobskill-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U jobskill -d jobskill"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+volumes:
+  jobskill-pgdata:

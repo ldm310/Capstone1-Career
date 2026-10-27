@@ -144,7 +144,7 @@ CREATE TABLE extraction_run (
     review_reasons   jsonb         NOT NULL DEFAULT '[]' CHECK (jsonb_typeof(review_reasons) = 'array'),
     review_result    text          CHECK (review_result IN ('문제없음', '고침')),
     reviewed_at      timestamptz,
-    llm_output_raw   jsonb         NOT NULL,
+    llm_output_raw   jsonb,
     is_current       boolean       NOT NULL DEFAULT false,
     run_at           timestamptz   NOT NULL DEFAULT now(),
     CHECK ((review_result IS NULL) = (reviewed_at IS NULL))
@@ -163,7 +163,7 @@ COMMENT ON COLUMN extraction_run.retried        IS '다시 부름 (모집 단위
 COMMENT ON COLUMN extraction_run.review_reasons IS '확인 필요 사유 (예: [{"검사":1,"내용":"..."}], 비면 확인 불필요)';
 COMMENT ON COLUMN extraction_run.review_result  IS '확인 결과 (문제없음/고침, 확인 전이면 비움)';
 COMMENT ON COLUMN extraction_run.reviewed_at    IS '확인 시각';
-COMMENT ON COLUMN extraction_run.llm_output_raw IS '표준화 전 답 (LLM 이 준 JSON 그대로)';
+COMMENT ON COLUMN extraction_run.llm_output_raw IS '표준화 전 답 (LLM 이 준 JSON 그대로, 2026-10-27 이전 결과는 비어 있음)';
 COMMENT ON COLUMN extraction_run.is_current     IS '현재 사용 (공고마다 최대 하나)';
 COMMENT ON COLUMN extraction_run.run_at         IS '실행 시각';
 

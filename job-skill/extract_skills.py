@@ -19,11 +19,14 @@
 from __future__ import annotations
 
 import argparse
+import copy
+import hashlib
 import json
 import os
 import re
 import sys
 import time
+from datetime import datetime, timezone
 
 import numpy as np
 from PIL import Image
@@ -431,18 +434,30 @@ def count_line(r: dict) -> str:
     return (f"단위 {len(r['positions'])}개 [{units}] | 필수 {cnt('required')} | 우대 {cnt('preferred')} | 업무 {cnt('duties')} | 기타 {cnt('other')} | "
             f"근거없음 {len(r['rejected'])} 제외 {len(r.get('excluded', []))} 확인필요 {flags}"
             + (f" | 검사: 다시 부름({r['checks']['used']})" if (r.get("checks") or {}).get("retry") is not None else "")
-            + (f" ⚠단위 확인 {len(r['check_flag'])}" if r.get("check_flag") else ""))
+            + (f" ⚠확인 필요 {len(review_reasons(r))}" if review_reasons(r) else ""))
+
+
+def review_reasons(r: dict) -> list[dict]:
+    """결과의 확인 필요 사유 [{검사, 내용}]. 옛 결과(check_flag: 힌트 문장 목록)도 같은 모양으로 바꿔 돌려준다."""
+    if "review_reasons" in r:
+        return r["review_reasons"]
+    out = []
+    for h in r.get("check_flag") or []:
+        n = 1 if "경력 조건" in h else 2 if "모집부문" in h else 3
+        out.append({"검사": n, "내용": h})
+    return out
 
 
 UNIT_HEAD = re.compile(r"^■ (모집\s*부문|모집\s*분야|직무명|채용\s*분야|모집\s*구분|직무)\s*$")
 
 
-def unit_checks(r: dict, inp: dict) -> list[str]:
-    """LLM 결과의 모집 단위가 의심스러운지 코드로 본다. 반환: 다시 부를 때 붙일 힌트 문장들(문제 없으면 빈 목록).
-      1) 경력 범위: 사람인 목록의 경력 조건(예: '신입 · 경력')에 있는 신입/경력이 단위들의 career 에 없음
-      2) 모집부문 수: 입력 표의 '■ 모집부문' 칸(행)이 단위 이름 수보다 많음
-      3) 빈 IT 단위: IT 단위인데 필수·우대·업무가 모두 비었음"""
-    hints, pos = [], r.get("positions", [])
+def unit_checks(r: dict, inp: dict) -> list[dict]:
+    """LLM 결과의 모집 단위가 의심스러운지 코드로 본다(문제 없으면 빈 목록).
+    반환: [{검사, 내용, 힌트}] — 내용은 DB 의 '확인 필요 사유'로, 힌트는 다시 부를 때 LLM 입력 끝에 붙인다.
+      1) 신입·경력을 빠짐없이 담았는가: 사람인 경력 조건(예: '신입 · 경력')에 있는 신입/경력이 단위들의 career 에 없음
+      2) 모집 직무를 빠짐없이 담았는가: 입력 표의 '■ 모집부문' 칸(행)이 단위 이름 수보다 많음
+      3) IT 직무인데 내용이 비어 있지 않은가: IT 단위인데 필수·우대·업무가 모두 비었음"""
+    found, pos = [], r.get("positions", [])
     car = inp.get("career", "")
     want_new = "신입" in car
     want_exp = bool(re.search(r"경력(?!무관)|\d+\s*~\s*\d+\s*년", car))
@@ -451,31 +466,50 @@ def unit_checks(r: dict, inp: dict) -> list[str]:
         has_new = bool(cars & {"신입", "신입·경력"})
         has_exp = bool(cars & {"경력", "신입·경력"})
         if (want_new and not has_new) or (want_exp and not has_exp):
-            hints.append(f"사람인 목록상 이 공고의 경력 조건은 '{car}'이다. 신입·경력 조건을 빠뜨리지 마라. "
-                         "경력직에만 따로 적힌 조건이 있으면 신입 단위와 경력 단위로 나누고, 하나로 둘 때는 career 를 '신입·경력'으로 적는다.")
+            found.append({"검사": 1, "내용": f"경력 조건 '{car}' / 만든 자리 경력: {', '.join(sorted(c for c in cars if c))}",
+                          "힌트": f"사람인 목록상 이 공고의 경력 조건은 '{car}'이다. 신입·경력 조건을 빠뜨리지 마라. "
+                                  "경력직에만 따로 적힌 조건이 있으면 신입 단위와 경력 단위로 나누고, 하나로 둘 때는 career 를 '신입·경력'으로 적는다."})
     n_head = sum(1 for ln in inp.get("text", "").splitlines() if UNIT_HEAD.match(ln.strip()))
     names = {re.sub(r"\s*\((신입|경력)[^)]*\)\s*$", "", x.get("name", "")) for x in pos}
     if n_head >= 2 and len(names) < n_head:
-        hints.append(f"입력의 표에 모집부문 칸이 {n_head}개 있다. 모집부문마다 따로 단위를 만들어라.")
+        found.append({"검사": 2, "내용": f"모집 직무 칸 {n_head}개 / 만든 자리 이름 {len(names)}개",
+                      "힌트": f"입력의 표에 모집부문 칸이 {n_head}개 있다. 모집부문마다 따로 단위를 만들어라."})
     for x in pos:
         if x.get("it_job", True) and not any(x.get(k) for k in ("required", "preferred", "duties")):
-            hints.append(f"IT 직무 단위 '{x.get('name')}'의 필수·우대·업무가 비어 있다. 그 단위의 자격요건·우대사항·담당업무를 빠뜨리지 말고 적어라.")
-    return hints
+            found.append({"검사": 3, "내용": f"IT 자리 '{x.get('name')}'의 필수·우대·업무가 비어 있음",
+                          "힌트": f"IT 직무 단위 '{x.get('name')}'의 필수·우대·업무가 비어 있다. 그 단위의 자격요건·우대사항·담당업무를 빠뜨리지 말고 적어라."})
+    return found
+
+
+def llm_input(inp: dict, extra: str = "") -> str:
+    """LLM 에 보내는 입력 글(머리 3줄 + 공고 글). extra 는 다시 부를 때 끝에 붙이는 힌트."""
+    return (f"사람인 직무 분류: {inp['role'] or '(모름)'} (참고용, 다른 직무 부문도 모두 정리)\n회사: {inp.get('company') or '(모름)'}\n"
+            + (f"사람인 목록 경력 조건: {inp['career']}\n" if inp.get("career") else "") + f"\n{inp['text']}"
+            + (f"\n\n[다시 확인] 앞선 정리에서 아래 문제가 보였다. 고쳐서 다시 정리하라.\n{extra}" if extra else ""))
+
+
+def sha256(s: str) -> str:
+    return hashlib.sha256(s.encode("utf-8")).hexdigest()
+
+
+def prompt_version(examples: bool) -> str:
+    """프롬프트(지시문 + 예시 답안 + JSON 틀)가 바뀌면 바뀌는 짧은 지문."""
+    return sha256(instructions(examples) + json.dumps(SCHEMA, ensure_ascii=False, sort_keys=True))[:12]
 
 
 def call_llm(client, model: str, effort: str, inp: dict, examples: bool, extra: str = ""):
-    """LLM 한 번 호출 -> (걸러낸 결과, 입력 토큰, 출력 토큰, 초, 상태). extra 는 입력 끝에 붙이는 다시 확인 힌트."""
+    """LLM 한 번 호출 -> (걸러낸 결과, 표준화 전 답, 입력 토큰, 출력 토큰, 초, 상태). extra 는 입력 끝에 붙이는 다시 확인 힌트."""
     t = time.perf_counter()
     resp = client.responses.create(
         model=model, instructions=instructions(examples),
-        input=f"사람인 직무 분류: {inp['role'] or '(모름)'} (참고용, 다른 직무 부문도 모두 정리)\n회사: {inp.get('company') or '(모름)'}\n"
-              + (f"사람인 목록 경력 조건: {inp['career']}\n" if inp.get("career") else "") + f"\n{inp['text']}"
-              + (f"\n\n[다시 확인] 앞선 정리에서 아래 문제가 보였다. 고쳐서 다시 정리하라.\n{extra}" if extra else ""),
+        input=llm_input(inp, extra),
         max_output_tokens=8000,
         reasoning={"effort": effort},
         text={"format": {"type": "json_schema", "name": "skills", "schema": SCHEMA, "strict": True}})
     sec = time.perf_counter() - t
-    return guard(json.loads(resp.output_text), inp["text"]), resp.usage.input_tokens, resp.usage.output_tokens, sec, resp.status
+    raw = json.loads(resp.output_text)
+    # guard 는 받은 dict 를 고치므로, 표준화 전 답은 복사해 둔다
+    return guard(copy.deepcopy(raw), inp["text"]), raw, resp.usage.input_tokens, resp.usage.output_tokens, sec, resp.status
 
 
 def run_model(client, model: str, effort: str, inputs: dict[str, dict], examples: bool = False, tag: str = "") -> dict:
@@ -489,19 +523,25 @@ def run_model(client, model: str, effort: str, inputs: dict[str, dict], examples
         if os.path.exists(path):
             r = json.load(open(path, encoding="utf-8"))
         else:
-            parsed, tin, tout, sec, status = call_llm(client, model, effort, inp, examples)
+            run_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+            parsed, raw, tin, tout, sec, status = call_llm(client, model, effort, inp, examples)
             first = unit_checks(parsed, inp)
-            checks = {"first": first, "retry": None, "used": "first"}
+            reason = lambda found: [{"검사": f["검사"], "내용": f["내용"]} for f in found]
+            checks = {"first": reason(first), "retry": None, "used": "first"}
+            final = first
             if first:  # 의심되면 힌트를 붙여 한 번 더 — 덜 의심스러운 쪽을 쓴다(비용은 두 번 다 센다)
-                p2, i2, o2, s2, st2 = call_llm(client, model, effort, inp, examples, extra="\n".join("- " + h for h in first))
+                p2, raw2, i2, o2, s2, st2 = call_llm(client, model, effort, inp, examples,
+                                                     extra="\n".join("- " + f["힌트"] for f in first))
                 second = unit_checks(p2, inp)
-                checks["retry"] = second
+                checks["retry"] = reason(second)
                 tin, tout, sec = tin + i2, tout + o2, sec + s2
                 if len(second) <= len(first):
-                    parsed, status, checks["used"] = p2, st2, "retry"
-            r = {"rec_idx": rid, "model": model, "effort": effort, "examples": examples, "seconds": round(sec, 2),
-                 "input_tokens": tin, "output_tokens": tout, "status": status, "checks": checks,
-                 "check_flag": checks["retry"] if checks["used"] == "retry" else first, **parsed}
+                    parsed, raw, status, checks["used"], final = p2, raw2, st2, "retry", second
+            r = {"rec_idx": rid, "model": model, "effort": effort, "examples": examples,
+                 "prompt_version": prompt_version(examples), "dict_version": CD.version.split()[0] if CD.version else "",
+                 "input_hash": sha256(llm_input(inp)), "run_at": run_at, "seconds": round(sec, 2),
+                 "input_tokens": tin, "output_tokens": tout, "cost_usd": round(tin / 1e6 * pin + tout / 1e6 * pout, 6),
+                 "status": status, "checks": checks, "review_reasons": reason(final), "llm_output_raw": raw, **parsed}
             json.dump(r, open(path, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
         stats["in"] += r["input_tokens"]
         stats["out"] += r["output_tokens"]
@@ -791,8 +831,10 @@ function posting(p){
        "<input type='text' id='addName' placeholder='공고 표기 그대로 (예: Spring Boot)'><select id='addCat'>" +
        ["필수", "우대", "필수+우대"].map(o => "<option>" + o + "</option>").join("") + "</select><button id='addBtn'>추가</button></div>";
   const filt = D.models.map(m => { const r = p.res[m]; if (!r) return "";
-    const ck = r.checks && r.checks.first && r.checks.first.length ? " · 단위 검사: " + esc(r.checks.first.join(" / ")) +
-      (r.checks.retry ? " → 다시 부름(" + (r.checks.used === "retry" ? "다시 부른 결과 사용" : "처음 결과 유지") + ")" + (r.check_flag && r.check_flag.length ? " ⚠ 남은 문제: " + esc(r.check_flag.join(" / ")) : " 해결") : "") : "";
+    const why = xs => (xs || []).map(x => typeof x === "string" ? x : x["검사"] + ") " + x["내용"]).join(" / ");
+    const left = r.review_reasons || r.check_flag || [];
+    const ck = r.checks && r.checks.first && r.checks.first.length ? " · 단위 검사: " + esc(why(r.checks.first)) +
+      (r.checks.retry ? " → 다시 부름(" + (r.checks.used === "retry" ? "다시 부른 결과 사용" : "처음 결과 유지") + ")" + (left.length ? " ⚠ 확인 필요: " + esc(why(left)) : " 해결") : "") : "";
     const rej = r.rejected.map(x => esc(x.name)).join(", "), exl = (r.excluded || []).map(x => esc(x.name) + "(" + esc(x.reason) + ")").join(", ");
     return (rej || exl || r.notes || ck) ? "<div><b>" + esc(m) + "</b>" + ck + (exl ? " · 스킬이 아니라 뺌: " + exl : "") + (rej ? " · 글자에 없어 뺌: " + rej : "") + (r.notes ? " · 메모: " + esc(r.notes) : "") + "</div>" : ""; }).join("");
   if (filt) h += "<h3>걸러진 것·모델 메모</h3><div class='filtered'>" + filt + "</div>";
@@ -832,6 +874,8 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--models", default="gpt-5.6-terra,gpt-5.6-luna")
     ap.add_argument("--effort", default="low")
+    ap.add_argument("--examples", action="store_true", help="프롬프트에 예시 답안을 붙인다(지금 쓰는 설정)")
+    ap.add_argument("--tag", default="", help="결과 폴더 이름 뒤에 붙일 말(예: -ex → out/extract/gpt-5.6-luna-ex/)")
     args = ap.parse_args()
     models = [m.strip() for m in args.models.split(",") if m.strip()]
     inputs = posting_inputs()
@@ -842,12 +886,12 @@ def main() -> None:
         print(f"{rid}: 남긴 단락 {inp['kept']}, 뺀 단락 {inp['dropped']}, 글자 {len(norm(inp['text']))}자")
     from openai import OpenAI
     client = OpenAI(max_retries=4, timeout=300)
-    stats = [run_model(client, m, args.effort, inputs) for m in models]
+    stats = [run_model(client, m, args.effort, inputs, examples=args.examples, tag=args.tag) for m in models]
     for s in stats:
         print(f"{s['model']}: 입력 {s['in']} 출력 {s['out']} 토큰, ${s['usd']:.4f} (공고당 ${s['usd'] / len(inputs):.4f}), "
               f"공고당 {s['sec'] / len(inputs):.1f}s")
     json.dump(stats, open(os.path.join(EX, "_stats.json"), "w", encoding="utf-8"), ensure_ascii=False)
-    build_html(inputs, models, stats)
+    build_html(inputs, [m + args.tag for m in models], stats)
     print("-> out/extract/index.html")
 
 

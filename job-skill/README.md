@@ -28,7 +28,7 @@
    1. 신입·경력을 빠짐없이 담았는가
    2. 모집 직무를 빠짐없이 담았는가
    3. IT 직무인데 내용이 비어 있지 않은가
-6. **DB 저장 (Load):** PostgreSQL. 설계는 끝났고([ERD](docs/erd.png), [물리 설계](docs/physical-design.md), [`db/schema.sql`](db/schema.sql)), DB에 넣는 코드는 아직 없다.
+6. **DB 저장 (Load):** PostgreSQL에 넣는다(`db_load.py`). → [ERD](docs/erd.png), [물리 설계](docs/physical-design.md)
 
 ## 파일
 
@@ -45,15 +45,19 @@
 | `extract_skills.py` | LLM 추출, 표준화, 모집 단위 검사. 브라우저 채점 화면 `out/extract/index.html`도 만든다. |
 | `capabilities.json`, `capdict.py` | 표준화 사전(능력 61개, 기술 184개, 제외할 말)과 조회 코드. 사용자 역량도 같은 사전을 쓴다. |
 | `db/schema.sql` | DB 표 만들기(PostgreSQL DDL). 설명은 [docs/physical-design.md](docs/physical-design.md) |
+| `db_load.py` | DB 저장: 표 만들기(`init`), 사전 동기화(`sync-dict`), 공고·추출 결과 넣기(`load`). 여러 번 돌려도 겹치지 않는다. |
+| `docker-compose.yml`, `.env.example` | 로컬 개발용 PostgreSQL(Docker). 비밀번호는 `.env`(올리지 않음) |
 | `docs/` | 그림(파이프라인, 추출 방법, LLM 단계, 단위 검사, ERD), [물리 설계](docs/physical-design.md), [기술 스택 결정](docs/pipeline-stack.md), [OCR 비교 실험](docs/ocr-comparison.md) |
 | `run_tesseract.py` 등 | OCR 비교 실험 코드 → [docs/ocr-comparison.md](docs/ocr-comparison.md) |
 
 ## 실행
 
 준비
-- Python 3.12에 `pillow`, `numpy`, `openai`를 설치한다.
+- Python 3.12에 `pillow`, `numpy`, `openai`, `psycopg[binary]`를 설치한다.
 - PaddleOCR은 별도 가상환경에 설치한다(`requirements-paddle.txt`, GPU는 [OCR 비교 실험](docs/ocr-comparison.md#측정-환경) 참고).
-- 환경변수 `OPENAI_API_KEY`를 설정한다.
+- 환경변수 `OPENAI_API_KEY`를 설정한다(LLM).
+- DB는 Docker로 띄운다: `.env.example`을 `.env`로 복사해 비밀번호를 정하고 `docker compose up -d`.
+  PostgreSQL 17이 `localhost:5433`에 뜬다(내 컴퓨터에서만 접속). `db_load.py`는 `.env`의 `DATABASE_URL`을 읽는다.
 
 ```powershell
 py -3.12 sample_random.py --out sample3 --per-role 10      # 1. 수집
@@ -61,11 +65,15 @@ $env:OCR_DATA_DIR = "sample3"
 py -3.12 fetch_images.py                                  # 2. 이미지 받기
 <venv-paddle>\Scripts\python.exe dump_paddle_boxes.py --gpu   # 3. OCR
 py -3.12 section_split.py --paddle-only                   # 4. 단락 나누기·빼기
-py -3.12 extract_skills.py --models gpt-5.6-luna          # 5. LLM 추출·표준화·단위 검사 (유료)
+py -3.12 extract_skills.py --models gpt-5.6-luna --examples --tag -ex   # 5. LLM 추출·표준화·단위 검사 (유료)
+py -3.12 db_load.py init                                  # 6. DB: 표 만들기 (처음 한 번)
+py -3.12 db_load.py sync-dict                             #    사전 넣기 (사전을 고칠 때마다)
+py -3.12 db_load.py load --run gpt-5.6-luna-ex            #    공고·추출 결과 넣기
 ```
 
 비용은 공고당 약 $0.004다(luna low, 다시 부르기 포함).
-지금 쓰는 설정은 프롬프트에 예시 답안을 붙인 것(`run_model(..., examples=True)`)이다. 그런데 이걸 켜는 명령줄 옵션이 아직 없어서, 위 명령은 예시 답안 없이 돈다.
+`--examples`는 프롬프트에 예시 답안을 붙인다(지금 쓰는 설정). `--tag`는 결과 폴더 이름 뒤에 붙는다(`out/extract/gpt-5.6-luna-ex/`).
+추출 결과에는 표준화 전 답, 확인 필요 사유(`[{검사, 내용}]`), 프롬프트·사전 버전, 입력 해시, 비용이 함께 저장된다.
 
 ## 데이터 원칙
 

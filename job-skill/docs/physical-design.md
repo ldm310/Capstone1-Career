@@ -81,7 +81,7 @@
 | 확인 필요 사유 | `review_reasons` | jsonb | NOT NULL, 기본값 `[]`, 목록이어야 함 |
 | 확인 결과 | `review_result` | text | 문제없음/고침 |
 | 확인 시각 | `reviewed_at` | timestamptz | 확인 결과와 함께 채움(둘 다 있거나 둘 다 비거나) |
-| 표준화 전 답 | `llm_output_raw` | jsonb | NOT NULL |
+| 표준화 전 답 | `llm_output_raw` | jsonb | 2026-10-27 이전 결과는 비어 있음(그 뒤로는 항상 채움) |
 | 현재 사용 | `is_current` | boolean | NOT NULL, 기본값 false, **공고마다 최대 하나** |
 | 실행 시각 | `run_at` | timestamptz | NOT NULL, 기본값 지금 |
 
@@ -205,10 +205,31 @@ PostgreSQL은 FK 칸에 색인을 자동으로 만들지 않는다. 그래서 �
 | 현재 사용이 아닌 실행 여러 개 (재추출 기록) | 허용 |
 | 추출 실행 지우기 | 아래 데이터 함께 지워짐, 능력은 그대로 |
 
+## 넣는 코드
+
+[`db_load.py`](../db_load.py)가 이 표들을 채운다(사용법은 [README](../README.md#실행)).
+- 시험(2026-10-27, 시험용 PostgreSQL 17, sample3):
+  - 공고 20 · 이미지 21 · 추출 실행 19 · 자리 39 · 한 줄 307 · 요건 305 · 요건 기술 170. JSON에서 센 값과 같다.
+  - 같은 것을 다시 넣으면 새로 들어가는 것이 0건이다.
+  - 사전에서 기술을 빼고 동기화하면 그 기술은 지워지지 않고 사용 여부만 false가 된다.
+
+## 통계
+
+**공고 기준**으로 센다(2026-10-27 결정). 공고 하나에 자리가 여러 개여도 1로 친다. 예: "필수에 '관계형 DB'가 나온 공고 수".
+
+```sql
+SELECT c.name, count(DISTINCT e.posting_id) AS 공고수
+FROM extraction_run e
+JOIN recruit_unit u ON u.run_id = e.id AND u.is_it
+JOIN unit_item i    ON i.unit_id = u.id AND i.category = '필수'
+JOIN requirement r  ON r.item_id = i.id
+JOIN capability c   ON c.id = r.capability_id
+WHERE e.is_current AND c.name <> '기타'
+GROUP BY c.name ORDER BY 공고수 DESC;
+```
+
 ## 남은 일
 
 - **영어 이름:** BE 팀과 이름 규칙을 맞춘다.
-- **통계용 조회(view):** "공고 기준 / 자리 기준" 세는 방법을 정한 뒤 만든다.
-- **코드:**
-  - `extract_skills.py`가 표준화 전 답을 저장하고, 확인 필요 사유를 `{검사, 내용}` 모양으로 내게 바꾼다.
-  - DB에 넣는 코드(Load), 사전 동기화 코드, 3일 수정 확인 코드를 만든다.
+- **3일마다 수정 확인:** Airflow DAG를 짤 때 만든다. 공고를 다시 받아 `content_hash`로 비교하고, 바뀐 공고만 다시 추출한다.
+- **통계용 조회(view):** 통계 화면을 만들 때 위 SQL을 바탕으로 만든다.
