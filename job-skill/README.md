@@ -28,7 +28,7 @@
    1. 신입·경력을 빠짐없이 담았는가
    2. 모집 직무를 빠짐없이 담았는가
    3. IT 직무인데 내용이 비어 있지 않은가
-6. **DB 저장 (Load):** 설계 중이다. → [ERD](docs/erd.png)
+6. **DB 저장 (Load):** PostgreSQL. 설계는 끝났고([ERD](docs/erd.png), [물리 설계](docs/physical-design.md), [`db/schema.sql`](db/schema.sql)), DB에 넣는 코드는 아직 없다.
 
 ## 파일
 
@@ -44,7 +44,8 @@
 | `table_layout.py` | OCR 상자를 표 구조대로 잇는다(왼쪽 머리말 표, 위쪽 머리말 열 표). |
 | `extract_skills.py` | LLM 추출, 표준화, 모집 단위 검사. 브라우저 채점 화면 `out/extract/index.html`도 만든다. |
 | `capabilities.json`, `capdict.py` | 표준화 사전(능력 61개, 기술 184개, 제외할 말)과 조회 코드. 사용자 역량도 같은 사전을 쓴다. |
-| `docs/` | 그림(파이프라인, 추출 방법, LLM 단계, 단위 검사, ERD), [기술 스택 결정](docs/pipeline-stack.md), [OCR 비교 실험](docs/ocr-comparison.md) |
+| `db/schema.sql` | DB 표 만들기(PostgreSQL DDL). 설명은 [docs/physical-design.md](docs/physical-design.md) |
+| `docs/` | 그림(파이프라인, 추출 방법, LLM 단계, 단위 검사, ERD), [물리 설계](docs/physical-design.md), [기술 스택 결정](docs/pipeline-stack.md), [OCR 비교 실험](docs/ocr-comparison.md) |
 | `run_tesseract.py` 등 | OCR 비교 실험 코드 → [docs/ocr-comparison.md](docs/ocr-comparison.md) |
 
 ## 실행
