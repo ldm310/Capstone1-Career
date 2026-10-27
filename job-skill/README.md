@@ -59,6 +59,7 @@
 - DB는 Docker로 띄운다: `.env.example`을 `.env`로 복사해 비밀번호를 정하고 `docker compose up -d`.
   PostgreSQL 17이 `localhost:5433`에 뜬다(컨테이너 `career-db`, DB·계정 `career`, 내 컴퓨터에서만 접속). `db_load.py`는 `.env`의 `DATABASE_URL`을 읽는다.
   사람마다 자기 컴퓨터에 따로 뜨는 DB라 데이터는 공유되지 않는다. 샘플은 아래 `db_load.py`로 넣는다.
+  이 파이프라인의 표는 모두 `job` 스키마에 있다(BE 표는 기본 `public`). 다른 쪽에서 읽을 때는 `job.posting`처럼 부른다.
 
 ```powershell
 py -3.12 sample_random.py --out sample3 --per-role 10      # 1. 수집

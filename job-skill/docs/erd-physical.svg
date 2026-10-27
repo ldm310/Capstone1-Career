@@ -24,7 +24,7 @@
 </defs>
 <rect width="1860" height="880" fill="#fff"/>
 <rect x="20" y="20" width="1820" height="840" fill="none" stroke="#999" stroke-width="1"/>
-<text class="title" x="44" y="58">채용공고 DB 물리 설계 (PostgreSQL 17)</text>
+<text class="title" x="44" y="58">채용공고 DB 물리 설계 (PostgreSQL 17 · 스키마 job)</text>
 <rect x="40" y="90" width="590" height="490" fill="none" stroke="#888" stroke-width="1.1" stroke-dasharray="6 4"/><text class="zt" x="52" y="110">① 수집</text>
 <rect x="640" y="90" width="1190" height="480" fill="none" stroke="#888" stroke-width="1.1" stroke-dasharray="6 4"/><text class="zt" x="652" y="110">② 추출 결과</text>
 <rect x="940" y="590" width="890" height="250" fill="none" stroke="#888" stroke-width="1.1" stroke-dasharray="6 4"/><text class="zt" x="952" y="610">③ 표준화 사전</text>

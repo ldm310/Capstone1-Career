@@ -8,11 +8,13 @@
 - 시험: 2026-10-27, 시험용 PostgreSQL 17에서 표 12개가 오류 없이 만들어지고 제약이 동작하는 것을 확인했다.
 
 표와 칸의 한글 이름은 DDL의 `COMMENT`로 DB 안에도 남겨 두었다.
+모든 표는 `job` 스키마(DB 안의 폴더)에 있다. 다른 쪽(BE 등)에서 읽을 때는 `job.posting`처럼 스키마 이름을 붙인다.
 
 ## 정한 규칙
 
 | 항목 | 규칙 | 예 |
 |---|---|---|
+| 스키마 | 모든 표를 **`job`** 스키마에 둔다. 같은 DB를 쓰는 BE 표(`public`)와 이름이 겹쳐도 부딪히지 않는다 | `job.posting` |
 | 이름 | 영어 소문자 + 밑줄(snake_case), 표 이름은 단수 | `posting`, `site_posting_no` |
 | 기본 키 | 표마다 `id` (`bigint`, 자동 증가) | `posting.id` |
 | 외래 키 | `<가리키는 표>_id` | `posting.company_id` |
@@ -221,6 +223,7 @@ PostgreSQL은 FK 칸에 색인을 자동으로 만들지 않는다. 그래서 �
 **공고 기준**으로 센다(2026-10-27 결정). 공고 하나에 자리가 여러 개여도 1로 친다. 예: "필수에 '관계형 DB'가 나온 공고 수".
 
 ```sql
+SET search_path TO job;   -- 표 이름 앞에 job. 을 매번 붙이지 않으려면
 SELECT c.name, count(DISTINCT e.posting_id) AS 공고수
 FROM extraction_run e
 JOIN recruit_unit u ON u.run_id = e.id AND u.is_it

@@ -41,6 +41,7 @@ DICT_JSON = os.path.join(HERE, "capabilities.json")
 EX = os.path.join(OUT_DIR, "extract")
 CAT_KO = {"required": "필수", "preferred": "우대", "duties": "업무", "other": "기타"}
 OTHER = "기타"  # 사전에 맞는 능력이 없을 때 가리키는 능력
+SCHEMA = "job"  # 이 파이프라인의 표는 모두 job 스키마에 있다(BE 표는 public)
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
@@ -63,7 +64,8 @@ def connect(autocommit: bool = False) -> psycopg.Connection:
     url = database_url()
     if not url:
         sys.exit("DATABASE_URL 이 없습니다. .env.example 을 .env 로 복사해 채우거나 환경변수로 설정하세요.")
-    return psycopg.connect(url, autocommit=autocommit)
+    # 스키마 이름을 붙이지 않은 표 이름은 job 에서 찾는다
+    return psycopg.connect(url, autocommit=autocommit, options=f"-c search_path={SCHEMA}")
 
 
 def rel(path: str) -> str:
@@ -112,12 +114,12 @@ def employment_type(career: str) -> str | None:
 
 def cmd_init() -> None:
     with connect(autocommit=True) as conn:
-        if conn.execute("SELECT to_regclass('public.posting')").fetchone()[0]:
+        if conn.execute("SELECT to_regclass(%s)", (f"{SCHEMA}.posting",)).fetchone()[0]:
             print("표가 이미 있습니다. 건너뜁니다.")
             return
         conn.execute(open(SCHEMA_SQL, encoding="utf-8").read())
-        n = conn.execute("SELECT count(*) FROM pg_tables WHERE schemaname = 'public'").fetchone()[0]
-        print(f"표 {n}개를 만들었습니다.")
+        n = conn.execute("SELECT count(*) FROM pg_tables WHERE schemaname = %s", (SCHEMA,)).fetchone()[0]
+        print(f"스키마 {SCHEMA} 에 표 {n}개를 만들었습니다.")
 
 
 # ---------------------------------------------------------------- sync-dict
