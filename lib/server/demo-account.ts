@@ -5,6 +5,8 @@ import {
   type Workspace,
 } from "@/types/workspace";
 import type { GrowthState } from "@/types/growth";
+import { dummyJobs } from "@/lib/dummy-jobs";
+import { saveJob, saveProfile, savedJobSchema } from "./user-data";
 
 // 데모 로그인 계정: 이미 자료를 올리고 분석까지 마친 사용자를 흉내 내는 더미 데이터다.
 export const demoAccount = {
@@ -284,10 +286,33 @@ function demoGrowth(): GrowthState {
 }
 
 // 데모 계정이 없으면 계정과 자료를 만든다. 이미 있으면 그대로 둔다.
+// 마이페이지 더미: 내 정보와 저장한 공고. 예전에 만든 데모 계정에도 한 번만 넣는다.
+function seedDemoMyPage() {
+  if (db().prepare("SELECT user_id FROM profiles WHERE user_id=?").get(userId))
+    return;
+  saveProfile(userId, {
+    education: "대졸(4년제)",
+    school: "한국대학교",
+    major: "컴퓨터공학과",
+    career: "신입",
+    location: "서울, 경기",
+    github: "https://github.com/career-demo",
+    intro: "주문 API를 만들며 SQL 성능 개선에 관심이 생긴 백엔드 지망생이에요.",
+  });
+  const saved = [
+    ["dummy:commerce-backend", "2026-10-26T10:00:00+09:00"],
+    ["dummy:backend-platform", "2026-10-24T21:30:00+09:00"],
+    ["dummy:junior-api", "2026-10-22T13:10:00+09:00"],
+  ] as const;
+  for (const [id, savedAt] of saved) {
+    const job = dummyJobs.find((j) => j.id === id);
+    if (job) saveJob(userId, savedJobSchema.parse(job), Date.parse(savedAt));
+  }
+}
 export function ensureDemoAccount() {
   const d = db();
   if (d.prepare("SELECT id FROM users WHERE email=?").get(demoAccount.email))
-    return;
+    return seedDemoMyPage();
   d.exec(
     "CREATE TABLE IF NOT EXISTS growth(user_id TEXT PRIMARY KEY,data TEXT NOT NULL)",
   );
@@ -320,4 +345,5 @@ export function ensureDemoAccount() {
   d.prepare(
     "INSERT INTO growth VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET data=excluded.data",
   ).run(userId, JSON.stringify(demoGrowth()));
+  seedDemoMyPage();
 }

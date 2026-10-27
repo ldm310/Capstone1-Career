@@ -27,9 +27,6 @@ test("no signup: sources, saved results and every section tab are accessible", a
   for (const url of [
     "/my-skills",
     "/my-skills?tab=next",
-    "/my-skills?tab=tasks",
-    "/my-skills?tab=plan",
-    "/my-skills?tab=interview",
     "/my-data?tab=share",
   ]) {
     await page.goto(url);
@@ -37,16 +34,15 @@ test("no signup: sources, saved results and every section tab are accessible", a
     await expect(page.locator(".career-workspace [role=alert]")).toHaveCount(0);
   }
   await page.goto("/sign-in");
-  await expect(page.getByRole("heading", { name: "로그인", exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "로그인", exact: true }),
+  ).toBeVisible();
   expect((await (await page.request.get("/api/career")).json()).user.id).toBe(
     before,
   );
 });
 
-test("guest sessions isolate documents", async ({
-  browser,
-  baseURL,
-}) => {
+test("guest sessions isolate documents", async ({ browser, baseURL }) => {
   const first = await browser.newContext(),
     second = await browser.newContext();
   const headers = { Origin: baseURL! };

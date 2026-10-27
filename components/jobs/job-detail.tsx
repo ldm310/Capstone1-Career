@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, CheckCircle2, CircleX, MapPin } from "lucide-react";
+import { ArrowLeft, CheckCircle2, CircleX } from "lucide-react";
 import {
   studyDemoJobs,
   exampleComparison,
@@ -17,7 +17,7 @@ import { JobSkillComparison } from "./job-skill-comparison";
 import { JobPosting } from "./job-posting";
 import { ApplicantComparison } from "./applicant-comparison";
 import { LoadingSpinner } from "@/components/shared/loading-spinner";
-import { OriginalLink } from "@/components/jobs/original-link";
+import { JobExtras, JobSummary } from "./job-summary";
 
 function RequirementList({
   title,
@@ -95,17 +95,7 @@ export function JobDetail({ id }: { id: string }) {
         <ArrowLeft size={16} />
         공고 목록
       </Link>
-      <header className="study-job-heading">
-        <div>
-          <span>{job.company}</span>
-          <h2>{job.title}</h2>
-          <p>
-            <MapPin size={16} />
-            {job.location}, {job.employment}
-          </p>
-        </div>
-        <OriginalLink job={job} className="job-original-link" />
-      </header>
+      <JobSummary job={job} />
       <ApplicantComparison jobId={job.id} />
       <nav className="study-detail-tabs" aria-label="공고 상세 메뉴">
         <Link
@@ -122,10 +112,13 @@ export function JobDetail({ id }: { id: string }) {
         </Link>
       </nav>
       {view === "posting" ? (
-        <JobPosting
-          job={job}
-          posting={tier ? examplePosting(job) : undefined}
-        />
+        <>
+          <JobPosting
+            job={job}
+            posting={tier ? examplePosting(job) : undefined}
+          />
+          <JobExtras job={job} />
+        </>
       ) : comparison ? (
         <>
           <QualificationSummary comparison={comparison} />

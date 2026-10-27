@@ -26,24 +26,24 @@ test("official job cards paginate, bookmark, persist, filter and link to source"
     })
     .click();
 
-  await expect(page.locator(".public-job-card")).toHaveCount(7);
-  await expect(
-    page.getByText("모든 공고를 확인했어요."),
-  ).toBeVisible();
-  await page
-    .getByRole("navigation", { name: "채용공고 하위 메뉴" })
-    .getByRole("link", { name: "저장한 공고" })
-    .click();
-  await expect(page.locator(".public-job-card")).toHaveCount(1);
-  await page.reload();
   await expect(
     page.getByRole("button", { name: "Backend Engineer 1 저장 취소" }),
   ).toHaveAttribute("aria-pressed", "true");
-  await page
-    .getByRole("navigation", { name: "채용공고 하위 메뉴" })
-    .getByRole("link", { name: "전체 공고", exact: true })
-    .click();
-  await expect(page).toHaveURL(/\/jobs$/);
+  await expect(page.locator(".public-job-card")).toHaveCount(7);
+  await expect(page.getByText("모든 공고를 확인했어요.")).toBeVisible();
+  // 저장한 공고는 마이페이지에서 본다. 예전 주소도 마이페이지로 보낸다.
+  await page.goto("/jobs?tab=saved");
+  await expect(page).toHaveURL(/\/my-page$/);
+  await expect(page.locator(".mypage-jobs li")).toHaveCount(1);
+  await expect(page.locator(".mypage-jobs h3")).toHaveText(
+    "Backend Engineer 1",
+  );
+  await page.reload();
+  await expect(page.locator(".mypage-jobs li")).toHaveCount(1);
+  await page.goto("/jobs");
+  await expect(
+    page.getByRole("button", { name: "Backend Engineer 1 저장 취소" }),
+  ).toHaveAttribute("aria-pressed", "true");
   await expect(page.locator(".public-job-card")).toHaveCount(7);
   await page.getByLabel("공고 직무").selectOption("data");
   await expect(page.locator(".public-job-card")).toHaveCount(1);

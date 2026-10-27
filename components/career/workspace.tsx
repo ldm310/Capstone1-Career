@@ -2,8 +2,6 @@
 import { GrowthHub } from "@/components/growth/growth-hub";
 import { SourcesPanel } from "./panels/sources";
 import { PreferencesPanel } from "./panels/preferences";
-import { PlanPanel } from "./panels/plan";
-import { InterviewPanel } from "./panels/interview";
 import { SharePanel } from "./panels/share";
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
@@ -153,11 +151,10 @@ export function CareerWorkspace({ section }: { section: FeatureSection }) {
           </p>
         )}
       </div>
-      {["skills", "next", "tasks"].includes(tab) && (
+      {["skills", "next"].includes(tab) && (
         <GrowthHub
           preparation={tab === "next"}
           role={state.role}
-          view={tab === "next" ? "skills" : tab}
           findings={findings}
           targets={targets}
         />
@@ -171,13 +168,6 @@ export function CareerWorkspace({ section }: { section: FeatureSection }) {
           </Link>
         </>
       )}
-      {tab === "plan" && (
-        <>
-          <PreferencesPanel {...panelProps} />
-          <PlanPanel {...panelProps} />
-        </>
-      )}
-      {tab === "interview" && <InterviewPanel {...panelProps} />}
       {tab === "share" && <SharePanel {...panelProps} />}
     </div>
   );

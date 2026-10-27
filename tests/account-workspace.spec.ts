@@ -131,7 +131,7 @@ test("account data is isolated, persists across sessions, links documents, compa
   await stranger.close();
 });
 
-test("weekly plan, interview and account views work on desktop and mobile", async ({
+test("legacy tabs and account views work on desktop and mobile", async ({
   page,
   baseURL,
 }) => {
@@ -144,27 +144,13 @@ test("weekly plan, interview and account views work on desktop and mobile", asyn
       name: "계획 검증",
     },
   });
-  await page.goto("/my-skills?tab=plan");
-  await page.getByRole("button", { name: "계획 추가", exact: true }).click();
-  await expect(page.locator(".career-task")).toHaveCount(18);
-  await page.locator(".career-task input[type=checkbox]").first().check();
+  // 없앤 탭(진행 중 과제, 주간 계획, 면접 준비)은 메뉴에 없다.
+  await page.goto("/my-skills");
   await expect(
-    page.locator(".career-task input[type=checkbox]").first(),
-  ).toBeChecked();
-  await page.reload();
-  await expect(
-    page.locator(".career-task input[type=checkbox]").first(),
-  ).toBeChecked();
-  await page.goto("/my-skills?tab=interview");
-  await page
-    .locator("textarea")
-    .first()
-    .fill("실제 경험을 바탕으로 답변을 정리했습니다.");
-  await page.getByRole("button", { name: "답변 저장" }).first().click();
-  await page.reload();
-  await expect(page.locator("textarea").first()).toHaveValue(
-    "실제 경험을 바탕으로 답변을 정리했습니다.",
-  );
+    page
+      .getByRole("navigation", { name: "내 역량 하위 메뉴" })
+      .getByRole("link"),
+  ).toHaveText(["분석 결과", "추천 과제"]);
   for (const tab of [
     "sources",
     "share",

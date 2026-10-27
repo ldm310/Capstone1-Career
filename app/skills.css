@@ -1,6 +1,5 @@
-/* 내 역량 기술 카드: 분야별 묶음, 1~100 점수 막대. */
+/* 내 역량 분석 결과: 한 목록에 기술명, 레벨, 1~100 점수 막대. */
 
-/* 카드가 배경 위에 바로 놓이도록 바깥 패널의 흰 상자를 없앤다. */
 .growth-hub .career-panel.skill-panel {
   background: transparent;
   border: 0;
@@ -22,172 +21,103 @@
 }
 .skill-groups {
   display: grid;
-  gap: 36px;
+  gap: 14px;
   margin-top: 16px;
 }
-.skill-group h3 {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 20px;
-  font-weight: 700;
-  color: #1f3445;
-  margin-bottom: 14px;
-}
-.skill-group h3 small {
-  padding: 2px 9px;
-  border-radius: 99px;
-  background: #e8eff6;
-  font-size: 13px;
-  font-weight: 600;
-  color: #3f5a70;
-}
-.skill-cards {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
+.skill-rows {
   margin: 0;
-  padding: 0;
+  padding: 6px 0;
   list-style: none;
-}
-.growth-hub .skill-card {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  justify-content: flex-start;
-  gap: 14px;
-  width: 100%;
-  min-height: 0;
-  padding: 20px 22px;
-  text-align: left;
   background: #fff;
-  color: #1f3445;
   border: 1px solid #d6e1ea;
   border-radius: 16px;
-  box-shadow: 0 1px 2px #1f344510;
-  cursor: pointer;
-  font: inherit;
-  transition:
-    transform 0.2s ease,
-    box-shadow 0.2s ease,
-    border-color 0.2s ease;
 }
-.growth-hub .skill-card:hover,
-.growth-hub .skill-card:focus-visible {
-  background: #fff;
-  transform: translateY(-3px);
-  border-color: #9fbfda;
-  box-shadow: 0 12px 28px #2f53751f;
-}
-.growth-hub .skill-card:focus-visible {
-  outline: 2px solid #315d80;
-  outline-offset: 3px;
+.skill-rows li + li {
+  border-top: 1px solid #edf1f5;
 }
 /* 단계별 색: 입문 slate, 기초 적용 teal, 기능 구현 blue, 통합 구현 indigo, 심화 개선 violet. */
-.growth-hub .skill-card.tier-1 {
+.growth-hub .skill-row.tier-1 {
   --tone: #5d7286;
-  --tone-soft: #eef2f6;
   --bar: linear-gradient(90deg, #9aabbb, #6f8498);
 }
-.growth-hub .skill-card.tier-2 {
+.growth-hub .skill-row.tier-2 {
   --tone: #16786a;
-  --tone-soft: #e2f4ef;
   --bar: linear-gradient(90deg, #5cc7b2, #1f8a7a);
 }
-.growth-hub .skill-card.tier-3 {
+.growth-hub .skill-row.tier-3 {
   --tone: #2366ad;
-  --tone-soft: #e4eefa;
   --bar: linear-gradient(90deg, #6fb0ec, #2f74bd);
 }
-.growth-hub .skill-card.tier-4 {
+.growth-hub .skill-row.tier-4 {
   --tone: #3c45b8;
-  --tone-soft: #e9eafb;
   --bar: linear-gradient(90deg, #7c8bf0, #4b55c7);
 }
-.growth-hub .skill-card.tier-5 {
+.growth-hub .skill-row.tier-5 {
   --tone: #6a2fc0;
-  --tone-soft: #f1e9fd;
   --bar: linear-gradient(90deg, #8f6cf0, #7a3fd1, #d08a2e);
-  box-shadow: 0 0 0 1px #d9c8f6, 0 8px 24px #7a3fd122;
-  animation: skill-glow 3.2s ease-in-out infinite;
 }
-@keyframes skill-glow {
-  50% {
-    box-shadow: 0 0 0 1px #c8b0f3, 0 10px 30px #7a3fd133;
-  }
-}
-.growth-hub .skill-card {
-  --score: var(--tone);
-  position: relative;
-  overflow: hidden;
-}
-/* 카드 위쪽 단계 색 띠 */
-.growth-hub .skill-card::before {
-  content: "";
-  position: absolute;
-  inset: 0 0 auto 0;
-  height: 4px;
-  background: var(--bar);
-}
-.skill-card-tier {
-  padding: 3px 10px;
-  border-radius: 99px;
-  background: var(--tone-soft);
-  color: var(--tone) !important;
-  font-weight: 700 !important;
-}
-.skill-card-icon {
-  background: var(--tone-soft) !important;
-  color: var(--tone) !important;
-}
-.skill-card-bar > i {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 2px;
-  margin-left: -1px;
-  background: #ffffffcc;
-  z-index: 1;
-}
-.skill-card-next {
-  font-size: 13px;
-  color: #4a6072;
-  margin-top: -6px;
-}
-.skill-card-next b {
-  color: var(--tone);
-}
-/* 근거가 없는 기술은 눈에 덜 띄게 둔다. */
-.growth-hub .skill-card.is-empty {
-  background: #f8fafc;
-  border-style: dashed;
-  box-shadow: none;
-  animation: none;
+.growth-hub .skill-row.is-empty {
   --tone: #536878;
-  --tone-soft: #e9eef3;
   --bar: #b8c7d4;
 }
-.skill-card-head {
+.growth-hub .skill-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 200px) 76px minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  min-height: 0;
+  padding: 14px 22px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #1f3445;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+.growth-hub .skill-rows li:first-child .skill-row {
+  border-radius: 15px 15px 0 0;
+}
+.growth-hub .skill-rows li:last-child .skill-row {
+  border-radius: 0 0 15px 15px;
+}
+.growth-hub .skill-row:hover,
+.growth-hub .skill-row:focus-visible {
+  background: #f4f8fb;
+}
+.growth-hub .skill-row:focus-visible {
+  outline: 2px solid #315d80;
+  outline-offset: -2px;
+}
+.skill-row-name {
   display: flex;
   align-items: center;
-  gap: 10px;
-}
-.skill-card-icon {
-  display: grid;
-  place-items: center;
-  flex-shrink: 0;
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  background: #edf4fa;
-  color: #3a74a8;
-}
-.skill-card-name {
-  font-size: 18px;
-  font-weight: 700;
-  line-height: 1.3;
+  gap: 8px;
   min-width: 0;
+  font-size: 16px;
+  font-weight: 700;
   overflow-wrap: anywhere;
+}
+.skill-row.is-empty .skill-row-name {
+  color: #536878;
+  font-weight: 600;
+}
+.skill-row-level {
+  color: var(--tone);
+  font-size: 22px;
+  font-weight: 750;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.growth-hub .skill-row-level small {
+  display: inline;
+  margin-right: 3px;
+  color: inherit;
+  font-size: 12px;
+  font-weight: 700;
 }
 .skill-card-flag {
   flex-shrink: 0;
@@ -198,46 +128,10 @@
   background: #fbf1e7;
   color: #8a4b1c;
 }
-.skill-card-chevron {
-  margin-left: auto;
-  flex-shrink: 0;
-  color: #7f95a8;
-  transition: transform 0.2s ease;
-}
-.growth-hub .skill-card:hover .skill-card-chevron {
-  transform: translateX(3px);
-}
-.skill-card-score {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
-}
-.skill-card-number {
-  font-size: 32px;
-  font-weight: 750;
-  line-height: 1;
-  color: var(--score);
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.02em;
-}
-.growth-hub .skill-card-number small {
-  display: inline;
-  color: inherit;
-  font-size: 13px;
-  font-weight: 700;
-  margin-right: 4px;
-  letter-spacing: 0;
-}
-.skill-card-tier {
-  font-size: 14px;
-  font-weight: 600;
-  color: #3f5a70;
-}
 .skill-card-bar {
   display: block;
   position: relative;
-  height: 8px;
+  height: 10px;
   border-radius: 99px;
   background: #e8eef4;
   overflow: hidden;
@@ -257,22 +151,14 @@
   transform: translateX(-100%);
   animation: skill-shine 2.8s ease-in-out 1s infinite;
 }
+.skill-row.is-empty .skill-card-bar > span::after {
+  animation: none;
+}
 @keyframes skill-shine {
   60%,
   100% {
     transform: translateX(100%);
   }
-}
-.skill-card-meta {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  font-size: 14px;
-  color: #4a6072;
-}
-.skill-card-meta b {
-  color: #1f3445;
-  font-weight: 700;
 }
 .skill-dialog-level {
   display: flex;
@@ -285,27 +171,28 @@
   background: #edf4fa;
   color: #2f5f86;
 }
-@media (max-width: 1000px) {
-  .skill-cards {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
 @media (max-width: 560px) {
-  .skill-cards {
-    grid-template-columns: 1fr;
+  .growth-hub .skill-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px 12px;
+    padding: 14px 16px;
+  }
+  .skill-row .skill-card-bar {
+    grid-column: 1 / -1;
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .growth-hub .skill-card,
-  .skill-card-chevron,
+  .growth-hub .skill-row,
   .skill-card-bar > span {
     transition: none;
   }
-  .skill-card-bar > span::after,
-  .growth-hub .skill-card.tier-5 {
+  .skill-card-bar > span::after {
     animation: none;
   }
-  .growth-hub .skill-card:hover {
-    transform: none;
-  }
+}
+.growth-hub .skill-row .skill-card-flag {
+  display: inline-block;
+  margin: 0;
+  padding: 1px 7px;
+  line-height: 1.5;
 }

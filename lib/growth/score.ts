@@ -28,18 +28,3 @@ export const scoreTiers = [
 export function scoreTier(score: number) {
   return scoreTiers.find((t) => score >= t.min)!;
 }
-
-const categories: [string, string[]][] = [
-  [
-    "Backend",
-    ["Java", "Spring Boot", "Spring Security", "REST API", "Node.js", "Kotlin"],
-  ],
-  ["Database", ["SQL", "PostgreSQL", "MySQL", "Redis", "Vector DB"]],
-  ["DevOps", ["Docker", "Kubernetes", "Git", "AWS"]],
-  ["Data", ["Python", "Airflow", "Spark", "PyTorch"]],
-  ["AI", ["RAG", "LangGraph", "MCP"]],
-];
-export const categoryOrder = [...categories.map(([name]) => name), "기타"];
-export function skillCategory(skill: string) {
-  return categories.find(([, skills]) => skills.includes(skill))?.[0] ?? "기타";
-}

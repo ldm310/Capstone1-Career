@@ -20,26 +20,22 @@ import { isSupportedRole } from "@/lib/roles";
 import { roleLabels } from "@/lib/korean";
 import { LoadingSpinner } from "@/components/shared/loading-spinner";
 import { OriginalLink } from "@/components/jobs/original-link";
-const storageKey = "career-twin:saved-public-jobs:v1";
+import { useSavedJobs } from "@/lib/saved-jobs";
 export function LiveJobsSection({
   mode = "preview",
-  initialSavedOnly = false,
 }: {
   mode?: "preview" | "catalog";
-  initialSavedOnly?: boolean;
 }) {
   const preview = mode === "preview";
   const [location, setLocation] = useState("");
   const [workplace, setWorkplace] = useState("all");
   const [sort, setSort] = useState("newest");
   const [experience, setExperience] = useState<ExperienceKind[]>([]);
-  const [savedCards, setSavedCards] = useState<PublicJob[]>([]);
   const [feed, setFeed] = useState<PublicJobsResponse | null>(null);
   const [role, setRole] = useState("all"),
-    [savedOnly] = useState(initialSavedOnly),
     [query, setQuery] = useState("");
-  const [saved, setSaved] = useState<string[]>([]),
-    [loading, setLoading] = useState(!initialSavedOnly),
+  const savedJobs = useSavedJobs();
+  const [loading, setLoading] = useState(true),
     [error, setError] = useState(""),
     [message, setMessage] = useState("");
   const controller = useRef<AbortController | null>(null);
@@ -57,30 +53,6 @@ export function LiveJobsSection({
       if (!response.ok) throw new Error("공고를 불러오지 못했어요.");
       const next: PublicJobsResponse = await response.json();
       if (current.signal.aborted) return;
-      try {
-        const ids: unknown = JSON.parse(
-          localStorage.getItem(storageKey) ?? "[]",
-        );
-        if (Array.isArray(ids)) {
-          const recovered = next.jobs.filter((job) => ids.includes(job.id));
-          if (recovered.length)
-            setSavedCards((previous) => {
-              const cards = [
-                ...new Map(
-                  [...previous, ...recovered].map((job) => [job.id, job]),
-                ).values(),
-              ];
-              try {
-                localStorage.setItem(
-                  storageKey + ":cards",
-                  JSON.stringify(cards),
-                );
-              } catch {}
-              return cards;
-            });
-        }
-      } catch {}
-
       setFeed((previous) => ({
         ...next,
         jobs:
@@ -102,82 +74,22 @@ export function LiveJobsSection({
       if (!current.signal.aborted) setLoading(false);
     }
   }
-  useEffect(() => {
-    let mounted = true;
-    Promise.resolve().then(() => {
-      if (!mounted) return;
-      try {
-        const cards = JSON.parse(
-          localStorage.getItem(storageKey + ":cards") ?? "[]",
-        );
-        if (Array.isArray(cards))
-          setSavedCards(
-            cards.filter(
-              (j) =>
-                typeof j.id === "string" &&
-                typeof j.url === "string" &&
-                j.url.startsWith("https://jobs.lever.co/"),
-            ),
-          );
-      } catch {}
-      try {
-        const value: unknown = JSON.parse(
-          localStorage.getItem(storageKey) ?? "[]",
-        );
-        if (Array.isArray(value))
-          setSaved(value.filter((id): id is string => typeof id === "string"));
-      } catch {
-        /* Storage is optional. */
-      }
-    });
-    return () => {
-      mounted = false;
-      controller.current?.abort();
-    };
-  }, []);
+  useEffect(() => () => controller.current?.abort(), []);
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (!savedOnly) void load(0, role, query);
+      void load(0, role, query);
     }, 350);
     return () => clearTimeout(timer);
     // load changes with input; request cancellation handles stale results.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, role, savedOnly, location, workplace, sort, experience]);
-  function toggle(id: string) {
-    const next = saved.includes(id)
-      ? saved.filter((value) => value !== id)
-      : [...saved, id];
-    setSaved(next);
-    const card = feed?.jobs.find((j) => j.id === id);
-    const cards = saved.includes(id)
-      ? savedCards.filter((j) => j.id !== id)
-      : card
-        ? [...savedCards.filter((j) => j.id !== id), card]
-        : savedCards;
-    setSavedCards(cards);
-    try {
-      localStorage.setItem(storageKey, JSON.stringify(next));
-      localStorage.setItem(storageKey + ":cards", JSON.stringify(cards));
-      setMessage(next.includes(id) ? "저장했어요." : "저장을 취소했어요.");
-    } catch {
-      setMessage("이번 방문 중에만 저장돼요.");
-    }
+  }, [query, role, location, workplace, sort, experience]);
+  async function toggle(job: PublicJob) {
+    setMessage(await savedJobs.toggle(job));
   }
   const visible = sortPublicJobs(
-    (savedOnly
-      ? [
-          ...new Map(
-            [
-              ...savedCards,
-              ...(feed?.jobs ?? []).filter((j) => saved.includes(j.id)),
-            ].map((j) => [j.id, j]),
-          ).values(),
-        ]
-      : (feed?.jobs ?? [])
-    ).filter(
+    (feed?.jobs ?? []).filter(
       (job) =>
         isSupportedRole(job.category) &&
-        (!savedOnly || saved.includes(job.id)) &&
         (role === "all" || job.category === role) &&
         (!experience.length ||
           experience.some((value) => jobExperience(job).includes(value))) &&
@@ -199,7 +111,7 @@ export function LiveJobsSection({
       <div className="public-jobs-heading">
         <div>
           <h2 id="public-jobs-title">
-            {preview ? "채용공고" : savedOnly ? "저장한 공고" : "전체 공고"}
+            {preview ? "채용공고" : "전체 공고"}
           </h2>
         </div>
         {preview ? (
@@ -220,7 +132,7 @@ export function LiveJobsSection({
           </aside>
           <div className="public-jobs-toolbar">
             <span className="catalog-results-label">
-              {savedOnly ? `저장한 공고 ${saved.length}개` : "검색"}
+              검색
             </span>
             <div className="public-job-filters">
               <select
@@ -316,13 +228,13 @@ export function LiveJobsSection({
               </span>
               <button
                 className="icon-button"
-                aria-label={`${job.title} ${saved.includes(job.id) ? "저장 취소" : "저장"}`}
-                aria-pressed={saved.includes(job.id)}
-                onClick={() => toggle(job.id)}
+                aria-label={`${job.title} ${savedJobs.isSaved(job.id) ? "저장 취소" : "저장"}`}
+                aria-pressed={savedJobs.isSaved(job.id)}
+                onClick={() => void toggle(job)}
               >
                 <Bookmark
                   size={21}
-                  fill={saved.includes(job.id) ? "currentColor" : "none"}
+                  fill={savedJobs.isSaved(job.id) ? "currentColor" : "none"}
                 />
               </button>
             </div>
@@ -366,7 +278,7 @@ export function LiveJobsSection({
       )}
       {!preview && (
         <div className="public-job-more">
-          {!savedOnly && feed?.nextOffset != null ? (
+          {feed?.nextOffset != null ? (
             <button
               disabled={loading}
               onClick={() => void load(feed.nextOffset!, role)}
@@ -374,7 +286,7 @@ export function LiveJobsSection({
               <RefreshCw size={19} className={loading ? "spin" : ""} />
               {loading ? "불러오는 중…" : "더보기"}
             </button>
-          ) : !savedOnly && feed && !loading && !error ? (
+          ) : feed && !loading && !error ? (
             <>
               <p>모든 공고를 확인했어요.</p>
               <button onClick={() => void load(0, role)}>

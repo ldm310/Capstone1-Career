@@ -27,7 +27,9 @@ export function db() {
     globals.careerDb = connection;
   }
   globals.careerDb.exec(
-    "CREATE TABLE IF NOT EXISTS guests(user_id TEXT PRIMARY KEY)",
+    `CREATE TABLE IF NOT EXISTS guests(user_id TEXT PRIMARY KEY);
+ CREATE TABLE IF NOT EXISTS profiles(user_id TEXT PRIMARY KEY,data TEXT);
+ CREATE TABLE IF NOT EXISTS saved_jobs(user_id TEXT,job_id TEXT,data TEXT,saved_at INTEGER,PRIMARY KEY(user_id,job_id));`,
   );
   return globals.careerDb;
 }

@@ -5,6 +5,7 @@ import "../home.css";
 import "../feature-pages.css";
 import "../studies.css";
 import "../skills.css";
+import "../job-detail.css";
 import "../readability.css";
 import { LoadingSpinner } from "@/components/shared/loading-spinner";
 export default function Layout({ children }: { children: React.ReactNode }) {

@@ -8,7 +8,7 @@ import {
 import { collectedJobs } from "@/lib/server/job-feed";
 import { dummyJobs } from "@/lib/dummy-jobs";
 import type { PublicJob } from "@/types/public-job";
-const minimumJobs = 3;
+const minimumJobs = 6;
 export const runtime = "nodejs";
 export async function GET(request: Request) {
   const params = new URL(request.url).searchParams;

@@ -14,6 +14,30 @@ export interface PublicJob {
   url: string;
   dummy?: boolean;
   posting?: PostingSection[];
+  details?: JobDetails;
+}
+// 공고 상세 화면의 요약 정보. 원문에 없는 값은 비워 두고 화면에서도 숨긴다.
+export interface JobDetails {
+  education?: string;
+  salary?: string;
+  position?: string;
+  headcount?: string;
+  address?: string;
+  station?: string;
+  startsAt?: string;
+  applyMethod?: string;
+  documents?: string[];
+  company?: CompanyInfo;
+}
+export interface CompanyInfo {
+  ceo?: string;
+  type?: string;
+  industry?: string;
+  employees?: string;
+  founded?: string;
+  revenue?: string;
+  homepage?: string;
+  address?: string;
 }
 export interface PostingSection {
   title: string;

@@ -125,20 +125,14 @@ export function LearningPath({
             </strong>
           </div>
         </div>
-        {task ? (
-          <Link className="focus-task-cta" href="/my-skills?tab=tasks">
-            이어서 하기 <ArrowRight size={16} />
-          </Link>
-        ) : (
-          <button
-            className="focus-task-cta"
-            type="button"
-            onClick={() => onSelect(item.skill)}
-          >
-            {next <= 3 ? "과제 보기" : "근거 보기"}{" "}
-            <ArrowRight size={16} aria-hidden="true" />
-          </button>
-        )}
+        <button
+          className="focus-task-cta"
+          type="button"
+          onClick={() => onSelect(item.skill)}
+        >
+          {next <= 3 ? "과제 보기" : "근거 보기"}{" "}
+          <ArrowRight size={16} aria-hidden="true" />
+        </button>
       </div>
     </div>
   );

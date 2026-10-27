@@ -33,17 +33,19 @@ export function FeatureShell({ children }: { children: React.ReactNode }) {
           <h1>{info.title}</h1>
           <p>{info.description}</p>
         </header>
-        <nav className="feature-tabs" aria-label={`${info.title} 하위 메뉴`}>
-          {info.tabs.map(([key, label], index) => (
-            <Link
-              key={key}
-              href={index === 0 ? info.path : `${info.path}?tab=${key}`}
-              aria-current={tab === key ? "page" : undefined}
-            >
-              {label}
-            </Link>
-          ))}
-        </nav>
+        {info.tabs.length > 1 && (
+          <nav className="feature-tabs" aria-label={`${info.title} 하위 메뉴`}>
+            {info.tabs.map(([key, label], index) => (
+              <Link
+                key={key}
+                href={index === 0 ? info.path : `${info.path}?tab=${key}`}
+                aria-current={tab === key ? "page" : undefined}
+              >
+                {label}
+              </Link>
+            ))}
+          </nav>
+        )}
         <div className="feature-body" key={tab}>
           {children}
         </div>

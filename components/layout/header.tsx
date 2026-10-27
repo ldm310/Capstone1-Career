@@ -12,14 +12,19 @@ export function Header() {
   const [account, setAccount] = useState<string | null>(null);
   useEffect(() => {
     let active = true;
-    fetch("/api/account")
-      .then((r) => r.json())
-      .then((d) => {
-        if (active) setAccount(d.user && !d.guest ? d.user.name : null);
-      })
-      .catch(() => {});
+    const refresh = () =>
+      fetch("/api/account")
+        .then((r) => r.json())
+        .then((d) => {
+          if (active) setAccount(d.user && !d.guest ? d.user.name : null);
+        })
+        .catch(() => {});
+    void refresh();
+    // 마이페이지에서 이름을 바꾸면 바로 반영한다.
+    window.addEventListener("career:account", refresh);
     return () => {
       active = false;
+      window.removeEventListener("career:account", refresh);
     };
   }, [pathname]);
   async function logout() {
@@ -57,19 +62,42 @@ export function Header() {
               {feature.title}
             </Link>
           ))}
+          <Link
+            className="mobile-only"
+            href="/my-page"
+            aria-current={pathname === "/my-page" ? "page" : undefined}
+            onClick={() => setOpen(false)}
+          >
+            마이페이지
+          </Link>
         </nav>
         <div className="header-actions">
           {account ? (
             <>
-              <span className="header-user">{account}님</span>
+              <Link
+                className="header-user"
+                href="/my-page"
+                aria-current={pathname === "/my-page" ? "page" : undefined}
+              >
+                {account}님
+              </Link>
               <button className="header-login" onClick={() => void logout()}>
                 로그아웃
               </button>
             </>
           ) : (
-            <Link className="header-login" href="/sign-in">
-              로그인
-            </Link>
+            <>
+              <Link
+                className="header-user"
+                href="/my-page"
+                aria-current={pathname === "/my-page" ? "page" : undefined}
+              >
+                마이페이지
+              </Link>
+              <Link className="header-login" href="/sign-in">
+                로그인
+              </Link>
+            </>
           )}
           <LinkButton href="/my-data">
             시작하기 <ArrowUpRight size={15} />

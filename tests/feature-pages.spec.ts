@@ -2,18 +2,11 @@ import { test, expect } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { mockPublicJobs } from "./public-jobs-fixture";
 
-test("each header menu opens its independent section", async ({
-  page,
-}) => {
+test("each header menu opens its independent section", async ({ page }) => {
   await mockPublicJobs(page);
   const sections = [
-    ["채용공고", "/jobs", "채용공고", ["전체 공고", "저장한 공고"]],
-    [
-      "내 역량",
-      "/my-skills",
-      "내 역량",
-      ["분석 결과", "추천 과제", "진행 중 과제", "주간 계획", "면접 준비"],
-    ],
+    ["채용공고", "/jobs", "채용공고", []],
+    ["내 역량", "/my-skills", "내 역량", ["분석 결과", "추천 과제"]],
     ["내 자료", "/my-data", "내 자료", ["자료 추가", "포트폴리오 공유"]],
   ] as const;
   for (const [action, url, title, tabs] of sections) {
@@ -28,11 +21,17 @@ test("each header menu opens its independent section", async ({
       page.getByRole("heading", { level: 1, name: title, exact: true }),
     ).toBeVisible();
     await expect(page.locator(".sidebar")).toHaveCount(0);
-    await expect(
-      page
-        .getByRole("navigation", { name: title + " 하위 메뉴" })
-        .getByRole("link"),
-    ).toHaveText([...tabs]);
+    // 하위 메뉴가 하나뿐인 화면은 탭을 숨긴다.
+    if (tabs.length)
+      await expect(
+        page
+          .getByRole("navigation", { name: title + " 하위 메뉴" })
+          .getByRole("link"),
+      ).toHaveText([...tabs]);
+    else
+      await expect(
+        page.getByRole("navigation", { name: title + " 하위 메뉴" }),
+      ).toHaveCount(0);
     for (const width of [1440, 768, 390, 320]) {
       await page.setViewportSize({ width, height: 960 });
       expect(
@@ -50,33 +49,17 @@ test("each header menu opens its independent section", async ({
   }
 });
 
-test("catalog filters, saved-only view and comparison URL stay inside jobs", async ({
+test("catalog filters and comparison URL stay inside jobs", async ({
   page,
 }) => {
   await mockPublicJobs(page);
   await page.goto("/jobs");
   await expect(page.locator(".public-job-card")).toHaveCount(7);
-  await page
-    .getByRole("button", {
-      name: "Backend Engineer 1 저장",
-      exact: true,
-    })
-    .click();
-  await page
-    .getByRole("navigation", { name: "채용공고 하위 메뉴" })
-    .getByRole("link", { name: "저장한 공고" })
-    .click();
-  await expect(page).toHaveURL(/\/jobs\?tab=saved$/);
-  await expect(page.locator(".public-job-card")).toHaveCount(1);
-  await page.reload();
-  await expect(page.locator(".public-job-card")).toHaveCount(1);
   await page.locator("summary").filter({ hasText: "상세조건" }).click();
-  await page.getByLabel("근무 방식").selectOption("hybrid");
-  await expect(page.locator(".public-job-card")).toHaveCount(1);
   await page.getByLabel("지역 검색").fill("부산");
   await expect(page.locator(".public-job-card")).toHaveCount(0);
   await page.getByRole("button", { name: "필터 초기화" }).click();
-  await expect(page.locator(".public-job-card")).toHaveCount(1);
+  await expect(page.locator(".public-job-card")).toHaveCount(7);
   await page.route("**/api/analyze", (route) =>
     route.fulfill({
       json: {
@@ -96,12 +79,19 @@ test("catalog filters, saved-only view and comparison URL stay inside jobs", asy
       },
     }),
   );
-  await page.getByRole("link", { name: "역량 비교 →" }).click();
+  await page
+    .locator(".public-job-card")
+    .filter({
+      has: page.getByRole("heading", {
+        name: "Backend Engineer 1",
+        exact: true,
+      }),
+    })
+    .getByRole("link", { name: "역량 비교 →" })
+    .click();
   await expect(page).toHaveURL(/\/jobs\?job=fixture-0&view=compare$/);
   await expect(
-    page
-      .getByRole("navigation", { name: "공고 상세 메뉴" })
-      .getByRole("link"),
+    page.getByRole("navigation", { name: "공고 상세 메뉴" }).getByRole("link"),
   ).toHaveText(["공고 내용", "역량 비교"]);
   // The comparison runs on its own, without pressing a button.
   await expect(page.locator(".job-compare-group h4")).toHaveText([
@@ -115,7 +105,7 @@ test("old links preserve destination and removed sections are gone", async ({
 }) => {
   await mockPublicJobs(page);
   await page.goto("/career?tab=plan");
-  await expect(page).toHaveURL(/\/my-skills\?tab=plan$/);
+  await expect(page).toHaveURL(/\/my-skills\?tab=next$/);
   await page.goto("/career?tab=sources");
   await expect(page).toHaveURL(/\/my-data$/);
   await page.goto("/my-skills?tab=schedule");

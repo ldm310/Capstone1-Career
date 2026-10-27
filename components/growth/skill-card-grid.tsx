@@ -1,32 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
-import {
-  ChevronRight,
-  Code2,
-  Database,
-  Server,
-  BarChart3,
-  Sparkles,
-  Boxes,
-} from "lucide-react";
 import type { Finding } from "@/types/workspace";
 import type { SkillReview } from "@/types/growth";
-import {
-  categoryOrder,
-  scoreTier,
-  scoreTiers as tierList,
-  skillCategory,
-  skillScore,
-} from "@/lib/growth/score";
-
-const icons: Record<string, typeof Code2> = {
-  Backend: Code2,
-  Database,
-  DevOps: Server,
-  Data: BarChart3,
-  AI: Sparkles,
-  기타: Boxes,
-};
+import { scoreTier, skillScore } from "@/lib/growth/score";
 
 export interface SkillCardItem {
   skill: string;
@@ -41,16 +17,17 @@ export function skillCardItems(
   findings: Finding[],
 ): SkillCardItem[] {
   return names.map((skill) => {
-    const review = reviews.find((r) => r.skill === skill);
-    const evidence = findings.filter(
-      (f) => review?.evidenceIds.includes(f.id) || f.skill === skill,
-    );
+    // 이름 수정으로 같은 기술이 둘 이상이면 단계가 높은 것을 쓰고 근거는 합친다.
+    const same = reviews.filter((r) => r.skill === skill);
+    const review = [...same].sort((a, b) => (b.level ?? 0) - (a.level ?? 0))[0];
+    const ids = new Set(same.flatMap((r) => r.evidenceIds));
+    const evidence = findings.filter((f) => ids.has(f.id) || f.skill === skill);
     return { skill, review, evidence, score: skillScore(review, evidence) };
   });
 }
 
-// 기술을 분야별 카드로 모아 보여준다. 막대는 화면에 들어오면 점수만큼 차오른다.
-export function SkillCardGrid({
+// 모든 기술을 한 목록에 점수순으로 보여준다. 한 줄에 기술명, 레벨, 막대를 둔다.
+export function SkillList({
   items,
   onSelect,
 }: {
@@ -62,14 +39,9 @@ export function SkillCardGrid({
     const id = requestAnimationFrame(() => setFilled(true));
     return () => cancelAnimationFrame(id);
   }, []);
-  const groups = categoryOrder
-    .map((name) => ({
-      name,
-      items: items
-        .filter((i) => skillCategory(i.skill) === name)
-        .sort((a, b) => b.score - a.score),
-    }))
-    .filter((g) => g.items.length);
+  const sorted = [...items].sort(
+    (a, b) => b.score - a.score || a.skill.localeCompare(b.skill),
+  );
   const withEvidence = items.filter((i) => i.evidence.length);
   const average = withEvidence.length
     ? Math.round(
@@ -81,105 +53,49 @@ export function SkillCardGrid({
       <p className="skill-summary">
         근거 있는 기술 <b>{withEvidence.length}개</b>, 평균 <b>LV {average}</b>
       </p>
-      {groups.map((group) => {
-        const Icon = icons[group.name] ?? Boxes;
-        return (
-          <section key={group.name} className="skill-group">
-            <h3>
-              {group.name}
-              <small>{group.items.length}개 기술</small>
-            </h3>
-            <ul className="skill-cards">
-              {group.items.map(({ skill, score, review, evidence }) => {
-                const tier = scoreTier(score);
-                const next = [...tierList].reverse().find((t) => t.min > score);
-                const projects = new Set(evidence.map((f) => f.title)).size;
-                const latest = evidence
-                  .map((f) => f.detectedAt)
-                  .sort()
-                  .at(-1);
-                return (
-                  <li key={skill}>
-                    <button
-                      type="button"
-                      className={`plain-button skill-card tier-${scoreTiers(score)}${evidence.length ? "" : " is-empty"}`}
-                      onClick={() => onSelect(skill)}
-                      aria-label={`${skill} LV ${score} ${tier.name} 자세히`}
-                    >
-                      <span className="skill-card-head">
-                        <span className="skill-card-icon" aria-hidden="true">
-                          <Icon size={18} />
-                        </span>
-                        <strong className="skill-card-name">{skill}</strong>
-                        {review?.status === "pending" && (
-                          <span className="skill-card-flag">확인 전</span>
-                        )}
-                        <ChevronRight
-                          size={18}
-                          className="skill-card-chevron"
-                          aria-hidden="true"
-                        />
-                      </span>
-                      <span className="skill-card-score">
-                        <span className="skill-card-number">
-                          <small>LV</small>
-                          <CountUp value={score} run={filled} />
-                        </span>
-                        <span className="skill-card-tier">{tier.name}</span>
-                      </span>
-                      <span
-                        className="skill-card-bar"
-                        role="progressbar"
-                        aria-valuemin={1}
-                        aria-valuemax={100}
-                        aria-valuenow={score}
-                        aria-label={`${skill} 점수`}
-                      >
-                        <span style={{ width: filled ? `${score}%` : "0%" }} />
-                        {[20, 40, 60, 80].map((t) => (
-                          <i key={t} style={{ left: `${t}%` }} />
-                        ))}
-                      </span>
-                      {next && (
-                        <span className="skill-card-next">
-                          {next.name}까지 <b>{next.min - score}</b>
-                        </span>
-                      )}
-                      <span className="skill-card-meta">
-                        {evidence.length ? (
-                          <>
-                            <span>
-                              프로젝트 <b>{projects}</b>, 근거{" "}
-                              <b>{evidence.length}</b>
-                            </span>
-                            {latest && (
-                              <span>
-                                {new Date(latest).toLocaleDateString("ko-KR", {
-                                  month: "numeric",
-                                  day: "numeric",
-                                })}{" "}
-                                확인
-                              </span>
-                            )}
-                          </>
-                        ) : (
-                          <span>아직 근거가 없어요</span>
-                        )}
-                      </span>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          </section>
-        );
-      })}
+      <ul className="skill-rows">
+        {sorted.map(({ skill, score, review, evidence }) => {
+          const tier = scoreTier(score);
+          return (
+            <li key={skill}>
+              <button
+                type="button"
+                className={`plain-button skill-row tier-${tierStep(score)}${evidence.length ? "" : " is-empty"}`}
+                onClick={() => onSelect(skill)}
+                aria-label={`${skill} LV ${score} ${tier.name} 자세히`}
+                title={tier.name}
+              >
+                <span className="skill-row-name">
+                  {skill}
+                  {review?.status === "pending" && (
+                    <small className="skill-card-flag">확인 전</small>
+                  )}
+                </span>
+                <span className="skill-row-level">
+                  <small>LV</small>
+                  <CountUp value={score} run={filled} />
+                </span>
+                <span
+                  className="skill-card-bar"
+                  role="progressbar"
+                  aria-valuemin={1}
+                  aria-valuemax={100}
+                  aria-valuenow={score}
+                  aria-label={`${skill} 점수`}
+                >
+                  <span style={{ width: filled ? `${score}%` : "0%" }} />
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }
 
-// 점수 구간별 색 단계(1~5). 막대 색을 구간마다 조금씩 진하게 바꾼다.
-function scoreTiers(score: number) {
+// 점수 구간별 색 단계(1~5). 막대 색을 구간마다 바꾼다.
+function tierStep(score: number) {
   return score >= 80
     ? 5
     : score >= 60

@@ -1,0 +1,588 @@
+/* 공고 상세 요약, 근무지, 접수 기간, 기업 정보, 마이페이지. */
+
+.job-summary {
+  padding: 28px 30px;
+  margin-bottom: 28px;
+  background: #fff;
+  border: 1px solid #dde6ee;
+  border-radius: 18px;
+}
+.job-summary-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+}
+.job-summary-title {
+  min-width: 0;
+}
+.job-summary-company {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 17px;
+  font-weight: 600;
+  color: #33495b;
+}
+.job-summary-company .dummy-label {
+  margin-left: 0;
+}
+.job-summary-title h2 {
+  margin: 8px 0 0;
+  font-size: clamp(22px, 2.6vw, 30px);
+  font-weight: 750;
+  line-height: 1.4;
+  color: #142636;
+  overflow-wrap: anywhere;
+}
+.job-summary-actions {
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
+  flex-shrink: 0;
+}
+.job-summary .job-save {
+  display: grid;
+  place-items: center;
+  gap: 2px;
+  width: 76px;
+  min-height: 74px;
+  padding: 8px;
+  border: 1px solid #c9d6e2;
+  border-radius: 6px;
+  background: #fff;
+  color: #5b6f80;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition:
+    border-color 0.2s,
+    color 0.2s;
+}
+.job-summary .job-save:hover {
+  border-color: #8fa9c0;
+}
+.job-summary .job-save[aria-pressed="true"] {
+  color: #c27c0e;
+  border-color: #e9c98f;
+}
+.job-apply {
+  position: relative;
+  display: flex;
+}
+.job-summary .job-original-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 200px;
+  min-height: 74px;
+  padding: 0 24px;
+  border: 1px solid #2f5f86;
+  border-radius: 6px;
+  background: #2f5f86;
+  color: #fff;
+  font-size: 18px;
+  font-weight: 700;
+  transition: background 0.2s;
+}
+.job-summary .job-original-link:hover {
+  background: #244c6d;
+}
+.job-summary .original-missing {
+  display: inline-flex;
+  align-items: center;
+  min-height: 74px;
+  padding: 0 18px;
+  border: 1px dashed #d3b48f;
+  border-radius: 6px;
+}
+.job-apply .job-dday {
+  position: absolute;
+  top: -12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1;
+}
+.job-dday {
+  padding: 2px 10px;
+  border: 1px solid #e2626d;
+  border-radius: 99px;
+  background: #fff;
+  color: #c0313e;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.job-dday.is-closed {
+  border-color: #b8c4cf;
+  color: #5b6f80;
+}
+.job-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 48px;
+  margin-top: 26px;
+}
+.job-info-rows {
+  margin: 0;
+  padding: 18px 0;
+  border-top: 1px solid #e3eaf1;
+  border-bottom: 1px solid #e3eaf1;
+  display: grid;
+  gap: 12px;
+}
+.job-info-rows > div {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  gap: 12px;
+  font-size: 15px;
+}
+.job-info-rows dt {
+  color: #5b6f80;
+}
+.job-info-rows dd {
+  margin: 0;
+  color: #1a2d3d;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.job-summary-skills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 18px;
+}
+.job-summary-skills span {
+  padding: 4px 11px;
+  border-radius: 99px;
+  background: #edf4fa;
+  color: #2f5f86;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* 공고 내용 탭 아래 정보 상자 */
+.job-extras {
+  display: grid;
+  gap: 36px;
+  margin-top: 36px;
+}
+.job-extras h3 {
+  margin-bottom: 14px;
+  font-size: 21px;
+  font-weight: 700;
+  color: #142636;
+}
+.job-box {
+  border: 1px solid #dde6ee;
+  border-radius: 16px;
+  background: #fff;
+  overflow: hidden;
+}
+.job-place {
+  padding: 22px 28px 0;
+}
+.job-place p {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 12px;
+  font-size: 15px;
+  color: #26394a;
+}
+.job-place svg {
+  flex-shrink: 0;
+  color: #7a8d9e;
+}
+.job-box-link {
+  display: block;
+  margin-top: 10px;
+  padding: 16px;
+  border-top: 1px solid #e3eaf1;
+  text-align: center;
+  font-size: 15px;
+  font-weight: 600;
+  color: #33495b;
+}
+.job-box-link:hover {
+  background: #f6f9fb;
+}
+.job-period {
+  display: grid;
+  grid-template-columns: minmax(240px, 0.9fr) 1.1fr;
+}
+.job-period-time {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 6px;
+  padding: 28px 24px;
+  text-align: center;
+}
+.job-period-time > span {
+  color: #2f6fb3;
+  font-size: 15px;
+  font-weight: 600;
+}
+.job-countdown {
+  color: #2366ad;
+  font-size: clamp(26px, 3.4vw, 34px);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+.job-countdown small {
+  font-size: 0.6em;
+  margin-left: 2px;
+}
+.job-period-time dl {
+  display: grid;
+  gap: 10px;
+  margin: 12px 0 0;
+}
+.job-period-time dl > div {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.job-period-time dt {
+  min-width: 78px;
+  padding: 4px 12px;
+  border: 1px solid #b8c4cf;
+  border-radius: 99px;
+  font-size: 13px;
+  color: #4a6072;
+}
+.job-period-time dd {
+  margin: 0;
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+.job-period-time .is-end {
+  color: #2366ad;
+  border-color: #2f6fb3;
+}
+.job-period-time p {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: #4a6072;
+}
+.job-period-method {
+  padding: 18px 28px;
+  background: #f5f8fa;
+}
+.job-period-method .job-info-rows {
+  border: 0;
+}
+.job-note {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: #5b6f80;
+}
+.job-company {
+  padding: 24px 28px 8px;
+}
+.job-company-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.job-company-head strong {
+  font-size: 19px;
+  color: #142636;
+}
+.job-company-logo {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 12px;
+  background: #edf4fa;
+  color: #2f5f86;
+}
+.job-company .job-summary-grid {
+  margin-top: 16px;
+}
+.job-company .job-info-rows {
+  border-bottom: 0;
+}
+
+/* 마이페이지 */
+.mypage-empty {
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+  padding: 56px 20px;
+  border: 1px dashed #cbd8e3;
+  border-radius: 16px;
+  color: #4a6072;
+  text-align: center;
+}
+.mypage-empty p {
+  margin: 0;
+  font-size: 16px;
+}
+.mypage-count {
+  margin-bottom: 14px;
+  font-size: 18px;
+  font-weight: 700;
+}
+.mypage-count b {
+  color: #2f6fb3;
+}
+.mypage-jobs {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.mypage-jobs li {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  padding: 18px 20px;
+  border: 1px solid #dde6ee;
+  border-radius: 14px;
+  background: #fff;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s,
+    transform 0.2s;
+}
+.mypage-jobs li:hover {
+  transform: translateY(-2px);
+  border-color: #9fbfda;
+  box-shadow: 0 10px 24px #2f53751a;
+}
+.mypage-jobs .home-job-mark {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: #edf4fa;
+  border: 1px solid #dbe7f1;
+  color: #315d80;
+  font-weight: 700;
+  font-size: 18px;
+}
+.mypage-job-main small {
+  font-size: 13px;
+  color: #5a6f80;
+}
+.mypage-job-main h3 {
+  margin: 4px 0 6px;
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+.mypage-job-main p {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 0;
+  font-size: 14px;
+  color: #4a6072;
+}
+.mypage-job-main p span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.mypage-job-side {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.mypage-job-side .icon-button {
+  color: #c27c0e;
+}
+.mypage-profile {
+  display: grid;
+  gap: 20px;
+}
+.mypage-card {
+  padding: 26px 28px;
+  border: 1px solid #dde6ee;
+  border-radius: 16px;
+  background: #fff;
+}
+.mypage-summary {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 20px;
+}
+.mypage-avatar {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #5a9be0, #2f5f86);
+  color: #fff;
+  font-size: 26px;
+  font-weight: 700;
+}
+.mypage-summary strong {
+  display: block;
+  font-size: 20px;
+}
+.mypage-summary > div > span {
+  font-size: 14px;
+  color: #5a6f80;
+}
+.mypage-summary p {
+  margin: 6px 0 0;
+  font-size: 14px;
+  color: #33495b;
+}
+.mypage-summary dl {
+  display: flex;
+  gap: 28px;
+  margin: 0;
+}
+.mypage-summary dt {
+  font-size: 13px;
+  color: #5a6f80;
+}
+.mypage-summary dd {
+  margin: 2px 0 0;
+  font-weight: 700;
+}
+.mypage-form h2 {
+  margin-bottom: 8px;
+  font-size: 20px;
+  font-weight: 700;
+}
+.mypage-form fieldset {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 20px;
+  margin: 0;
+  padding: 18px 0;
+  border: 0;
+  border-bottom: 1px solid #e8eef3;
+}
+.mypage-form legend:not(.sr-only) {
+  float: left;
+  grid-column: 1 / -1;
+  width: 100%;
+  margin-bottom: 4px;
+  font-size: 15px;
+  font-weight: 700;
+  color: #33495b;
+}
+.mypage-form label {
+  display: grid;
+  gap: 6px;
+  font-size: 14px;
+  color: #4a6072;
+}
+.mypage-form .mypage-wide {
+  grid-column: 1 / -1;
+}
+.mypage-form input,
+.mypage-form select,
+.mypage-form textarea {
+  width: 100%;
+  min-height: 44px;
+  padding: 9px 12px;
+  border: 1px solid #c9d6e2;
+  border-radius: 10px;
+  background: #fff;
+  font: inherit;
+  font-size: 15px;
+  color: #142636;
+}
+.mypage-form input:disabled {
+  background: #f1f4f7;
+  color: #5a6f80;
+}
+.mypage-form textarea {
+  resize: vertical;
+}
+.mypage-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 16px;
+  padding-top: 18px;
+}
+.mypage-actions p {
+  margin: 0;
+  font-size: 14px;
+}
+.mypage-ok {
+  color: #1f7a4d;
+}
+.mypage-error {
+  color: #b42318;
+}
+.mypage-note {
+  margin: 0;
+  font-size: 14px;
+  color: #6b4a2a;
+}
+
+@media (max-width: 760px) {
+  .job-summary {
+    padding: 22px 18px;
+  }
+  .job-summary-top {
+    flex-direction: column;
+  }
+  .job-summary-actions {
+    width: 100%;
+  }
+  .job-apply,
+  .job-summary .job-original-link {
+    flex: 1;
+    min-width: 0;
+  }
+  .job-summary-grid,
+  .job-period {
+    grid-template-columns: 1fr;
+  }
+  .job-summary-grid .job-info-rows + .job-info-rows {
+    border-top: 0;
+    padding-top: 0;
+  }
+  .job-place,
+  .job-company,
+  .job-period-method {
+    padding-inline: 18px;
+  }
+  .mypage-summary {
+    grid-template-columns: 56px minmax(0, 1fr);
+  }
+  .mypage-summary dl {
+    grid-column: 1 / -1;
+    flex-wrap: wrap;
+  }
+  .mypage-form fieldset {
+    grid-template-columns: 1fr;
+  }
+  .mypage-jobs li {
+    grid-template-columns: minmax(0, 1fr) auto;
+    padding: 16px;
+  }
+  .mypage-jobs .home-job-mark {
+    display: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mypage-jobs li,
+  .mypage-jobs li:hover {
+    transition: none;
+    transform: none;
+  }
+}
