@@ -1,0 +1,389 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1860" height="880" viewBox="0 0 1860 880">
+<style>
+  text { font-family: "Malgun Gothic", "Apple SD Gothic Neo", Arial, sans-serif; fill: #1a1a1a; dominant-baseline: central; }
+  .title { font-size: 24px; font-weight: 700; }
+  .zt  { font-size: 15px; font-weight: 700; fill: #555; }
+  .tn  { font-family: Consolas, "Malgun Gothic", monospace; font-size: 15px; font-weight: 700; }
+  .tk  { font-family: "Malgun Gothic", sans-serif; font-size: 12px; font-weight: 400; fill: #888; }
+  .col { font-family: Consolas, monospace; font-size: 12.5px; }
+  .typ { font-family: Consolas, monospace; font-size: 11.5px; fill: #777; text-anchor: end; }
+  .nul { fill: #c0392b; font-weight: 700; }
+  .key { font-size: 9.5px; font-weight: 700; text-anchor: middle; }
+  .lg  { font-size: 13px; }
+  .rel { fill: none; stroke: #1a1a1a; stroke-width: 1.3; }
+</style>
+<defs>
+<marker id="one" viewBox="-26 -9 28 18" refX="0" refY="0" markerWidth="28" markerHeight="18" markerUnits="userSpaceOnUse" orient="auto"><path d="M-6,-7 L-6,7 M-11,-7 L-11,7" stroke="#1a1a1a" stroke-width="1.3" fill="none"/></marker>
+<marker id="oneS" viewBox="-26 -9 28 18" refX="0" refY="0" markerWidth="28" markerHeight="18" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M-6,-7 L-6,7 M-11,-7 L-11,7" stroke="#1a1a1a" stroke-width="1.3" fill="none"/></marker>
+<marker id="zone" viewBox="-26 -9 28 18" refX="0" refY="0" markerWidth="28" markerHeight="18" markerUnits="userSpaceOnUse" orient="auto"><path d="M-6,-7 L-6,7" stroke="#1a1a1a" stroke-width="1.3" fill="none"/><circle cx="-15" cy="0" r="4" fill="#fff" stroke="#1a1a1a" stroke-width="1.3"/></marker>
+<marker id="zoneS" viewBox="-26 -9 28 18" refX="0" refY="0" markerWidth="28" markerHeight="18" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M-6,-7 L-6,7" stroke="#1a1a1a" stroke-width="1.3" fill="none"/><circle cx="-15" cy="0" r="4" fill="#fff" stroke="#1a1a1a" stroke-width="1.3"/></marker>
+<marker id="omany" viewBox="-26 -9 28 18" refX="0" refY="0" markerWidth="28" markerHeight="18" markerUnits="userSpaceOnUse" orient="auto"><path d="M-12,0 L0,-7 M-12,0 L0,0 M-12,0 L0,7" stroke="#1a1a1a" stroke-width="1.3" fill="none"/><path d="M-16,-7 L-16,7" stroke="#1a1a1a" stroke-width="1.3" fill="none"/></marker>
+<marker id="omanyS" viewBox="-26 -9 28 18" refX="0" refY="0" markerWidth="28" markerHeight="18" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M-12,0 L0,-7 M-12,0 L0,0 M-12,0 L0,7" stroke="#1a1a1a" stroke-width="1.3" fill="none"/><path d="M-16,-7 L-16,7" stroke="#1a1a1a" stroke-width="1.3" fill="none"/></marker>
+<marker id="zmany" viewBox="-26 -9 28 18" refX="0" refY="0" markerWidth="28" markerHeight="18" markerUnits="userSpaceOnUse" orient="auto"><path d="M-12,0 L0,-7 M-12,0 L0,0 M-12,0 L0,7" stroke="#1a1a1a" stroke-width="1.3" fill="none"/><circle cx="-18" cy="0" r="4" fill="#fff" stroke="#1a1a1a" stroke-width="1.3"/></marker>
+<marker id="zmanyS" viewBox="-26 -9 28 18" refX="0" refY="0" markerWidth="28" markerHeight="18" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M-12,0 L0,-7 M-12,0 L0,0 M-12,0 L0,7" stroke="#1a1a1a" stroke-width="1.3" fill="none"/><circle cx="-18" cy="0" r="4" fill="#fff" stroke="#1a1a1a" stroke-width="1.3"/></marker>
+</defs>
+<rect width="1860" height="880" fill="#fff"/>
+<rect x="20" y="20" width="1820" height="840" fill="none" stroke="#999" stroke-width="1"/>
+<text class="title" x="44" y="58">채용공고 DB 물리 설계 (PostgreSQL 17)</text>
+<rect x="40" y="90" width="590" height="490" fill="none" stroke="#888" stroke-width="1.1" stroke-dasharray="6 4"/><text class="zt" x="52" y="110">① 수집</text>
+<rect x="640" y="90" width="1190" height="480" fill="none" stroke="#888" stroke-width="1.1" stroke-dasharray="6 4"/><text class="zt" x="652" y="110">② 추출 결과</text>
+<rect x="940" y="590" width="890" height="250" fill="none" stroke="#888" stroke-width="1.1" stroke-dasharray="6 4"/><text class="zt" x="952" y="610">③ 표준화 사전</text>
+<path class="rel" d="M310,186.0 H335 V210.0 H360" marker-start="url(#oneS)" marker-end="url(#omany)"/>
+<path class="rel" d="M360,330.0 H340 V370.0 H310" marker-start="url(#oneS)" marker-end="url(#zmany)"/>
+<path class="rel" d="M610,186.0 H622 V210.0 H660" marker-start="url(#oneS)" marker-end="url(#zmany)"/>
+<path class="rel" d="M910,186.0 H935 V210.0 H960" marker-start="url(#oneS)" marker-end="url(#zmany)"/>
+<path class="rel" d="M1210,186.0 H1235 V210.0 H1260" marker-start="url(#oneS)" marker-end="url(#zmany)"/>
+<path class="rel" d="M1510,186.0 H1525 V210.0 H1560" marker-start="url(#oneS)" marker-end="url(#zmany)"/>
+<path class="rel" d="M1685,294 V340" marker-start="url(#oneS)" marker-end="url(#zmany)"/>
+<path class="rel" d="M1685,640 V470" marker-start="url(#zoneS)" marker-end="url(#zmany)"/>
+<path class="rel" d="M1085,640 V580 H1535 V234.0 H1560" marker-start="url(#oneS)" marker-end="url(#zmany)"/>
+<path class="rel" d="M1560,686.0 H1510" marker-start="url(#oneS)" marker-end="url(#omany)"/>
+<path class="rel" d="M1210,686.0 H1235 V710.0 H1260" marker-start="url(#oneS)" marker-end="url(#zmany)"/>
+<rect x="60" y="140" width="250" height="82" fill="#fff" stroke="#1a1a1a" stroke-width="1.3"/>
+<rect x="60" y="140" width="250" height="34" fill="#efefef" stroke="#1a1a1a" stroke-width="1.3"/>
+<text class="tn" x="72" y="157.0">company<tspan class="tk" dx="8">회사</tspan></text>
+<rect x="68" y="178.0" width="22" height="16" rx="3" fill="#1a1a1a" stroke="#1a1a1a" stroke-width="1"/>
+<text class="key" x="79.0" y="186.5" style="fill:#fff">PK</text>
+<text class="col" x="98" y="186.0" style="font-weight:700;">id</text>
+<text class="typ" x="300" y="186.0">bigint</text>
+<line x1="60" y1="198.0" x2="310" y2="198.0" stroke="#e3e3e3" stroke-width="1"/>
+<rect x="68" y="202.0" width="22" height="16" rx="3" fill="#fff" stroke="#777" stroke-width="1"/>
+<text class="key" x="79.0" y="210.5" style="fill:#777">UK</text>
+<text class="col" x="98" y="210.0" style="">name</text>
+<text class="typ" x="300" y="210.0">text</text>
+<rect x="360" y="140" width="250" height="418" fill="#fff" stroke="#1a1a1a" stroke-width="1.3"/>
+<rect x="360" y="140" width="250" height="34" fill="#efefef" stroke="#1a1a1a" stroke-width="1.3"/>
+<text class="tn" x="372" y="157.0">posting<tspan class="tk" dx="8">공고</tspan></text>
+<rect x="368" y="178.0" width="22" height="16" rx="3" fill="#1a1a1a" stroke="#1a1a1a" stroke-width="1"/>
+<text class="key" x="379.0" y="186.5" style="fill:#fff">PK</text>
+<text class="col" x="398" y="186.0" style="font-weight:700;">id</text>
+<text class="typ" x="600" y="186.0">bigint</text>
+<line x1="360" y1="198.0" x2="610" y2="198.0" stroke="#e3e3e3" stroke-width="1"/>
+<rect x="368" y="202.0" width="22" height="16" rx="3" fill="#fff" stroke="#1a1a1a" stroke-width="1"/>
+<text class="key" x="379.0" y="210.5" style="fill:#1a1a1a">FK</text>
+<text class="col" x="398" y="210.0" style="">company_id</text>
+<text class="typ" x="600" y="210.0">bigint</text>
+<line x1="360" y1="222.0" x2="610" y2="222.0" stroke="#e3e3e3" stroke-width="1"/>
+<rect x="368" y="226.0" width="22" height="16" rx="3" fill="#fff" stroke="#777" stroke-width="1"/>
+<text class="key" x="379.0" y="234.5" style="fill:#777">UK</text>
+<text class="col" x="398" y="234.0" style="">site</text>
+<text class="typ" x="600" y="234.0">text</text>
+<line x1="360" y1="246.0" x2="610" y2="246.0" stroke="#e3e3e3" stroke-width="1"/>
+<rect x="368" y="250.0" width="22" height="16" rx="3" fill="#fff" stroke="#777" stroke-width="1"/>
+<text class="key" x="379.0" y="258.5" style="fill:#777">UK</text>
+<text class="col" x="398" y="258.0" style="">site_posting_no</text>
+<text class="typ" x="600" y="258.0">text</text>
+<line x1="360" y1="270.0" x2="610" y2="270.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="398" y="282.0" style="">title</text>
+<text class="typ" x="600" y="282.0">text</text>
+<line x1="360" y1="294.0" x2="610" y2="294.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="398" y="306.0" style="">site_job_category</text>
+<text class="typ" x="600" y="306.0">text<tspan class="nul">?</tspan></text>
+<line x1="360" y1="318.0" x2="610" y2="318.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="398" y="330.0" style="">career_condition</text>
+<text class="typ" x="600" y="330.0">text<tspan class="nul">?</tspan></text>
+<line x1="360" y1="342.0" x2="610" y2="342.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="398" y="354.0" style="">min_years</text>
+<text class="typ" x="600" y="354.0">smallint<tspan class="nul">?</tspan></text>
+<line x1="360" y1="366.0" x2="610" y2="366.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="398" y="378.0" style="">employment_type</text>
+<text class="typ" x="600" y="378.0">text<tspan class="nul">?</tspan></text>
+<line x1="360" y1="390.0" x2="610" y2="390.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="398" y="402.0" style="">kind</text>
+<text class="typ" x="600" y="402.0">text</text>
+<line x1="360" y1="414.0" x2="610" y2="414.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="398" y="426.0" style="">status</text>
+<text class="typ" x="600" y="426.0">text</text>
+<line x1="360" y1="438.0" x2="610" y2="438.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="398" y="450.0" style="">deadline</text>
+<text class="typ" x="600" y="450.0">date<tspan class="nul">?</tspan></text>
+<line x1="360" y1="462.0" x2="610" y2="462.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="398" y="474.0" style="">raw_path</text>
+<text class="typ" x="600" y="474.0">text</text>
+<line x1="360" y1="486.0" x2="610" y2="486.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="398" y="498.0" style="">raw_hash</text>
+<text class="typ" x="600" y="498.0">char(64)</text>
+<line x1="360" y1="510.0" x2="610" y2="510.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="398" y="522.0" style="">collected_at</text>
+<text class="typ" x="600" y="522.0">timestamptz</text>
+<line x1="360" y1="534.0" x2="610" y2="534.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="398" y="546.0" style="">last_checked_at</text>
+<text class="typ" x="600" y="546.0">timestamptz</text>
+<rect x="60" y="300" width="250" height="202" fill="#fff" stroke="#1a1a1a" stroke-width="1.3"/>
+<rect x="60" y="300" width="250" height="34" fill="#efefef" stroke="#1a1a1a" stroke-width="1.3"/>
+<text class="tn" x="72" y="317.0">posting_image<tspan class="tk" dx="8">공고 이미지</tspan></text>
+<rect x="68" y="338.0" width="22" height="16" rx="3" fill="#1a1a1a" stroke="#1a1a1a" stroke-width="1"/>
+<text class="key" x="79.0" y="346.5" style="fill:#fff">PK</text>
+<text class="col" x="98" y="346.0" style="font-weight:700;">id</text>
+<text class="typ" x="300" y="346.0">bigint</text>
+<line x1="60" y1="358.0" x2="310" y2="358.0" stroke="#e3e3e3" stroke-width="1"/>
+<rect x="68" y="362.0" width="22" height="16" rx="3" fill="#fff" stroke="#1a1a1a" stroke-width="1"/>
+<text class="key" x="79.0" y="370.5" style="fill:#1a1a1a">FK</text>
+<text class="col" x="98" y="370.0" style="">posting_id</text>
+<text class="typ" x="300" y="370.0">bigint</text>
+<line x1="60" y1="382.0" x2="310" y2="382.0" stroke="#e3e3e3" stroke-width="1"/>
+<rect x="68" y="386.0" width="22" height="16" rx="3" fill="#fff" stroke="#777" stroke-width="1"/>
+<text class="key" x="79.0" y="394.5" style="fill:#777">UK</text>
+<text class="col" x="98" y="394.0" style="">seq</text>
+<text class="typ" x="300" y="394.0">smallint</text>
+<line x1="60" y1="406.0" x2="310" y2="406.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="98" y="418.0" style="">url</text>
+<text class="typ" x="300" y="418.0">text</text>
+<line x1="60" y1="430.0" x2="310" y2="430.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="98" y="442.0" style="">file_path</text>
+<text class="typ" x="300" y="442.0">text</text>
+<line x1="60" y1="454.0" x2="310" y2="454.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="98" y="466.0" style="">kept</text>
+<text class="typ" x="300" y="466.0">boolean<tspan class="nul">?</tspan></text>
+<line x1="60" y1="478.0" x2="310" y2="478.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="98" y="490.0" style="">ocr_path</text>
+<text class="typ" x="300" y="490.0">text<tspan class="nul">?</tspan></text>
+<rect x="660" y="140" width="250" height="418" fill="#fff" stroke="#1a1a1a" stroke-width="1.3"/>
+<rect x="660" y="140" width="250" height="34" fill="#efefef" stroke="#1a1a1a" stroke-width="1.3"/>
+<text class="tn" x="672" y="157.0">extraction_run<tspan class="tk" dx="8">추출 실행</tspan></text>
+<rect x="668" y="178.0" width="22" height="16" rx="3" fill="#1a1a1a" stroke="#1a1a1a" stroke-width="1"/>
+<text class="key" x="679.0" y="186.5" style="fill:#fff">PK</text>
+<text class="col" x="698" y="186.0" style="font-weight:700;">id</text>
+<text class="typ" x="900" y="186.0">bigint</text>
+<line x1="660" y1="198.0" x2="910" y2="198.0" stroke="#e3e3e3" stroke-width="1"/>
+<rect x="668" y="202.0" width="22" height="16" rx="3" fill="#fff" stroke="#1a1a1a" stroke-width="1"/>
+<text class="key" x="679.0" y="210.5" style="fill:#1a1a1a">FK</text>
+<text class="col" x="698" y="210.0" style="">posting_id</text>
+<text class="typ" x="900" y="210.0">bigint</text>
+<line x1="660" y1="222.0" x2="910" y2="222.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="698" y="234.0" style="">model</text>
+<text class="typ" x="900" y="234.0">text</text>
+<line x1="660" y1="246.0" x2="910" y2="246.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="698" y="258.0" style="">prompt_version</text>
+<text class="typ" x="900" y="258.0">text</text>
+<line x1="660" y1="270.0" x2="910" y2="270.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="698" y="282.0" style="">dict_version</text>
+<text class="typ" x="900" y="282.0">text</text>
+<line x1="660" y1="294.0" x2="910" y2="294.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="698" y="306.0" style="">input_hash</text>
+<text class="typ" x="900" y="306.0">char(64)</text>
+<line x1="660" y1="318.0" x2="910" y2="318.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="698" y="330.0" style="">input_tokens</text>
+<text class="typ" x="900" y="330.0">integer</text>
+<line x1="660" y1="342.0" x2="910" y2="342.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="698" y="354.0" style="">output_tokens</text>
+<text class="typ" x="900" y="354.0">integer</text>
+<line x1="660" y1="366.0" x2="910" y2="366.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="698" y="378.0" style="">cost_usd</text>
+<text class="typ" x="900" y="378.0">numeric(10,6)</text>
+<line x1="660" y1="390.0" x2="910" y2="390.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="698" y="402.0" style="">retried</text>
+<text class="typ" x="900" y="402.0">boolean</text>
+<line x1="660" y1="414.0" x2="910" y2="414.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="698" y="426.0" style="">review_reasons</text>
+<text class="typ" x="900" y="426.0">jsonb</text>
+<line x1="660" y1="438.0" x2="910" y2="438.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="698" y="450.0" style="">review_result</text>
+<text class="typ" x="900" y="450.0">text<tspan class="nul">?</tspan></text>
+<line x1="660" y1="462.0" x2="910" y2="462.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="698" y="474.0" style="">reviewed_at</text>
+<text class="typ" x="900" y="474.0">timestamptz<tspan class="nul">?</tspan></text>
+<line x1="660" y1="486.0" x2="910" y2="486.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="698" y="498.0" style="">llm_output_raw</text>
+<text class="typ" x="900" y="498.0">jsonb<tspan class="nul">?</tspan></text>
+<line x1="660" y1="510.0" x2="910" y2="510.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="698" y="522.0" style="">is_current</text>
+<text class="typ" x="900" y="522.0">boolean</text>
+<line x1="660" y1="534.0" x2="910" y2="534.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="698" y="546.0" style="">run_at</text>
+<text class="typ" x="900" y="546.0">timestamptz</text>
+<rect x="960" y="140" width="250" height="250" fill="#fff" stroke="#1a1a1a" stroke-width="1.3"/>
+<rect x="960" y="140" width="250" height="34" fill="#efefef" stroke="#1a1a1a" stroke-width="1.3"/>
+<text class="tn" x="972" y="157.0">recruit_unit<tspan class="tk" dx="8">모집 단위</tspan></text>
+<rect x="968" y="178.0" width="22" height="16" rx="3" fill="#1a1a1a" stroke="#1a1a1a" stroke-width="1"/>
+<text class="key" x="979.0" y="186.5" style="fill:#fff">PK</text>
+<text class="col" x="998" y="186.0" style="font-weight:700;">id</text>
+<text class="typ" x="1200" y="186.0">bigint</text>
+<line x1="960" y1="198.0" x2="1210" y2="198.0" stroke="#e3e3e3" stroke-width="1"/>
+<rect x="968" y="202.0" width="22" height="16" rx="3" fill="#fff" stroke="#1a1a1a" stroke-width="1"/>
+<text class="key" x="979.0" y="210.5" style="fill:#1a1a1a">FK</text>
+<text class="col" x="998" y="210.0" style="">run_id</text>
+<text class="typ" x="1200" y="210.0">bigint</text>
+<line x1="960" y1="222.0" x2="1210" y2="222.0" stroke="#e3e3e3" stroke-width="1"/>
+<rect x="968" y="226.0" width="22" height="16" rx="3" fill="#fff" stroke="#777" stroke-width="1"/>
+<text class="key" x="979.0" y="234.5" style="fill:#777">UK</text>
+<text class="col" x="998" y="234.0" style="">seq</text>
+<text class="typ" x="1200" y="234.0">smallint</text>
+<line x1="960" y1="246.0" x2="1210" y2="246.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="998" y="258.0" style="">name</text>
+<text class="typ" x="1200" y="258.0">text</text>
+<line x1="960" y1="270.0" x2="1210" y2="270.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="998" y="282.0" style="">is_it</text>
+<text class="typ" x="1200" y="282.0">boolean</text>
+<line x1="960" y1="294.0" x2="1210" y2="294.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="998" y="306.0" style="">career</text>
+<text class="typ" x="1200" y="306.0">text</text>
+<line x1="960" y1="318.0" x2="1210" y2="318.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="998" y="330.0" style="">years_text</text>
+<text class="typ" x="1200" y="330.0">text</text>
+<line x1="960" y1="342.0" x2="1210" y2="342.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="998" y="354.0" style="">min_years</text>
+<text class="typ" x="1200" y="354.0">smallint<tspan class="nul">?</tspan></text>
+<line x1="960" y1="366.0" x2="1210" y2="366.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="998" y="378.0" style="">max_years</text>
+<text class="typ" x="1200" y="378.0">smallint<tspan class="nul">?</tspan></text>
+<rect x="1260" y="140" width="250" height="178" fill="#fff" stroke="#1a1a1a" stroke-width="1.3"/>
+<rect x="1260" y="140" width="250" height="34" fill="#efefef" stroke="#1a1a1a" stroke-width="1.3"/>
+<text class="tn" x="1272" y="157.0">unit_item<tspan class="tk" dx="8">항목</tspan></text>
+<rect x="1268" y="178.0" width="22" height="16" rx="3" fill="#1a1a1a" stroke="#1a1a1a" stroke-width="1"/>
+<text class="key" x="1279.0" y="186.5" style="fill:#fff">PK</text>
+<text class="col" x="1298" y="186.0" style="font-weight:700;">id</text>
+<text class="typ" x="1500" y="186.0">bigint</text>
+<line x1="1260" y1="198.0" x2="1510" y2="198.0" stroke="#e3e3e3" stroke-width="1"/>
+<rect x="1268" y="202.0" width="22" height="16" rx="3" fill="#fff" stroke="#1a1a1a" stroke-width="1"/>
+<text class="key" x="1279.0" y="210.5" style="fill:#1a1a1a">FK</text>
+<text class="col" x="1298" y="210.0" style="">unit_id</text>
+<text class="typ" x="1500" y="210.0">bigint</text>
+<line x1="1260" y1="222.0" x2="1510" y2="222.0" stroke="#e3e3e3" stroke-width="1"/>
+<rect x="1268" y="226.0" width="22" height="16" rx="3" fill="#fff" stroke="#777" stroke-width="1"/>
+<text class="key" x="1279.0" y="234.5" style="fill:#777">UK</text>
+<text class="col" x="1298" y="234.0" style="">category</text>
+<text class="typ" x="1500" y="234.0">text</text>
+<line x1="1260" y1="246.0" x2="1510" y2="246.0" stroke="#e3e3e3" stroke-width="1"/>
+<rect x="1268" y="250.0" width="22" height="16" rx="3" fill="#fff" stroke="#777" stroke-width="1"/>
+<text class="key" x="1279.0" y="258.5" style="fill:#777">UK</text>
+<text class="col" x="1298" y="258.0" style="">seq</text>
+<text class="typ" x="1500" y="258.0">smallint</text>
+<line x1="1260" y1="270.0" x2="1510" y2="270.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="1298" y="282.0" style="">text</text>
+<text class="typ" x="1500" y="282.0">text</text>
+<line x1="1260" y1="294.0" x2="1510" y2="294.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="1298" y="306.0" style="">quote</text>
+<text class="typ" x="1500" y="306.0">text</text>
+<rect x="1560" y="140" width="250" height="154" fill="#fff" stroke="#1a1a1a" stroke-width="1.3"/>
+<rect x="1560" y="140" width="250" height="34" fill="#efefef" stroke="#1a1a1a" stroke-width="1.3"/>
+<text class="tn" x="1572" y="157.0">requirement<tspan class="tk" dx="8">요건</tspan></text>
+<rect x="1568" y="178.0" width="22" height="16" rx="3" fill="#1a1a1a" stroke="#1a1a1a" stroke-width="1"/>
+<text class="key" x="1579.0" y="186.5" style="fill:#fff">PK</text>
+<text class="col" x="1598" y="186.0" style="font-weight:700;">id</text>
+<text class="typ" x="1800" y="186.0">bigint</text>
+<line x1="1560" y1="198.0" x2="1810" y2="198.0" stroke="#e3e3e3" stroke-width="1"/>
+<rect x="1568" y="202.0" width="22" height="16" rx="3" fill="#fff" stroke="#1a1a1a" stroke-width="1"/>
+<text class="key" x="1579.0" y="210.5" style="fill:#1a1a1a">FK</text>
+<text class="col" x="1598" y="210.0" style="">item_id</text>
+<text class="typ" x="1800" y="210.0">bigint</text>
+<line x1="1560" y1="222.0" x2="1810" y2="222.0" stroke="#e3e3e3" stroke-width="1"/>
+<rect x="1568" y="226.0" width="22" height="16" rx="3" fill="#fff" stroke="#1a1a1a" stroke-width="1"/>
+<text class="key" x="1579.0" y="234.5" style="fill:#1a1a1a">FK</text>
+<text class="col" x="1598" y="234.0" style="">capability_id</text>
+<text class="typ" x="1800" y="234.0">bigint</text>
+<line x1="1560" y1="246.0" x2="1810" y2="246.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="1598" y="258.0" style="">other_name</text>
+<text class="typ" x="1800" y="258.0">text</text>
+<line x1="1560" y1="270.0" x2="1810" y2="270.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="1598" y="282.0" style="">relation</text>
+<text class="typ" x="1800" y="282.0">text</text>
+<rect x="1560" y="340" width="250" height="130" fill="#fff" stroke="#1a1a1a" stroke-width="1.3"/>
+<rect x="1560" y="340" width="250" height="34" fill="#efefef" stroke="#1a1a1a" stroke-width="1.3"/>
+<text class="tn" x="1572" y="357.0">requirement_tech<tspan class="tk" dx="8">요건 기술</tspan></text>
+<rect x="1568" y="378.0" width="22" height="16" rx="3" fill="#1a1a1a" stroke="#1a1a1a" stroke-width="1"/>
+<text class="key" x="1579.0" y="386.5" style="fill:#fff">PK</text>
+<text class="col" x="1598" y="386.0" style="font-weight:700;">id</text>
+<text class="typ" x="1800" y="386.0">bigint</text>
+<line x1="1560" y1="398.0" x2="1810" y2="398.0" stroke="#e3e3e3" stroke-width="1"/>
+<rect x="1568" y="402.0" width="22" height="16" rx="3" fill="#fff" stroke="#1a1a1a" stroke-width="1"/>
+<text class="key" x="1579.0" y="410.5" style="fill:#1a1a1a">FK</text>
+<text class="col" x="1598" y="410.0" style="">requirement_id</text>
+<text class="typ" x="1800" y="410.0">bigint</text>
+<line x1="1560" y1="422.0" x2="1810" y2="422.0" stroke="#e3e3e3" stroke-width="1"/>
+<rect x="1568" y="426.0" width="22" height="16" rx="3" fill="#fff" stroke="#1a1a1a" stroke-width="1"/>
+<text class="key" x="1579.0" y="434.5" style="fill:#1a1a1a">FK</text>
+<text class="col" x="1598" y="434.0" style="">tech_id</text>
+<text class="typ" x="1800" y="434.0">bigint<tspan class="nul">?</tspan></text>
+<line x1="1560" y1="446.0" x2="1810" y2="446.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="1598" y="458.0" style="">written_name</text>
+<text class="typ" x="1800" y="458.0">text</text>
+<rect x="960" y="640" width="250" height="178" fill="#fff" stroke="#1a1a1a" stroke-width="1.3"/>
+<rect x="960" y="640" width="250" height="34" fill="#efefef" stroke="#1a1a1a" stroke-width="1.3"/>
+<text class="tn" x="972" y="657.0">capability<tspan class="tk" dx="8">능력</tspan></text>
+<rect x="968" y="678.0" width="22" height="16" rx="3" fill="#1a1a1a" stroke="#1a1a1a" stroke-width="1"/>
+<text class="key" x="979.0" y="686.5" style="fill:#fff">PK</text>
+<text class="col" x="998" y="686.0" style="font-weight:700;">id</text>
+<text class="typ" x="1200" y="686.0">bigint</text>
+<line x1="960" y1="698.0" x2="1210" y2="698.0" stroke="#e3e3e3" stroke-width="1"/>
+<rect x="968" y="702.0" width="22" height="16" rx="3" fill="#fff" stroke="#777" stroke-width="1"/>
+<text class="key" x="979.0" y="710.5" style="fill:#777">UK</text>
+<text class="col" x="998" y="710.0" style="">name</text>
+<text class="typ" x="1200" y="710.0">text</text>
+<line x1="960" y1="722.0" x2="1210" y2="722.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="998" y="734.0" style="">group_name</text>
+<text class="typ" x="1200" y="734.0">text<tspan class="nul">?</tspan></text>
+<line x1="960" y1="746.0" x2="1210" y2="746.0" stroke="#e3e3e3" stroke-width="1"/>
+<rect x="968" y="750.0" width="22" height="16" rx="3" fill="#fff" stroke="#1a1a1a" stroke-width="1"/>
+<text class="key" x="979.0" y="758.5" style="fill:#1a1a1a">FK</text>
+<text class="col" x="998" y="758.0" style="">parent_id</text>
+<text class="typ" x="1200" y="758.0">bigint<tspan class="nul">?</tspan></text>
+<line x1="960" y1="770.0" x2="1210" y2="770.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="998" y="782.0" style="">aliases</text>
+<text class="typ" x="1200" y="782.0">text[]</text>
+<line x1="960" y1="794.0" x2="1210" y2="794.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="998" y="806.0" style="">is_active</text>
+<text class="typ" x="1200" y="806.0">boolean</text>
+<rect x="1260" y="640" width="250" height="82" fill="#fff" stroke="#1a1a1a" stroke-width="1.3"/>
+<rect x="1260" y="640" width="250" height="34" fill="#efefef" stroke="#1a1a1a" stroke-width="1.3"/>
+<text class="tn" x="1272" y="657.0">tech_capability<tspan class="tk" dx="8">기술-능력</tspan></text>
+<rect x="1268" y="678.0" width="38" height="16" rx="3" fill="#1a1a1a" stroke="#1a1a1a" stroke-width="1"/>
+<text class="key" x="1287.0" y="686.5" style="fill:#fff">PK·FK</text>
+<text class="col" x="1312" y="686.0" style="font-weight:700;">tech_id</text>
+<text class="typ" x="1500" y="686.0">bigint</text>
+<line x1="1260" y1="698.0" x2="1510" y2="698.0" stroke="#e3e3e3" stroke-width="1"/>
+<rect x="1268" y="702.0" width="38" height="16" rx="3" fill="#1a1a1a" stroke="#1a1a1a" stroke-width="1"/>
+<text class="key" x="1287.0" y="710.5" style="fill:#fff">PK·FK</text>
+<text class="col" x="1312" y="710.0" style="font-weight:700;">capability_id</text>
+<text class="typ" x="1500" y="710.0">bigint</text>
+<rect x="1260" y="744" width="250" height="82" fill="#fff" stroke="#1a1a1a" stroke-width="1.3"/>
+<rect x="1260" y="744" width="250" height="34" fill="#efefef" stroke="#1a1a1a" stroke-width="1.3"/>
+<text class="tn" x="1272" y="761.0">dictionary_version<tspan class="tk" dx="8">사전 버전</tspan></text>
+<rect x="1268" y="782.0" width="22" height="16" rx="3" fill="#1a1a1a" stroke="#1a1a1a" stroke-width="1"/>
+<text class="key" x="1279.0" y="790.5" style="fill:#fff">PK</text>
+<text class="col" x="1298" y="790.0" style="font-weight:700;">version</text>
+<text class="typ" x="1500" y="790.0">text</text>
+<line x1="1260" y1="802.0" x2="1510" y2="802.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="1298" y="814.0" style="">synced_at</text>
+<text class="typ" x="1500" y="814.0">timestamptz</text>
+<rect x="1560" y="640" width="250" height="154" fill="#fff" stroke="#1a1a1a" stroke-width="1.3"/>
+<rect x="1560" y="640" width="250" height="34" fill="#efefef" stroke="#1a1a1a" stroke-width="1.3"/>
+<text class="tn" x="1572" y="657.0">tech<tspan class="tk" dx="8">기술</tspan></text>
+<rect x="1568" y="678.0" width="22" height="16" rx="3" fill="#1a1a1a" stroke="#1a1a1a" stroke-width="1"/>
+<text class="key" x="1579.0" y="686.5" style="fill:#fff">PK</text>
+<text class="col" x="1598" y="686.0" style="font-weight:700;">id</text>
+<text class="typ" x="1800" y="686.0">bigint</text>
+<line x1="1560" y1="698.0" x2="1810" y2="698.0" stroke="#e3e3e3" stroke-width="1"/>
+<rect x="1568" y="702.0" width="22" height="16" rx="3" fill="#fff" stroke="#777" stroke-width="1"/>
+<text class="key" x="1579.0" y="710.5" style="fill:#777">UK</text>
+<text class="col" x="1598" y="710.0" style="">name</text>
+<text class="typ" x="1800" y="710.0">text</text>
+<line x1="1560" y1="722.0" x2="1810" y2="722.0" stroke="#e3e3e3" stroke-width="1"/>
+<rect x="1568" y="726.0" width="22" height="16" rx="3" fill="#fff" stroke="#1a1a1a" stroke-width="1"/>
+<text class="key" x="1579.0" y="734.5" style="fill:#1a1a1a">FK</text>
+<text class="col" x="1598" y="734.0" style="">parent_id</text>
+<text class="typ" x="1800" y="734.0">bigint<tspan class="nul">?</tspan></text>
+<line x1="1560" y1="746.0" x2="1810" y2="746.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="1598" y="758.0" style="">aliases</text>
+<text class="typ" x="1800" y="758.0">text[]</text>
+<line x1="1560" y1="770.0" x2="1810" y2="770.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="1598" y="782.0" style="">is_active</text>
+<text class="typ" x="1800" y="782.0">boolean</text>
+
+<rect x="60" y="600" width="550" height="230" fill="#fff" stroke="#bbb" stroke-width="1"/>
+<text class="zt" x="76" y="622">읽는 법</text>
+<rect x="78" y="644" width="22" height="16" rx="3" fill="#1a1a1a"/><text class="key" x="89" y="652.5" style="fill:#fff">PK</text>
+<text class="lg" x="110" y="652">기본 키 (bigint 자동 증가)</text>
+<rect x="78" y="672" width="22" height="16" rx="3" fill="#fff" stroke="#1a1a1a"/><text class="key" x="89" y="680.5">FK</text>
+<text class="lg" x="110" y="680">외래 키 (다른 표의 id)</text>
+<rect x="78" y="700" width="22" height="16" rx="3" fill="#fff" stroke="#777"/><text class="key" x="89" y="708.5" style="fill:#777">UK</text>
+<text class="lg" x="110" y="708">겹치면 안 됨 (여럿이면 묶어서)</text>
+<path class="rel" d="M330,652 H390" marker-end="url(#one)"/><text class="lg" x="402" y="652">반드시 하나</text>
+<path class="rel" d="M330,680 H390" marker-end="url(#zone)"/><text class="lg" x="402" y="680">없거나 하나</text>
+<path class="rel" d="M330,708 H390" marker-end="url(#omany)"/><text class="lg" x="402" y="708">하나 이상</text>
+<path class="rel" d="M330,736 H390" marker-end="url(#zmany)"/><text class="lg" x="402" y="736">없거나 여러 개</text>
+<text class="lg" x="78" y="768"><tspan style="font-family:Consolas,monospace;fill:#c0392b;font-weight:700">?</tspan> = 비워 둘 수 있음(NULL). 없으면 NOT NULL</text>
+<text class="lg" x="78" y="790" style="fill:#777">정해진 값(CHECK)·지울 때 동작·색인은 docs/physical-design.md</text>
+<text class="lg" x="78" y="812" style="fill:#777">DDL: db/schema.sql</text>
+
+</svg>

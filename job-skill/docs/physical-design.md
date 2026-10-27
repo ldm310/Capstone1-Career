@@ -1,6 +1,9 @@
 # 물리 설계 (PostgreSQL 17)
 
 논리 설계([ERD](erd.png))를 실제 DB에 만들 수 있게 옮겼다.
+
+![물리 설계 ERD](erd-physical.png)
+
 - DDL: [`db/schema.sql`](../db/schema.sql)
 - 시험: 2026-10-27, 시험용 PostgreSQL 17에서 표 12개가 오류 없이 만들어지고 제약이 동작하는 것을 확인했다.
 

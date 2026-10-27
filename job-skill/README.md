@@ -28,7 +28,7 @@
    1. 신입·경력을 빠짐없이 담았는가
    2. 모집 직무를 빠짐없이 담았는가
    3. IT 직무인데 내용이 비어 있지 않은가
-6. **DB 저장 (Load):** PostgreSQL에 넣는다(`db_load.py`). → [ERD](docs/erd.png), [물리 설계](docs/physical-design.md)
+6. **DB 저장 (Load):** PostgreSQL에 넣는다(`db_load.py`). → [ERD](docs/erd.png), [물리 설계](docs/physical-design.md) ([그림](docs/erd-physical.png))
 
 ## 파일
 
