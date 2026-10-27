@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="850" height="520" viewBox="0 0 850 520">
+<style>
+  text { font-family: "Malgun Gothic", "Apple SD Gothic Neo", Arial, sans-serif; fill: #1a1a1a; dominant-baseline: central; text-anchor: middle; }
+  .title { font-size: 24px; font-weight: 700; text-anchor: start; }
+  .gt  { font-size: 17px; font-weight: 700; text-anchor: start; }
+  .lt  { font-size: 13px; font-weight: 700; fill: #555; text-anchor: start; }
+  .nt  { font-size: 15px; font-weight: 700; }
+  .sub { font-size: 12.5px; fill: #666; }
+  .num { font-size: 13px; font-weight: 700; fill: #fff; }
+  .yn  { font-size: 14px; font-weight: 700; fill: #444; }
+  .grp { fill: none; stroke: #1a1a1a; stroke-width: 1.3; }
+  .lane { fill: #f5f5f5; stroke: #777; stroke-width: 1.1; stroke-dasharray: 5 4; }
+  .ln  { fill: none; stroke: #1a1a1a; stroke-width: 1.4; }
+</style>
+<defs>
+  <marker id="a" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#1a1a1a"/></marker>
+  <marker id="r" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#d0342c"/></marker>
+</defs>
+<rect width="850" height="520" fill="#fff"/>
+<rect x="20" y="20" width="810" height="480" fill="none" stroke="#999" stroke-width="1"/>
+<text class="title" x="44" y="58">모집 단위 검사</text>
+<rect class="grp" x="50" y="90" width="230" height="390"/><text class="gt" x="64" y="112">입력</text>
+<rect x="80" y="126" width="170" height="96" rx="4" fill="#fff" stroke="#1a1a1a" stroke-width="1.3"/>
+<g transform="translate(150.0,136) scale(1.25)" fill="none" stroke="#1a1a1a" stroke-width="1.28" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3v4a1 1 0 0 0 1 1h4" /><path d="M17 21h-10a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2h7l5 5v11a2 2 0 0 1 -2 2z" /><path d="M10 13l-1 2l1 2" /><path d="M14 13l1 2l-1 2" /></g>
+<text class="nt" x="165.0" y="185" style="fill:#1a1a1a">LLM 답</text>
+<text class="sub" x="165.0" y="205">표준화 후</text>
+<rect x="80" y="242" width="170" height="96" rx="4" fill="#fff" stroke="#1a1a1a" stroke-width="1.3"/>
+<g transform="translate(150.0,252) scale(1.25)" fill="none" stroke="#1a1a1a" stroke-width="1.28" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l11 0" /><path d="M9 12l11 0" /><path d="M9 18l11 0" /><path d="M5 6l0 .01" /><path d="M5 12l0 .01" /><path d="M5 18l0 .01" /></g>
+<text class="nt" x="165.0" y="301" style="fill:#1a1a1a">경력 조건</text>
+<text class="sub" x="165.0" y="321">사람인</text>
+<rect x="80" y="358" width="170" height="96" rx="4" fill="#fff" stroke="#1a1a1a" stroke-width="1.3"/>
+<g transform="translate(150.0,368) scale(1.25)" fill="none" stroke="#1a1a1a" stroke-width="1.28" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3v4a1 1 0 0 0 1 1h4" /><path d="M17 21h-10a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2h7l5 5v11a2 2 0 0 1 -2 2z" /><path d="M9 9l1 0" /><path d="M9 13l6 0" /><path d="M9 17l6 0" /></g>
+<text class="nt" x="165.0" y="417" style="fill:#1a1a1a">공고 글</text>
+<text class="sub" x="165.0" y="437">모집 직무 칸</text>
+<path class="ln" d="M250,174 H305"/>
+<path class="ln" d="M250,290 H305"/>
+<path class="ln" d="M250,406 H305"/>
+<path class="ln" d="M305,174 V406"/>
+<path class="ln" d="M305,290 H355" style="stroke:#1a1a1a" marker-end="url(#a)"/>
+<rect class="grp" x="330" y="90" width="470" height="390"/><text class="gt" x="344" y="112">단위 검사 (코드)</text>
+<rect x="355" y="126" width="420" height="96" rx="4" fill="#fff" stroke="#1a1a1a" stroke-width="1.3"/>
+<g transform="translate(387,158.0) scale(1.3333333333333333)" fill="none" stroke="#1a1a1a" stroke-width="1.20" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7m0 2a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v9a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2z" /><path d="M8 7v-2a2 2 0 0 1 2 -2h4a2 2 0 0 1 2 2v2" /><path d="M12 12l0 .01" /><path d="M3 13a20 20 0 0 0 18 0" /></g>
+<circle cx="371" cy="142" r="11" fill="#1a1a1a"/>
+<text class="num" x="371" y="143">1</text>
+<text class="nt" x="435" y="164" style="text-anchor:start">신입·경력을 빠짐없이 담았는가</text>
+<text class="sub" x="435" y="188" style="text-anchor:start">예: 경력 조건은 '신입 · 경력'인데 신입 자리만 있음</text>
+<rect x="355" y="242" width="420" height="96" rx="4" fill="#fff" stroke="#1a1a1a" stroke-width="1.3"/>
+<g transform="translate(387,274.0) scale(1.3333333333333333)" fill="none" stroke="#1a1a1a" stroke-width="1.20" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4m0 2a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v12a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2z" /><path d="M4 12l16 0" /></g>
+<circle cx="371" cy="258" r="11" fill="#1a1a1a"/>
+<text class="num" x="371" y="259">2</text>
+<text class="nt" x="435" y="280" style="text-anchor:start">모집 직무를 빠짐없이 담았는가</text>
+<text class="sub" x="435" y="304" style="text-anchor:start">예: 공고의 모집 직무는 3개인데 자리는 2개</text>
+<rect x="355" y="358" width="420" height="96" rx="4" fill="#fff" stroke="#1a1a1a" stroke-width="1.3"/>
+<g transform="translate(387,390.0) scale(1.3333333333333333)" fill="none" stroke="#1a1a1a" stroke-width="1.20" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l18 18" /><path d="M7 3h7l5 5v7m0 4a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-14" /></g>
+<circle cx="371" cy="374" r="11" fill="#1a1a1a"/>
+<text class="num" x="371" y="375">3</text>
+<text class="nt" x="435" y="396" style="text-anchor:start">IT 직무인데 내용이 비어 있지 않은가</text>
+<text class="sub" x="435" y="420" style="text-anchor:start">예: 자격요건 · 우대사항 · 하는 일이 모두 빔</text>
+</svg>

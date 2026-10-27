@@ -1,0 +1,316 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1860" height="830" viewBox="0 0 1860 830">
+<style>
+  text { font-family: "Malgun Gothic", "Apple SD Gothic Neo", Arial, sans-serif; fill: #1a1a1a; dominant-baseline: central; }
+  .title { font-size: 24px; font-weight: 700; }
+  .zt  { font-size: 15px; font-weight: 700; fill: #555; }
+  .tn  { font-size: 15px; font-weight: 700; }
+  .col { font-size: 13px; }
+  .hint { font-size: 11.5px; fill: #888; text-anchor: end; }
+  .key { font-size: 9.5px; font-weight: 700; text-anchor: middle; }
+  .lg  { font-size: 13px; }
+  .rel { fill: none; stroke: #1a1a1a; stroke-width: 1.3; }
+</style>
+<defs>
+  <marker id="many" viewBox="-16 -9 18 18" refX="0" refY="0" markerWidth="18" markerHeight="18" markerUnits="userSpaceOnUse" orient="auto">
+    <path d="M-14,0 L0,-7 M-14,0 L0,0 M-14,0 L0,7" stroke="#1a1a1a" stroke-width="1.3" fill="none"/></marker>
+  <marker id="one" viewBox="-16 -9 18 18" refX="0" refY="0" markerWidth="18" markerHeight="18" markerUnits="userSpaceOnUse" orient="auto-start-reverse">
+    <path d="M-6,-7 L-6,7 M-11,-7 L-11,7" stroke="#1a1a1a" stroke-width="1.3" fill="none"/></marker>
+</defs>
+<rect width="1860" height="830" fill="#fff"/>
+<rect x="20" y="20" width="1820" height="790" fill="none" stroke="#999" stroke-width="1"/>
+<text class="title" x="44" y="58">채용공고 DB 구조 (ERD)</text>
+<rect x="40" y="90" width="590" height="470" fill="none" stroke="#888" stroke-width="1.1" stroke-dasharray="6 4"/><text class="zt" x="52" y="110">① 수집</text>
+<rect x="640" y="90" width="1190" height="440" fill="none" stroke="#888" stroke-width="1.1" stroke-dasharray="6 4"/><text class="zt" x="652" y="110">② 추출 결과</text>
+<rect x="940" y="560" width="890" height="230" fill="none" stroke="#888" stroke-width="1.1" stroke-dasharray="6 4"/><text class="zt" x="952" y="580">③ 표준화 사전</text>
+<path class="rel" d="M310,186.0 H335 V210.0 H360" marker-start="url(#one)" marker-end="url(#many)"/>
+<path class="rel" d="M360,330.0 H340 V370.0 H310" marker-start="url(#one)" marker-end="url(#many)"/>
+<path class="rel" d="M610,186.0 H622 V210.0 H660" marker-start="url(#one)" marker-end="url(#many)"/>
+<path class="rel" d="M910,186.0 H935 V210.0 H960" marker-start="url(#one)" marker-end="url(#many)"/>
+<path class="rel" d="M1210,186.0 H1235 V210.0 H1260" marker-start="url(#one)" marker-end="url(#many)"/>
+<path class="rel" d="M1510,186.0 H1525 V210.0 H1560" marker-start="url(#one)" marker-end="url(#many)"/>
+<path class="rel" d="M1685,294 V340" marker-start="url(#one)" marker-end="url(#many)"/>
+<path class="rel" d="M1685,610 V470" marker-start="url(#one)" marker-end="url(#many)"/>
+<path class="rel" d="M1085,610 V545 H1545 V234.0 H1560" marker-start="url(#one)" marker-end="url(#many)"/>
+<path class="rel" d="M1560,656.0 H1510" marker-start="url(#one)" marker-end="url(#many)"/>
+<path class="rel" d="M1210,656.0 H1235 V680.0 H1260" marker-start="url(#one)" marker-end="url(#many)"/>
+<rect x="60" y="140" width="250" height="82" fill="#fff" stroke="#1a1a1a" stroke-width="1.3"/>
+<rect x="60" y="140" width="250" height="34" fill="#efefef" stroke="#1a1a1a" stroke-width="1.3"/>
+<text class="tn" x="72" y="157.0">회사</text>
+<rect x="68" y="178.0" width="22" height="16" rx="3" fill="#1a1a1a" stroke="#1a1a1a" stroke-width="1"/>
+<text class="key" x="79.0" y="186.5" style="fill:#fff">PK</text>
+<text class="col" x="98" y="186.0" style="font-weight:700;">회사ID</text>
+<line x1="60" y1="198.0" x2="310" y2="198.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="98" y="210.0" style="">회사 이름</text>
+<text class="hint" x="300" y="210.0">예: (주)예시소프트</text>
+<rect x="360" y="140" width="250" height="394" fill="#fff" stroke="#1a1a1a" stroke-width="1.3"/>
+<rect x="360" y="140" width="250" height="34" fill="#efefef" stroke="#1a1a1a" stroke-width="1.3"/>
+<text class="tn" x="372" y="157.0">공고</text>
+<rect x="368" y="178.0" width="22" height="16" rx="3" fill="#1a1a1a" stroke="#1a1a1a" stroke-width="1"/>
+<text class="key" x="379.0" y="186.5" style="fill:#fff">PK</text>
+<text class="col" x="398" y="186.0" style="font-weight:700;">공고ID</text>
+<line x1="360" y1="198.0" x2="610" y2="198.0" stroke="#e3e3e3" stroke-width="1"/>
+<rect x="368" y="202.0" width="22" height="16" rx="3" fill="#fff" stroke="#1a1a1a" stroke-width="1"/>
+<text class="key" x="379.0" y="210.5" style="fill:#1a1a1a">FK</text>
+<text class="col" x="398" y="210.0" style="">회사ID</text>
+<line x1="360" y1="222.0" x2="610" y2="222.0" stroke="#e3e3e3" stroke-width="1"/>
+<rect x="368" y="226.0" width="22" height="16" rx="3" fill="#fff" stroke="#777" stroke-width="1"/>
+<text class="key" x="379.0" y="234.5" style="fill:#777">UK</text>
+<text class="col" x="398" y="234.0" style="">사이트</text>
+<text class="hint" x="600" y="234.0">사람인</text>
+<line x1="360" y1="246.0" x2="610" y2="246.0" stroke="#e3e3e3" stroke-width="1"/>
+<rect x="368" y="250.0" width="22" height="16" rx="3" fill="#fff" stroke="#777" stroke-width="1"/>
+<text class="key" x="379.0" y="258.5" style="fill:#777">UK</text>
+<text class="col" x="398" y="258.0" style="">사이트 공고번호</text>
+<text class="hint" x="600" y="258.0">예: 55249798</text>
+<line x1="360" y1="270.0" x2="610" y2="270.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="398" y="282.0" style="">제목</text>
+<line x1="360" y1="294.0" x2="610" y2="294.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="398" y="306.0" style="">사람인 직무 분류</text>
+<text class="hint" x="600" y="306.0">백엔드</text>
+<line x1="360" y1="318.0" x2="610" y2="318.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="398" y="330.0" style="">경력 조건</text>
+<text class="hint" x="600" y="330.0">신입 · 경력</text>
+<line x1="360" y1="342.0" x2="610" y2="342.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="398" y="354.0" style="">최소 요구 연수</text>
+<text class="hint" x="600" y="354.0">0~3만 수집</text>
+<line x1="360" y1="366.0" x2="610" y2="366.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="398" y="378.0" style="">고용 형태</text>
+<text class="hint" x="600" y="378.0">정규직</text>
+<line x1="360" y1="390.0" x2="610" y2="390.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="398" y="402.0" style="">공고 형태</text>
+<text class="hint" x="600" y="402.0">글/이미지/섞임</text>
+<line x1="360" y1="414.0" x2="610" y2="414.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="398" y="426.0" style="">상태</text>
+<text class="hint" x="600" y="426.0">진행/마감</text>
+<line x1="360" y1="438.0" x2="610" y2="438.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="398" y="450.0" style="">마감일</text>
+<line x1="360" y1="462.0" x2="610" y2="462.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="398" y="474.0" style="">원본 위치</text>
+<text class="hint" x="600" y="474.0">파일 경로</text>
+<line x1="360" y1="486.0" x2="610" y2="486.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="398" y="498.0" style="">원본 해시</text>
+<text class="hint" x="600" y="498.0">바뀜 확인용</text>
+<line x1="360" y1="510.0" x2="610" y2="510.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="398" y="522.0" style="">수집 시각</text>
+<rect x="60" y="300" width="250" height="202" fill="#fff" stroke="#1a1a1a" stroke-width="1.3"/>
+<rect x="60" y="300" width="250" height="34" fill="#efefef" stroke="#1a1a1a" stroke-width="1.3"/>
+<text class="tn" x="72" y="317.0">공고 이미지</text>
+<rect x="68" y="338.0" width="22" height="16" rx="3" fill="#1a1a1a" stroke="#1a1a1a" stroke-width="1"/>
+<text class="key" x="79.0" y="346.5" style="fill:#fff">PK</text>
+<text class="col" x="98" y="346.0" style="font-weight:700;">이미지ID</text>
+<line x1="60" y1="358.0" x2="310" y2="358.0" stroke="#e3e3e3" stroke-width="1"/>
+<rect x="68" y="362.0" width="22" height="16" rx="3" fill="#fff" stroke="#1a1a1a" stroke-width="1"/>
+<text class="key" x="79.0" y="370.5" style="fill:#1a1a1a">FK</text>
+<text class="col" x="98" y="370.0" style="">공고ID</text>
+<line x1="60" y1="382.0" x2="310" y2="382.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="98" y="394.0" style="">순서</text>
+<text class="hint" x="300" y="394.0">1, 2, 3…</text>
+<line x1="60" y1="406.0" x2="310" y2="406.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="98" y="418.0" style="">이미지 주소</text>
+<text class="hint" x="300" y="418.0">인터넷 주소</text>
+<line x1="60" y1="430.0" x2="310" y2="430.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="98" y="442.0" style="">파일 위치</text>
+<text class="hint" x="300" y="442.0">파일 경로</text>
+<line x1="60" y1="454.0" x2="310" y2="454.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="98" y="466.0" style="">남김 여부</text>
+<text class="hint" x="300" y="466.0">rule base 결과</text>
+<line x1="60" y1="478.0" x2="310" y2="478.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="98" y="490.0" style="">OCR 결과 위치</text>
+<text class="hint" x="300" y="490.0">글자 + 좌표</text>
+<rect x="660" y="140" width="250" height="370" fill="#fff" stroke="#1a1a1a" stroke-width="1.3"/>
+<rect x="660" y="140" width="250" height="34" fill="#efefef" stroke="#1a1a1a" stroke-width="1.3"/>
+<text class="tn" x="672" y="157.0">추출 실행</text>
+<rect x="668" y="178.0" width="22" height="16" rx="3" fill="#1a1a1a" stroke="#1a1a1a" stroke-width="1"/>
+<text class="key" x="679.0" y="186.5" style="fill:#fff">PK</text>
+<text class="col" x="698" y="186.0" style="font-weight:700;">실행ID</text>
+<line x1="660" y1="198.0" x2="910" y2="198.0" stroke="#e3e3e3" stroke-width="1"/>
+<rect x="668" y="202.0" width="22" height="16" rx="3" fill="#fff" stroke="#1a1a1a" stroke-width="1"/>
+<text class="key" x="679.0" y="210.5" style="fill:#1a1a1a">FK</text>
+<text class="col" x="698" y="210.0" style="">공고ID</text>
+<line x1="660" y1="222.0" x2="910" y2="222.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="698" y="234.0" style="">모델</text>
+<text class="hint" x="900" y="234.0">gpt-5.6-luna</text>
+<line x1="660" y1="246.0" x2="910" y2="246.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="698" y="258.0" style="">프롬프트 버전</text>
+<text class="hint" x="900" y="258.0">예: v3</text>
+<line x1="660" y1="270.0" x2="910" y2="270.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="698" y="282.0" style="">사전 버전</text>
+<text class="hint" x="900" y="282.0">예: 0.1.1</text>
+<line x1="660" y1="294.0" x2="910" y2="294.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="698" y="306.0" style="">입력 해시</text>
+<text class="hint" x="900" y="306.0">같은 입력 확인</text>
+<line x1="660" y1="318.0" x2="910" y2="318.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="698" y="330.0" style="">입력 토큰</text>
+<line x1="660" y1="342.0" x2="910" y2="342.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="698" y="354.0" style="">출력 토큰</text>
+<line x1="660" y1="366.0" x2="910" y2="366.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="698" y="378.0" style="">비용</text>
+<text class="hint" x="900" y="378.0">예: $0.004</text>
+<line x1="660" y1="390.0" x2="910" y2="390.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="698" y="402.0" style="">다시 부름</text>
+<text class="hint" x="900" y="402.0">참/거짓</text>
+<line x1="660" y1="414.0" x2="910" y2="414.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="698" y="426.0" style="">단위 확인 표시</text>
+<text class="hint" x="900" y="426.0">남은 문제</text>
+<line x1="660" y1="438.0" x2="910" y2="438.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="698" y="450.0" style="">원본 답</text>
+<text class="hint" x="900" y="450.0">LLM 답 그대로</text>
+<line x1="660" y1="462.0" x2="910" y2="462.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="698" y="474.0" style="">현재 사용</text>
+<text class="hint" x="900" y="474.0">참/거짓</text>
+<line x1="660" y1="486.0" x2="910" y2="486.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="698" y="498.0" style="">실행 시각</text>
+<rect x="960" y="140" width="250" height="226" fill="#fff" stroke="#1a1a1a" stroke-width="1.3"/>
+<rect x="960" y="140" width="250" height="34" fill="#efefef" stroke="#1a1a1a" stroke-width="1.3"/>
+<text class="tn" x="972" y="157.0">모집 단위</text>
+<rect x="968" y="178.0" width="22" height="16" rx="3" fill="#1a1a1a" stroke="#1a1a1a" stroke-width="1"/>
+<text class="key" x="979.0" y="186.5" style="fill:#fff">PK</text>
+<text class="col" x="998" y="186.0" style="font-weight:700;">단위ID</text>
+<line x1="960" y1="198.0" x2="1210" y2="198.0" stroke="#e3e3e3" stroke-width="1"/>
+<rect x="968" y="202.0" width="22" height="16" rx="3" fill="#fff" stroke="#1a1a1a" stroke-width="1"/>
+<text class="key" x="979.0" y="210.5" style="fill:#1a1a1a">FK</text>
+<text class="col" x="998" y="210.0" style="">실행ID</text>
+<line x1="960" y1="222.0" x2="1210" y2="222.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="998" y="234.0" style="">이름</text>
+<text class="hint" x="1200" y="234.0">서버 개발자 (경력)</text>
+<line x1="960" y1="246.0" x2="1210" y2="246.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="998" y="258.0" style="">IT 직무</text>
+<text class="hint" x="1200" y="258.0">참/거짓</text>
+<line x1="960" y1="270.0" x2="1210" y2="270.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="998" y="282.0" style="">경력 구분</text>
+<text class="hint" x="1200" y="282.0">신입/경력/신입·경력</text>
+<line x1="960" y1="294.0" x2="1210" y2="294.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="998" y="306.0" style="">연수</text>
+<text class="hint" x="1200" y="306.0">예: 3년 이상</text>
+<line x1="960" y1="318.0" x2="1210" y2="318.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="998" y="330.0" style="">최소 연수</text>
+<text class="hint" x="1200" y="330.0">예: 3</text>
+<line x1="960" y1="342.0" x2="1210" y2="342.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="998" y="354.0" style="">최대 연수</text>
+<text class="hint" x="1200" y="354.0">없으면 비움</text>
+<rect x="1260" y="140" width="250" height="178" fill="#fff" stroke="#1a1a1a" stroke-width="1.3"/>
+<rect x="1260" y="140" width="250" height="34" fill="#efefef" stroke="#1a1a1a" stroke-width="1.3"/>
+<text class="tn" x="1272" y="157.0">항목</text>
+<rect x="1268" y="178.0" width="22" height="16" rx="3" fill="#1a1a1a" stroke="#1a1a1a" stroke-width="1"/>
+<text class="key" x="1279.0" y="186.5" style="fill:#fff">PK</text>
+<text class="col" x="1298" y="186.0" style="font-weight:700;">항목ID</text>
+<line x1="1260" y1="198.0" x2="1510" y2="198.0" stroke="#e3e3e3" stroke-width="1"/>
+<rect x="1268" y="202.0" width="22" height="16" rx="3" fill="#fff" stroke="#1a1a1a" stroke-width="1"/>
+<text class="key" x="1279.0" y="210.5" style="fill:#1a1a1a">FK</text>
+<text class="col" x="1298" y="210.0" style="">단위ID</text>
+<line x1="1260" y1="222.0" x2="1510" y2="222.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="1298" y="234.0" style="">칸</text>
+<text class="hint" x="1500" y="234.0">필수/우대/업무/기타</text>
+<line x1="1260" y1="246.0" x2="1510" y2="246.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="1298" y="258.0" style="">순서</text>
+<line x1="1260" y1="270.0" x2="1510" y2="270.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="1298" y="282.0" style="">개조식 한 줄</text>
+<text class="hint" x="1500" y="282.0">MySQL 등 DB 경험</text>
+<line x1="1260" y1="294.0" x2="1510" y2="294.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="1298" y="306.0" style="">근거</text>
+<text class="hint" x="1500" y="306.0">공고 원문 그대로</text>
+<rect x="1560" y="140" width="250" height="154" fill="#fff" stroke="#1a1a1a" stroke-width="1.3"/>
+<rect x="1560" y="140" width="250" height="34" fill="#efefef" stroke="#1a1a1a" stroke-width="1.3"/>
+<text class="tn" x="1572" y="157.0">요건</text>
+<rect x="1568" y="178.0" width="22" height="16" rx="3" fill="#1a1a1a" stroke="#1a1a1a" stroke-width="1"/>
+<text class="key" x="1579.0" y="186.5" style="fill:#fff">PK</text>
+<text class="col" x="1598" y="186.0" style="font-weight:700;">요건ID</text>
+<line x1="1560" y1="198.0" x2="1810" y2="198.0" stroke="#e3e3e3" stroke-width="1"/>
+<rect x="1568" y="202.0" width="22" height="16" rx="3" fill="#fff" stroke="#1a1a1a" stroke-width="1"/>
+<text class="key" x="1579.0" y="210.5" style="fill:#1a1a1a">FK</text>
+<text class="col" x="1598" y="210.0" style="">항목ID</text>
+<line x1="1560" y1="222.0" x2="1810" y2="222.0" stroke="#e3e3e3" stroke-width="1"/>
+<rect x="1568" y="226.0" width="22" height="16" rx="3" fill="#fff" stroke="#1a1a1a" stroke-width="1"/>
+<text class="key" x="1579.0" y="234.5" style="fill:#1a1a1a">FK</text>
+<text class="col" x="1598" y="234.0" style="">능력ID</text>
+<line x1="1560" y1="246.0" x2="1810" y2="246.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="1598" y="258.0" style="">기타 이름</text>
+<text class="hint" x="1800" y="258.0">능력이 '기타'일 때</text>
+<line x1="1560" y1="270.0" x2="1810" y2="270.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="1598" y="282.0" style="">관계</text>
+<text class="hint" x="1800" y="282.0">예시/택1/모두/능력만</text>
+<rect x="1560" y="340" width="250" height="130" fill="#fff" stroke="#1a1a1a" stroke-width="1.3"/>
+<rect x="1560" y="340" width="250" height="34" fill="#efefef" stroke="#1a1a1a" stroke-width="1.3"/>
+<text class="tn" x="1572" y="357.0">요건 기술</text>
+<rect x="1568" y="378.0" width="22" height="16" rx="3" fill="#1a1a1a" stroke="#1a1a1a" stroke-width="1"/>
+<text class="key" x="1579.0" y="386.5" style="fill:#fff">PK</text>
+<text class="col" x="1598" y="386.0" style="font-weight:700;">요건기술ID</text>
+<line x1="1560" y1="398.0" x2="1810" y2="398.0" stroke="#e3e3e3" stroke-width="1"/>
+<rect x="1568" y="402.0" width="22" height="16" rx="3" fill="#fff" stroke="#1a1a1a" stroke-width="1"/>
+<text class="key" x="1579.0" y="410.5" style="fill:#1a1a1a">FK</text>
+<text class="col" x="1598" y="410.0" style="">요건ID</text>
+<line x1="1560" y1="422.0" x2="1810" y2="422.0" stroke="#e3e3e3" stroke-width="1"/>
+<rect x="1568" y="426.0" width="22" height="16" rx="3" fill="#fff" stroke="#1a1a1a" stroke-width="1"/>
+<text class="key" x="1579.0" y="434.5" style="fill:#1a1a1a">FK</text>
+<text class="col" x="1598" y="434.0" style="">기술ID</text>
+<text class="hint" x="1800" y="434.0">사전에 없으면 비움</text>
+<line x1="1560" y1="446.0" x2="1810" y2="446.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="1598" y="458.0" style="">적힌 이름</text>
+<text class="hint" x="1800" y="458.0">예: 스프링 부트</text>
+<rect x="960" y="610" width="250" height="154" fill="#fff" stroke="#1a1a1a" stroke-width="1.3"/>
+<rect x="960" y="610" width="250" height="34" fill="#efefef" stroke="#1a1a1a" stroke-width="1.3"/>
+<text class="tn" x="972" y="627.0">능력</text>
+<rect x="968" y="648.0" width="22" height="16" rx="3" fill="#1a1a1a" stroke="#1a1a1a" stroke-width="1"/>
+<text class="key" x="979.0" y="656.5" style="fill:#fff">PK</text>
+<text class="col" x="998" y="656.0" style="font-weight:700;">능력ID</text>
+<line x1="960" y1="668.0" x2="1210" y2="668.0" stroke="#e3e3e3" stroke-width="1"/>
+<rect x="968" y="672.0" width="22" height="16" rx="3" fill="#fff" stroke="#777" stroke-width="1"/>
+<text class="key" x="979.0" y="680.5" style="fill:#777">UK</text>
+<text class="col" x="998" y="680.0" style="">이름</text>
+<text class="hint" x="1200" y="680.0">관계형 DB</text>
+<line x1="960" y1="692.0" x2="1210" y2="692.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="998" y="704.0" style="">묶음</text>
+<text class="hint" x="1200" y="704.0">데이터</text>
+<line x1="960" y1="716.0" x2="1210" y2="716.0" stroke="#e3e3e3" stroke-width="1"/>
+<rect x="968" y="720.0" width="22" height="16" rx="3" fill="#fff" stroke="#1a1a1a" stroke-width="1"/>
+<text class="key" x="979.0" y="728.5" style="fill:#1a1a1a">FK</text>
+<text class="col" x="998" y="728.0" style="">상위 능력ID</text>
+<text class="hint" x="1200" y="728.0">→ 데이터베이스</text>
+<line x1="960" y1="740.0" x2="1210" y2="740.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="998" y="752.0" style="">별칭 목록</text>
+<text class="hint" x="1200" y="752.0">RDBMS, RDB</text>
+<rect x="1260" y="610" width="250" height="82" fill="#fff" stroke="#1a1a1a" stroke-width="1.3"/>
+<rect x="1260" y="610" width="250" height="34" fill="#efefef" stroke="#1a1a1a" stroke-width="1.3"/>
+<text class="tn" x="1272" y="627.0">기술-능력</text>
+<rect x="1268" y="648.0" width="38" height="16" rx="3" fill="#1a1a1a" stroke="#1a1a1a" stroke-width="1"/>
+<text class="key" x="1287.0" y="656.5" style="fill:#fff">PK·FK</text>
+<text class="col" x="1312" y="656.0" style="font-weight:700;">기술ID</text>
+<text class="hint" x="1500" y="656.0">MySQL</text>
+<line x1="1260" y1="668.0" x2="1510" y2="668.0" stroke="#e3e3e3" stroke-width="1"/>
+<rect x="1268" y="672.0" width="38" height="16" rx="3" fill="#1a1a1a" stroke="#1a1a1a" stroke-width="1"/>
+<text class="key" x="1287.0" y="680.5" style="fill:#fff">PK·FK</text>
+<text class="col" x="1312" y="680.0" style="font-weight:700;">능력ID</text>
+<text class="hint" x="1500" y="680.0">관계형 DB</text>
+<rect x="1560" y="610" width="250" height="130" fill="#fff" stroke="#1a1a1a" stroke-width="1.3"/>
+<rect x="1560" y="610" width="250" height="34" fill="#efefef" stroke="#1a1a1a" stroke-width="1.3"/>
+<text class="tn" x="1572" y="627.0">기술</text>
+<rect x="1568" y="648.0" width="22" height="16" rx="3" fill="#1a1a1a" stroke="#1a1a1a" stroke-width="1"/>
+<text class="key" x="1579.0" y="656.5" style="fill:#fff">PK</text>
+<text class="col" x="1598" y="656.0" style="font-weight:700;">기술ID</text>
+<line x1="1560" y1="668.0" x2="1810" y2="668.0" stroke="#e3e3e3" stroke-width="1"/>
+<rect x="1568" y="672.0" width="22" height="16" rx="3" fill="#fff" stroke="#777" stroke-width="1"/>
+<text class="key" x="1579.0" y="680.5" style="fill:#777">UK</text>
+<text class="col" x="1598" y="680.0" style="">이름</text>
+<text class="hint" x="1800" y="680.0">Spring Boot</text>
+<line x1="1560" y1="692.0" x2="1810" y2="692.0" stroke="#e3e3e3" stroke-width="1"/>
+<rect x="1568" y="696.0" width="22" height="16" rx="3" fill="#fff" stroke="#1a1a1a" stroke-width="1"/>
+<text class="key" x="1579.0" y="704.5" style="fill:#1a1a1a">FK</text>
+<text class="col" x="1598" y="704.0" style="">상위 기술ID</text>
+<text class="hint" x="1800" y="704.0">EC2 → AWS</text>
+<line x1="1560" y1="716.0" x2="1810" y2="716.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="1598" y="728.0" style="">별칭 목록</text>
+<text class="hint" x="1800" y="728.0">스프링 부트</text>
+
+<rect x="60" y="600" width="550" height="180" fill="#fff" stroke="#bbb" stroke-width="1"/>
+<text class="zt" x="76" y="622">읽는 법</text>
+<rect x="78" y="642" width="22" height="16" rx="3" fill="#1a1a1a"/><text class="key" x="89" y="650.5" style="fill:#fff">PK</text>
+<text class="lg" x="112" y="650">표마다 줄을 하나씩 구분하는 번호</text>
+<rect x="78" y="670" width="22" height="16" rx="3" fill="#fff" stroke="#1a1a1a"/><text class="key" x="89" y="678.5">FK</text>
+<text class="lg" x="112" y="678">다른 표의 줄을 가리키는 번호 (선으로 이어짐)</text>
+<rect x="78" y="698" width="22" height="16" rx="3" fill="#fff" stroke="#777"/><text class="key" x="89" y="706.5" style="fill:#777">UK</text>
+<text class="lg" x="112" y="706">겹치면 안 됨 (같은 공고를 두 번 넣지 않음)</text>
+<path class="rel" d="M80,740 H150" marker-start="url(#one)" marker-end="url(#many)"/>
+<text class="lg" x="164" y="740">왼쪽 하나 ↔ 오른쪽 여러 개 (예: 공고 하나에 이미지 여러 장)</text>
+<text class="lg" x="78" y="766" style="fill:#777">회색 글씨는 들어갈 값의 예시</text>
+
+</svg>

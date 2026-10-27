@@ -1,0 +1,18 @@
+# 받은 이미지와 공고 본문(및 그것을 옮긴 글자·추출 결과)은 외부에 다시 게시하지 않는다.
+images/
+pages/
+out/
+tiles/
+sample*/
+targets.tsv
+sampling_log.tsv
+truth.tsv
+truth_review.md
+
+# 로컬 전용(모델·기록·환경)
+models/
+*.log
+__pycache__/
+.env
+.venv/
+venv*/
