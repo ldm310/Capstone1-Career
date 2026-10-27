@@ -57,7 +57,8 @@
 - PaddleOCR은 별도 가상환경에 설치한다(`requirements-paddle.txt`, GPU는 [OCR 비교 실험](docs/ocr-comparison.md#측정-환경) 참고).
 - 환경변수 `OPENAI_API_KEY`를 설정한다(LLM).
 - DB는 Docker로 띄운다: `.env.example`을 `.env`로 복사해 비밀번호를 정하고 `docker compose up -d`.
-  PostgreSQL 17이 `localhost:5433`에 뜬다(내 컴퓨터에서만 접속). `db_load.py`는 `.env`의 `DATABASE_URL`을 읽는다.
+  PostgreSQL 17이 `localhost:5433`에 뜬다(컨테이너 `career-db`, DB·계정 `career`, 내 컴퓨터에서만 접속). `db_load.py`는 `.env`의 `DATABASE_URL`을 읽는다.
+  사람마다 자기 컴퓨터에 따로 뜨는 DB라 데이터는 공유되지 않는다. 샘플은 아래 `db_load.py`로 넣는다.
 
 ```powershell
 py -3.12 sample_random.py --out sample3 --per-role 10      # 1. 수집
