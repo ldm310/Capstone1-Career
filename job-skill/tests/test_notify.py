@@ -63,3 +63,22 @@ def test_on_failure_sends_task_failure(monkeypatch):
     ti = SimpleNamespace(dag_id="daily_collect", task_id="load_db", try_number=3)
     notify.on_failure({"ti": ti, "exception": ValueError("DB 접속 실패")})
     assert sent == ["❌ daily_collect · load_db 실패 (3번째 시도) · ValueError: DB 접속 실패"]
+
+
+def test_msg_skipped_lists_postings_with_links():
+    """넘어간 공고는 공고번호·원인·사람인 링크를 한 줄씩(10건까지, 나머지는 '외 N건'). 제목·내용은 넣지 않는다."""
+    import notify
+    items = [(str(55000000 + i), "응답 잘림·형식 오류") for i in range(12)]
+    msg = notify.msg_skipped("매일 수집", "LLM 추출 실패", items, "결과 없이 저장하고 넘어감")
+    lines = msg.splitlines()
+    assert lines[0] == "⚠️ 매일 수집: LLM 추출 실패 12건 — 결과 없이 저장하고 넘어감"
+    assert lines[1] == "• 55000000 응답 잘림·형식 오류 https://www.saramin.co.kr/zf_user/jobs/relay/view?view_type=list&rec_idx=55000000"
+    assert len(lines) == 12 and lines[-1] == "…외 2건(태스크 로그)"
+
+
+def test_msg_failure_lists_failed_postings():
+    import notify
+    exc = notify.PostingsFailed("DB 저장 실패", [("D", "ValueError"), ("E", "OperationalError 3번")])
+    msg = notify.msg_failure("daily_collect", "load_db", 3, exc)
+    assert msg.splitlines()[0] == "❌ daily_collect · load_db 실패 (3번째 시도) · DB 저장 실패 2건"
+    assert "• D ValueError https://www.saramin.co.kr/zf_user/jobs/relay/view?view_type=list&rec_idx=D" in msg

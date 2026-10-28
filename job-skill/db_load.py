@@ -321,8 +321,8 @@ def save_posting(conn, t: dict, path: str, imgs: dict, kept: dict, inputs: dict,
     return c
 
 
-def load(run: str) -> tuple[dict[str, int], list[str]]:
-    """targets.tsv 의 공고·이미지와 out/extract/<run>/ 의 추출 결과를 넣는다. (넣은 수, 저장 실패한 공고번호).
+def load(run: str) -> tuple[dict[str, int], list[str], dict[str, str]]:
+    """targets.tsv 의 공고·이미지와 out/extract/<run>/ 의 추출 결과를 넣는다. (넣은 수, 저장 실패한 공고번호, {번호: 원인}).
     추출 결과 폴더가 없어도(비용 상한·실패) 공고·이미지는 넣는다 — 다음 ① 때 '밀린 공고'로 다시 추출된다.
     공고마다 따로 저장한다. 연결 끊김·교착 같은 일시 오류는 그 공고를 SAVE_TRIES 번까지 다시 하고(끊긴 연결은 다시 연결),
     다시 해도 같은 오류(데이터·사전 문제)는 그 공고만 건너뛰고 나머지를 계속 넣는다."""
@@ -334,8 +334,9 @@ def load(run: str) -> tuple[dict[str, int], list[str]]:
     total = {"공고": 0, "이미지": 0, "추출 실행(새로)": 0, "추출 실행(이미 있음)": 0, "자리": 0, "한 줄": 0, "요건": 0, "요건 기술": 0,
              "저장 실패": 0}
     failed: list[str] = []
+    why: dict[str, str] = {}
     if not targets:
-        return total, failed
+        return total, failed, why
     conn = connect()
     try:
         cap_id = dict(conn.execute("SELECT name, id FROM capability").fetchall())
@@ -354,6 +355,7 @@ def load(run: str) -> tuple[dict[str, int], list[str]]:
                     print(f"  {rid}: 저장 실패({attempt}/{SAVE_TRIES}) {type(e).__name__}: {str(e)[:200]}", flush=True)
                     if attempt == SAVE_TRIES:
                         failed.append(rid)
+                        why[rid] = f"{type(e).__name__}({SAVE_TRIES}번 다시 해도)"
                         break
                     if conn.closed or conn.broken:
                         conn = connect()
@@ -362,6 +364,7 @@ def load(run: str) -> tuple[dict[str, int], list[str]]:
                 except Exception as e:  # 데이터·사전 문제 — 다시 해도 같으니 그 공고만 건너뛴다
                     print(f"  {rid}: 저장 실패(다시 해도 같은 오류) {type(e).__name__}: {str(e)[:200]}", flush=True)
                     failed.append(rid)
+                    why[rid] = type(e).__name__
                     break
                 for k, v in c.items():
                     total[k] += v
@@ -369,16 +372,16 @@ def load(run: str) -> tuple[dict[str, int], list[str]]:
     finally:
         conn.close()
     total["저장 실패"] = len(failed)
-    return total, failed
+    return total, failed, why
 
 
 def cmd_load(run: str) -> None:
     """저장하고 결과를 <데이터>/out/load_result.json 에 쓴다(Airflow 태스크가 읽음). 저장 실패가 남으면 종료 코드 1."""
-    total, failed = load(run)
+    total, failed, why = load(run)
     print(" · ".join(f"{k} {v}" for k, v in total.items()))
     os.makedirs(OUT_DIR, exist_ok=True)
     with open(os.path.join(OUT_DIR, "load_result.json"), "w", encoding="utf-8") as f:
-        json.dump({"total": total, "failed": failed}, f, ensure_ascii=False)
+        json.dump({"total": total, "failed": failed, "why": why}, f, ensure_ascii=False)
     if failed:
         print(f"저장 실패 {len(failed)}건: {', '.join(failed)}", flush=True)
         sys.exit(1)

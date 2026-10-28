@@ -512,6 +512,15 @@ def call_llm(client, model: str, effort: str, inp: dict, examples: bool, extra: 
     return guard(copy.deepcopy(raw), inp["text"]), raw, resp.usage.input_tokens, resp.usage.output_tokens, sec, resp.status
 
 
+def fail_reason(e: BaseException) -> str:
+    """공고 하나의 LLM 추출 실패 원인 이름(Slack 알림용 — 공고 내용은 넣지 않음).
+    연결 끊김·사용 한도·서버 오류는 OpenAI 클라이언트가 먼저 4번까지 다시 해 본 뒤에 여기로 온다."""
+    if isinstance(e, json.JSONDecodeError):
+        return "응답 잘림·형식 오류"
+    return {"BadRequestError": "잘못된 요청", "RateLimitError": "사용 한도", "APIConnectionError": "연결 오류",
+            "APITimeoutError": "시간 초과", "InternalServerError": "OpenAI 서버 오류"}.get(type(e).__name__, type(e).__name__)
+
+
 def run_model(client, model: str, effort: str, inputs: dict[str, dict], examples: bool = False, tag: str = "",
               max_usd: float | None = None) -> dict:
     """examples=True 면 지시문에 예시 답안을 붙인다. 결과 폴더는 out/extract/<model><tag>/ (같은 모델의 다른 설정을 나눠 저장).
@@ -521,7 +530,7 @@ def run_model(client, model: str, effort: str, inputs: dict[str, dict], examples
     os.makedirs(d, exist_ok=True)
     pin, pout = PRICES.get(model, (0, 0))
     stats = {"model": model, "effort": effort, "in": 0, "out": 0, "sec": 0.0, "usd": 0.0,
-             "stopped": False, "spent_new": 0.0, "left": 0, "failed": [], "done_new": 0}
+             "stopped": False, "spent_new": 0.0, "left": 0, "failed": [], "fail_reasons": {}, "fail_detail": {}, "done_new": 0}
     todo = list(inputs.items())
     for i, (rid, inp) in enumerate(todo):
         path = os.path.join(d, f"{rid}.json")
@@ -557,6 +566,9 @@ def run_model(client, model: str, effort: str, inputs: dict[str, dict], examples
                      "status": status, "checks": checks, "review_reasons": reason(final), "llm_output_raw": raw, **parsed}
             except Exception as e:  # 공고 하나의 실패(응답 잘림·거절·잘못된 요청)가 실행 전체를 막지 않게 — 결과 없이 넘어간다
                 stats["failed"].append(rid)
+                why = fail_reason(e)
+                stats["fail_reasons"][why] = stats["fail_reasons"].get(why, 0) + 1
+                stats["fail_detail"][rid] = why
                 print(f"  [{model}] {rid}  추출 실패: {type(e).__name__}: {str(e)[:200]}", flush=True)
                 continue
             json.dump(r, open(path, "w", encoding="utf-8"), ensure_ascii=False, indent=1)

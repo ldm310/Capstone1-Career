@@ -91,7 +91,7 @@ def step_collect(run_dir: str, include_pending: bool, max_new: int | None = None
     return out
 
 
-def step_detect(run_dir: str) -> dict:
+def step_detect(run_dir: str, dag_label: str = "매일 수집") -> dict:
     """변경 감지(①): 고른 공고만 확인 — 목록에서 사라진 공고는 전체 페이지의 마감 표시, 수정된 공고는 본문 지문.
     바뀐 공고는 targets.tsv 뒤에 붙고(다시 추출), 결과는 changes.json. check.json 이 없으면(③) 아무것도 안 한다.
     그대로인 공고만 확인 시각을 지금으로 바꾼다. 바뀐 공고는 다시 추출해 DB 저장에 성공할 때 바뀐다(실패하면 다음 날 다시)."""
@@ -103,6 +103,9 @@ def step_detect(run_dir: str) -> dict:
     res = recheck.detect_changes(d, rows)
     with connect() as conn:
         db_queries.touch_checked(conn, res["unchanged"])
+    if res["error"]:
+        notify.send(notify.msg_skipped(dag_label, "확인 못 한 공고", [(no, res.get("why", {}).get(no, "오류")) for no in res["error"]],
+                                       "마감으로 치지 않고 다음 날 다시 확인"))
     return {"확인": len(rows), "바뀜": len(res["changed"]), "그대로": len(res["unchanged"]), "오류": len(res["error"])}
 
 
@@ -116,12 +119,26 @@ def step_close(run_dir: str) -> int:
         return db_queries.mark_closed(conn, res["closed"])
 
 
-def step_fetch_raw(run_dir: str) -> dict:
-    """공고 원본 수집(본문·이미지) → 글/이미지 종류 채우기. targets 가 비면 아무것도 안 함."""
-    if not _targets(run_dir):
+def step_fetch_raw(run_dir: str, dag_label: str = "수집") -> dict:
+    """공고 원본 수집(본문·이미지) → 글/이미지 종류 채우기. targets 가 비면 아무것도 안 함.
+    본문을 못 받아 빠진 공고는 공고번호·원인·링크를 Slack 으로 알린다(DB 에 안 들어가 다음 실행 때 다시 시도)."""
+    before = [r["rec_idx"] for r in _targets(run_dir)]
+    if not before:
         return {}
     run_script("fetch_images.py", [], run_dir)
-    return collect.classify_targets(_abs(run_dir))
+    counts = collect.classify_targets(_abs(run_dir))
+    kept = {r["rec_idx"] for r in _targets(run_dir)}
+    dropped = [no for no in before if no not in kept]
+    if dropped:
+        why = {}
+        skipped = os.path.join(_abs(run_dir), "images", "skipped.tsv")
+        if os.path.exists(skipped):
+            import csv
+            with open(skipped, encoding="utf-8") as f:
+                why = {r["rec_idx"]: r["reason"] for r in csv.DictReader(f, delimiter="\t") if r["reason"] != "본문 이미지 없음"}
+        notify.send(notify.msg_skipped(dag_label, "본문을 못 받은 공고", [(no, why.get(no, "본문 없음")) for no in dropped],
+                                       "건너뜀 — 다음 실행 때 다시 시도"))
+    return counts
 
 
 def step_ocr(run_dir: str) -> None:
@@ -171,16 +188,26 @@ def step_extract(run_dir: str, budget_usd: float, dag_label: str, limit: float |
     if budget_usd <= 0:
         notify.send(notify.msg_budget(dag_label, limit - budget_usd, limit, len(targets)))
         return {"stopped": True, "left": len(targets)}
-    budget_path = os.path.join(_abs(run_dir), "out", "extract", "_budget.json")
-    if os.path.exists(budget_path):  # 지난 시도의 기록 — 이번 실행에서 다시 알리지 않게 지운다
-        os.remove(budget_path)
+    ex = os.path.join(_abs(run_dir), "out", "extract")
+    budget_path, stats_path = os.path.join(ex, "_budget.json"), os.path.join(ex, "_stats.json")
+    for path in (budget_path, stats_path):  # 지난 시도의 기록 — 이번 실행에서 다시 알리지 않게 지운다
+        if os.path.exists(path):
+            os.remove(path)
     run_script("extract_skills.py", ["--models", MODEL, "--effort", "low", "--examples", f"--tag={TAG}",
                                      "--max-usd", f"{budget_usd}"], run_dir)
+    items = []
+    if os.path.exists(stats_path):  # 공고 하나하나의 추출 실패: 태스크는 계속하고 공고번호·원인·링크를 알린다
+        for st in json.load(open(stats_path, encoding="utf-8")):
+            detail = st.get("fail_detail", {})
+            items += [(no, detail.get(no, "추출 실패")) for no in st.get("failed", [])]
+    failed = len(items)
+    if items:
+        notify.send(notify.msg_skipped(dag_label, "LLM 추출 실패", items, "결과 없이 저장하고 넘어감(새 공고는 다음 날 밀린 공고로 다시)"))
     if not os.path.exists(budget_path):
-        return {"stopped": False}
+        return {"stopped": False, "failed": failed}
     b = json.load(open(budget_path, encoding="utf-8"))
     notify.send(notify.msg_budget(dag_label, (limit - budget_usd) + b["spent"], limit, b["left"]))
-    return {"stopped": True, "left": b["left"]}
+    return {"stopped": True, "left": b["left"], "failed": failed}
 
 
 def step_load(run_dir: str) -> dict:
@@ -194,9 +221,10 @@ def step_load(run_dir: str) -> dict:
         try:
             run_script("db_load.py", ["load", "--run", RUN_NAME], run_dir)
         except subprocess.CalledProcessError as e:
-            failed = json.load(open(result, encoding="utf-8"))["failed"] if os.path.exists(result) else []
-            if failed:  # Airflow 가 태스크를 다시 하고, 그래도 안 되면 이 문장이 Slack 실패 알림에 실린다(숫자만)
-                raise RuntimeError(f"DB 저장 실패 {len(failed)}건 — 공고마다 여러 번 다시 해도 실패(공고번호는 태스크 로그)") from e
+            res = json.load(open(result, encoding="utf-8")) if os.path.exists(result) else {}
+            if res.get("failed"):  # Airflow 가 태스크를 다시 하고, 그래도 안 되면 Slack 실패 알림에 공고번호·원인·링크가 실린다
+                why = res.get("why", {})
+                raise notify.PostingsFailed("DB 저장 실패", [(no, why.get(no, "저장 실패")) for no in res["failed"]]) from e
             raise
         if os.path.exists(result):
             total = json.load(open(result, encoding="utf-8"))["total"]

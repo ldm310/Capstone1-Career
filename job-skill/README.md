@@ -50,7 +50,7 @@
 | `collect.py` | Airflow 수집: 두 직무 목록을 경력 필터를 켜고 끝까지 보기, 새 공고 고르기(목록 − 아는 번호, 마감일, 버린 공고) |
 | `recheck.py` | ① 안의 수정·마감 확인: 다시 볼 공고 고르기('수정'·사라진 공고), 본문 지문 비교, 전체 페이지의 '접수마감' 확인 |
 | `db_queries.py` | 파이프라인이 다음 할 일을 정하려고 DB에서 읽고 쓰는 함수(진행 공고, 밀린 공고, 하루 비용 등) |
-| `notify.py` | Slack 알림(실패, 비용 상한, 결과, 하루 비용). 숫자·상태만 보낸다. |
+| `notify.py` | Slack 알림(실패, 비용 상한, 결과, 하루 비용, 넘어간 공고). 숫자·상태와 넘어간 공고의 번호·링크만 보낸다(제목·내용 X). |
 | `pipeline_tasks.py` | Airflow 태스크 함수. 실행마다 `data/runs/<dag>/<run>/` 폴더를 만들고 위 스크립트를 돌린다. |
 | `airflow/`, `docker-compose.airflow.yml` | Airflow 3.3.2 Docker 묶음과 DAG 3개(`airflow/dags/job_skill_dags.py`). 아래 [Airflow로 돌리기](#airflow로-돌리기) |
 | `db/migrations/` | 이미 표가 있는 DB에 적용할 변경(새로 만들 때는 `db/schema.sql`에 이미 들어 있음) |
@@ -132,7 +132,7 @@ py -3.12 db_load.py load --run gpt-5.6-luna-ex            #    공고·추출 �
 - ③이 끝나기 전에 ①을 켜서 겹쳐 돌아도 자리 1개짜리 풀 3개(`saramin`·`gpu`·`llm`, airflow-init이 만듦)가 사람인 요청·GPU OCR·LLM 추출을 한 번에 하나씩만 돌린다.
 - 실행마다 받은 본문·이미지·OCR·추출 결과는 `data/runs/<dag_id>/<run_id>/`에 남는다(저장소에 올리지 않음). 하루 상한은 이 폴더의 ① 결과 파일로 센다.
 - 어떤 태스크든 두 번 다시 시도해도 실패하면 Slack으로 알린다. 고친 뒤 관리 화면에서 그 태스크부터 다시 실행하면 된다.
-- DB 저장은 공고마다 따로 커밋한다. 연결 끊김·교착 같은 일시 오류는 그 공고를 3번까지 다시 하고, 다시 해도 같은 오류인 공고는 건너뛰고 나머지를 저장한다. 실패가 남으면 "DB 저장 실패 N건"으로 태스크가 실패해 Airflow가 다시 하고, 그래도 안 되면 Slack으로 알린다(공고번호는 태스크 로그에만).
+- DB 저장은 공고마다 따로 커밋한다. 연결 끊김·교착 같은 일시 오류는 그 공고를 3번까지 다시 하고, 다시 해도 같은 오류인 공고는 건너뛰고 나머지를 저장한다. 실패가 남으면 "DB 저장 실패 N건"으로 태스크가 실패해 Airflow가 다시 하고, 그래도 안 되면 Slack으로 알린다(실패 알림에 공고번호·원인·사람인 링크가 실린다).
 - 끄기: `docker compose -f docker-compose.airflow.yml down` (실행 기록은 볼륨 `career-airflow-pgdata`에 남는다).
 
 **시험**

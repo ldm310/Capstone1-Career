@@ -51,27 +51,32 @@ def select_recheck(listed: dict[str, dict], rows: list[dict], today: dt.date) ->
     return check, {"진행": len(rows), "수정": modified, "목록에 없음": gone}
 
 
-def _closed_by_view(no: str, get) -> bool | None:
-    """공고 전체 페이지로 마감인지. True 마감 / False 진행 중 / None 모름(막힘·장애)."""
+def _status_text(status) -> str:
+    return "연결 실패" if status is None else f"HTTP {status}"
+
+
+def _closed_by_view(no: str, get) -> tuple[bool | None, str]:
+    """공고 전체 페이지로 마감인지. (True 마감 / False 진행 중 / None 모름(막힘·장애), 모를 때 원인)."""
     status, _, body = get(VIEW.format(id=no))
     if status in (404, 410):
-        return True
+        return True, ""
     if status != 200:
-        return None
+        return None, _status_text(status) + "(전체 페이지)"
     page = body.decode("utf-8", "replace")
-    return any(m in page for m in CLOSED_MARKS)
+    return any(m in page for m in CLOSED_MARKS), ""
 
 
 def detect_changes(run_dir: str, rows: list[dict], get=fetch_images.get) -> dict[str, list[str]]:
-    res = {"changed": [], "closed": [], "unchanged": [], "error": []}
+    res = {"changed": [], "closed": [], "unchanged": [], "error": [], "why": {}}
     changed_rows = []
     pages = os.path.join(run_dir, "pages")
     for r in rows:
         no = r["rec_idx"]
         if r.get("reason") == "목록에 없음":
-            closed = _closed_by_view(no, get)
+            closed, why = _closed_by_view(no, get)
             if closed is None:
                 res["error"].append(no)
+                res["why"][no] = why
                 continue
             if closed:
                 res["closed"].append(no)
@@ -82,6 +87,7 @@ def detect_changes(run_dir: str, rows: list[dict], get=fetch_images.get) -> dict
             continue
         if status != 200:  # 연결 실패·5xx·403·429 등: 일시 장애나 막힘일 수 있어 마감(되돌릴 수 없음)으로 치지 않는다
             res["error"].append(no)
+            res["why"][no] = _status_text(status)
             continue
         page = body.decode("utf-8", "replace")
         if "user_content" not in page:

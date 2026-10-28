@@ -39,7 +39,7 @@ def test_detect_changes_splits_three_ways(tmp_path):
     rows = [row("A", db_load.content_hash(base, "A")), row("B", db_load.content_hash(base, "B")), row("C", "c" * 64)]
     get = FakeGet({"A": ok(base), "B": ok(page("지어낸 자격요건: Java·Kotlin 개발 경험")), "C": (404, "", b"")})
     res = recheck.detect_changes(str(tmp_path), rows, get=get)
-    assert res == {"changed": ["B"], "closed": ["C"], "unchanged": ["A"], "error": []}
+    assert res == {"changed": ["B"], "closed": ["C"], "unchanged": ["A"], "error": [], "why": {}}
     assert (tmp_path / "pages" / "B.html").exists() and not (tmp_path / "pages" / "A.html").exists()
     assert [r["rec_idx"] for r in collect.read_targets(str(tmp_path))] == ["B"]
     assert json.loads((tmp_path / "changes.json").read_text(encoding="utf-8")) == res
@@ -64,6 +64,7 @@ def test_connection_error_is_not_closed(tmp_path):
     rows = [row("A", "a" * 64), row("B", "b" * 64)]
     res = recheck.detect_changes(str(tmp_path), rows, get=FakeGet({"A": (None, "", b""), "B": (503, "", b"")}))
     assert res["error"] == ["A", "B"] and res["closed"] == []
+    assert res["why"] == {"A": "연결 실패", "B": "HTTP 503"}
 
 
 # ── 목록 기반 고르기: 마지막 확인 뒤 '수정'된 공고 + 목록에서 사라진 공고만 본문을 받는다 ──
@@ -148,7 +149,7 @@ def test_gone_posting_is_closed_by_full_page_marker(tmp_path):
     get = SplitGet(view={"A": ok(VIEW_CLOSED), "B": ok(VIEW_OPEN), "C": (404, "", b""), "D": (429, "", b"")},
                    body={"A": ok(base), "B": ok(base), "E": ok(page("지어낸 자격요건: Go 개발 경험"))})
     res = recheck.detect_changes(str(tmp_path), rows, get=get)
-    assert res == {"changed": ["E"], "closed": ["A", "C"], "unchanged": ["B"], "error": ["D"]}
+    assert res == {"changed": ["E"], "closed": ["A", "C"], "unchanged": ["B"], "error": ["D"], "why": {"D": "HTTP 429(전체 페이지)"}}
     viewed = sorted(u.split("rec_idx=")[1] for u in get.urls if "/jobs/view?" in u)
     assert viewed == ["A", "B", "C", "D"]                      # 수정된 공고(E)는 목록에 있어 마감 확인을 하지 않음
 

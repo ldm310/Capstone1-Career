@@ -111,3 +111,22 @@ def test_all_postings_failing_raises(ex):
     """전부 실패하면(키 오류·연결 끊김 등) 태스크를 실패시켜 Slack 으로 알린다."""
     with pytest.raises(RuntimeError):
         ex.run_model(FlakyClient(bad={1, 2, 3}), MODEL, "low", inputs(3), examples=True, tag=TAG)
+
+
+class BrokenJsonClient(FakeClient):
+    """두 번째 호출의 답이 잘려 JSON 이 아님(응답 길이 상한에 걸린 경우 흉내)."""
+
+    def _create(self, **kw):
+        r = super()._create(**kw)
+        if self.calls == 2:
+            r.output_text = '{"positions": [{"name": "서버 개발'
+        return r
+
+
+def test_failure_reasons_are_counted(ex):
+    """실패한 공고 수와 원인을 센다(Slack 알림용 — 공고 내용·번호는 넣지 않음)."""
+    stats = ex.run_model(BrokenJsonClient(), MODEL, "low", inputs(3), examples=True, tag=TAG)
+    assert stats["failed"] == ["T2"] and stats["fail_reasons"] == {"응답 잘림·형식 오류": 1}
+    assert stats["fail_detail"] == {"T2": "응답 잘림·형식 오류"}
+    stats = ex.run_model(FlakyClient(bad={1}), MODEL, "low", inputs(2), examples=True, tag=TAG + "2")
+    assert stats["fail_reasons"] == {"RuntimeError": 1}

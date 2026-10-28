@@ -54,22 +54,22 @@ def saved(db):
 
 def test_transient_error_is_retried(run, monkeypatch, db):
     tries = flaky_upsert(run, monkeypatch, lambda no, k: psycopg.OperationalError("지어낸 연결 끊김") if no == "D" and k == 1 else None)
-    total, failed = run.load("gpt-5.6-luna-ex")
-    assert failed == [] and tries["D"] == 2 and total["공고"] == 2      # 두 번째 시도에 저장, 공고 수는 한 번만 셈
+    total, failed, why = run.load("gpt-5.6-luna-ex")
+    assert failed == [] and why == {} and tries["D"] == 2 and total["공고"] == 2      # 두 번째 시도에 저장, 공고 수는 한 번만 셈
     assert saved(db) == ["D", "E"]
 
 
 def test_gives_up_after_three_transient_errors(run, monkeypatch, db):
     tries = flaky_upsert(run, monkeypatch, lambda no, k: psycopg.OperationalError("지어낸 연결 끊김") if no == "D" else None)
-    total, failed = run.load("gpt-5.6-luna-ex")
-    assert failed == ["D"] and tries["D"] == 3 and total["저장 실패"] == 1
+    total, failed, why = run.load("gpt-5.6-luna-ex")
+    assert failed == ["D"] and why == {"D": "OperationalError(3번 다시 해도)"} and tries["D"] == 3 and total["저장 실패"] == 1
     assert saved(db) == ["E"]                                           # 뒤 공고는 그대로 저장
 
 
 def test_permanent_error_skips_only_that_posting(run, monkeypatch, db):
     tries = flaky_upsert(run, monkeypatch, lambda no, k: ValueError("지어낸 데이터 오류") if no == "D" else None)
-    total, failed = run.load("gpt-5.6-luna-ex")
-    assert failed == ["D"] and tries["D"] == 1                          # 다시 해도 같은 오류라 다시 하지 않음
+    total, failed, why = run.load("gpt-5.6-luna-ex")
+    assert failed == ["D"] and why == {"D": "ValueError"} and tries["D"] == 1                          # 다시 해도 같은 오류라 다시 하지 않음
     assert saved(db) == ["E"]
 
 
@@ -81,4 +81,4 @@ def test_cmd_load_writes_result_and_fails(run, monkeypatch, tmp_path):
         run.cmd_load("gpt-5.6-luna-ex")
     assert e.value.code == 1
     res = json.loads((tmp_path / "out" / "load_result.json").read_text(encoding="utf-8"))
-    assert res["failed"] == ["D"] and res["total"]["공고"] == 1
+    assert res["failed"] == ["D"] and res["why"] == {"D": "ValueError"} and res["total"]["공고"] == 1

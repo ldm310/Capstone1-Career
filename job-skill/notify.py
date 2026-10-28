@@ -1,6 +1,7 @@
 """
 Slack 알림 (#data-pipeline). 웹훅 주소는 환경변수 SLACK_WEBHOOK_URL, 없으면 이 폴더의 .env 에서 읽는다.
 메시지에는 숫자·상태·오류 종류만 넣는다 — 공고 제목·회사·본문은 넣지 않는다.
+실패해서 넘어간 공고는 공고번호·원인·사람인 공개 링크까지 넣는다(사용자 결정 — 어느 공고인지 바로 찾아보게).
 보내기에 실패해도 예외를 던지지 않는다(알림 때문에 파이프라인이 멈추지 않게).
 """
 
@@ -14,7 +15,25 @@ import urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ENV_PATH = os.path.join(HERE, ".env")
+POSTING_URL = "https://www.saramin.co.kr/zf_user/jobs/relay/view?view_type=list&rec_idx={no}"
+SHOW = 10  # 알림 한 번에 보여 줄 공고 수(나머지는 '외 N건')
 log = logging.getLogger(__name__)
+
+
+class PostingsFailed(RuntimeError):
+    """공고 몇 개가 실패해 태스크를 실패시킬 때. 실패 알림(on_failure)에 공고번호·원인·링크를 붙인다."""
+
+    def __init__(self, what: str, items: list[tuple[str, str]]):
+        self.what, self.items = what, list(items)
+        super().__init__(f"{what} {len(self.items)}건")
+
+
+def posting_lines(items: list[tuple[str, str]]) -> str:
+    """'• 공고번호 원인 링크' 한 줄씩, SHOW 건까지."""
+    lines = [f"• {no} {why} {POSTING_URL.format(no=no)}" for no, why in items[:SHOW]]
+    if len(items) > SHOW:
+        lines.append(f"…외 {len(items) - SHOW}건(태스크 로그)")
+    return "\n".join(lines)
 
 
 def webhook_url() -> str | None:
@@ -55,12 +74,19 @@ def msg_result(dag_label: str, counts: dict) -> str:
 
 def msg_failure(dag_id: str, task_id: str, try_number: int, exc: BaseException | None) -> str:
     head = f"❌ {dag_id} · {task_id} 실패 ({try_number}번째 시도)"
+    if isinstance(exc, PostingsFailed):
+        return f"{head} · {exc}\n{posting_lines(exc.items)}"
     return head if exc is None else f"{head} · {type(exc).__name__}: {str(exc)[:200]}"
 
 
 def msg_budget(dag_label: str, spent: float, limit: float, left: int) -> str:
     return (f"⚠️ {dag_label}: 비용 상한 ${limit:.2f} 도달로 LLM 추출 멈춤 · 쓴 비용 ${spent:.2f} · "
             f"남은 공고 {left}건은 다음 실행 때")
+
+
+def msg_skipped(dag_label: str, what: str, items: list[tuple[str, str]], after: str) -> str:
+    """태스크는 계속하고 넘어간 공고들: '⚠️ 매일 수집: LLM 추출 실패 2건 — 결과 없이 저장하고 넘어감' + 공고 줄."""
+    return f"⚠️ {dag_label}: {what} {len(items)}건 — {after}\n{posting_lines(items)}"
 
 
 def msg_daily_cost(day: dt.date, usd: float, runs: int) -> str:

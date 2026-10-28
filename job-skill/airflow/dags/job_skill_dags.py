@@ -48,7 +48,7 @@ def _process(label: str, limit: float, daily: bool):
 
     @task(task_display_name="공고 원본 수집", pool=SARAMIN)
     def fetch_raw():
-        return pt.step_fetch_raw(_run_dir())
+        return pt.step_fetch_raw(_run_dir(), dag_label=label)
 
     @task_group(group_id="image_processing", group_display_name="이미지 처리")
     def image_processing():

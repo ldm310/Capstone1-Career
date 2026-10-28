@@ -14,6 +14,14 @@ if HERE not in sys.path:
     sys.path.insert(0, HERE)
 
 
+@pytest.fixture(autouse=True)
+def no_real_slack(monkeypatch, tmp_path_factory):
+    """시험이 진짜 Slack 채널로 보내지 않게: 웹훅 주소를 지운다(.env·환경변수 모두). 보내기 시험은 스스로 다시 넣는다."""
+    import notify
+    monkeypatch.delenv("SLACK_WEBHOOK_URL", raising=False)
+    monkeypatch.setattr(notify, "ENV_PATH", str(tmp_path_factory.mktemp("noenv") / ".env"))
+
+
 def _with_db(url: str, name: str) -> str:
     p = urllib.parse.urlsplit(url)
     return urllib.parse.urlunsplit((p.scheme, p.netloc, "/" + name, p.query, p.fragment))

@@ -149,10 +149,13 @@ def test_detect_touches_unchanged_only(monkeypatch, tmp_path):
     touched = []
     monkeypatch.setattr(pipeline_tasks, "connect", lambda: contextlib.nullcontext(object()))
     monkeypatch.setattr(pipeline_tasks.db_queries, "touch_checked", lambda conn, nos: touched.extend(nos) or len(nos))
+    sent = []
+    monkeypatch.setattr(pipeline_tasks.notify, "send", lambda text: sent.append(text) or True)
     monkeypatch.setattr(pipeline_tasks.recheck, "detect_changes",
                         lambda run_dir, rows: {"changed": ["B"], "closed": ["C"], "unchanged": ["A"], "error": ["D"]})
     res = pipeline_tasks.step_detect(str(tmp_path))
     assert touched == ["A"]          # 바뀐 공고는 다시 추출에 성공해야(DB 저장) 확인 시각이 바뀐다
+    assert len(sent) == 1 and "확인 못 한 공고 1건" in sent[0]   # 오류(D)는 링크와 함께 알림
     assert res == {"확인": 4, "바뀜": 1, "그대로": 1, "오류": 1}
 
 
@@ -224,13 +227,15 @@ def test_load_failure_is_reported_in_plain_words(monkeypatch, tmp_path):
     (out / "load_result.json").write_text('{"total": {}, "failed": ["OLD"]}', encoding="utf-8")   # 지난 시도의 찌꺼기
 
     def fake_run(script, args, run_dir, **k):
-        (out / "load_result.json").write_text(json.dumps({"total": {"공고": 0}, "failed": ["D", "E"]}), encoding="utf-8")
+        (out / "load_result.json").write_text(json.dumps({"total": {"공고": 0}, "failed": ["D", "E"], "why": {"D": "ValueError"}}),
+                                              encoding="utf-8")
         raise subprocess.CalledProcessError(1, script)
 
     monkeypatch.setattr(pipeline_tasks, "run_script", fake_run)
     monkeypatch.setattr(pipeline_tasks.db_queries, "record_excluded", lambda conn, rows: pytest.fail("실패했는데 기록함"))
-    with pytest.raises(RuntimeError, match="DB 저장 실패 2건"):
+    with pytest.raises(pipeline_tasks.notify.PostingsFailed, match="DB 저장 실패 2건") as e:
         pipeline_tasks.step_load(str(tmp_path))
+    assert e.value.items == [("D", "ValueError"), ("E", "저장 실패")]
 
 
 def test_load_returns_counts_for_the_log(monkeypatch, tmp_path):
@@ -307,3 +312,70 @@ def test_detect_and_close_without_check_file(monkeypatch, tmp_path):
     monkeypatch.setattr(pipeline_tasks, "connect", lambda: pytest.fail("DB 를 열면 안 됨"))
     assert pipeline_tasks.step_detect(str(tmp_path)) == {"확인": 0, "바뀜": 0, "그대로": 0, "오류": 0}
     assert pipeline_tasks.step_close(str(tmp_path)) == 0
+
+
+def test_extract_failures_are_alerted(monkeypatch, tmp_path):
+    """공고 하나하나의 LLM 추출 실패는 태스크를 멈추지 않고, 숫자·원인만 Slack 으로 알린다(공고번호는 넣지 않음)."""
+    import pipeline_tasks
+    write_rows(tmp_path, ["A", "B", "C"])
+    ex = tmp_path / "out" / "extract"
+    ex.mkdir(parents=True)
+    (ex / "_stats.json").write_text('[{"failed": ["OLD"], "fail_reasons": {"x": 1}}]', encoding="utf-8")   # 지난 시도의 찌꺼기
+    sent = []
+
+    def fake_run(script, args, run_dir, **k):
+        (ex / "_stats.json").write_text(json.dumps([{"failed": ["A", "B"], "fail_reasons": {"응답 잘림·형식 오류": 2},
+                                                     "fail_detail": {"A": "응답 잘림·형식 오류", "B": "응답 잘림·형식 오류"}}]),
+                                        encoding="utf-8")
+
+    monkeypatch.setattr(pipeline_tasks, "run_script", fake_run)
+    monkeypatch.setattr(pipeline_tasks.notify, "send", lambda text: sent.append(text) or True)
+    res = pipeline_tasks.step_extract(str(tmp_path), budget_usd=5.0, dag_label="매일 수집", limit=5.0)
+    assert len(sent) == 1 and "LLM 추출 실패 2건" in sent[0]
+    assert "rec_idx=A" in sent[0] and "rec_idx=B" in sent[0] and res["failed"] == 2
+
+
+def test_extract_without_failures_sends_nothing(monkeypatch, tmp_path):
+    import pipeline_tasks
+    write_rows(tmp_path, ["A"])
+    ex = tmp_path / "out" / "extract"
+    ex.mkdir(parents=True)
+    sent = []
+    monkeypatch.setattr(pipeline_tasks, "run_script", lambda script, args, run_dir, **k: (ex / "_stats.json").write_text(
+        json.dumps([{"failed": [], "fail_reasons": {}}]), encoding="utf-8"))
+    monkeypatch.setattr(pipeline_tasks.notify, "send", lambda text: sent.append(text) or True)
+    assert pipeline_tasks.step_extract(str(tmp_path), budget_usd=5.0, dag_label="매일 수집", limit=5.0)["failed"] == 0
+    assert sent == []
+
+
+
+def test_fetch_raw_alerts_postings_without_body(monkeypatch, tmp_path):
+    """본문을 못 받아 빠진 공고는 공고번호·링크·원인을 알린다(다음 실행 때 다시)."""
+    import pipeline_tasks
+    write_rows(tmp_path, ["A", "B"])
+    sent = []
+
+    def fake_fetch(script, args, run_dir, **k):
+        (tmp_path / "pages").mkdir(exist_ok=True)
+        (tmp_path / "pages" / "A.html").write_text('<div class="user_content"><p>지어낸 본문</p></div><script>', encoding="utf-8")
+        (tmp_path / "images").mkdir(exist_ok=True)
+        (tmp_path / "images" / "skipped.tsv").write_text("rec_idx\treason\nA\t본문 이미지 없음\nB\tHTTP 404\n", encoding="utf-8")
+
+    monkeypatch.setattr(pipeline_tasks, "run_script", fake_fetch)
+    monkeypatch.setattr(pipeline_tasks.notify, "send", lambda text: sent.append(text) or True)
+    pipeline_tasks.step_fetch_raw(str(tmp_path), dag_label="매일 수집")
+    assert [r["rec_idx"] for r in pipeline_tasks.collect.read_targets(str(tmp_path))] == ["A"]
+    assert len(sent) == 1 and "본문을 못 받은 공고 1건" in sent[0] and "• B HTTP 404" in sent[0] and "rec_idx=B" in sent[0]
+
+
+def test_detect_alerts_postings_it_could_not_check(monkeypatch, tmp_path):
+    import pipeline_tasks
+    (tmp_path / "check.json").write_text(json.dumps([{"rec_idx": "D", **ROW, "raw_hash": "h"}]), encoding="utf-8")
+    sent = []
+    monkeypatch.setattr(pipeline_tasks, "connect", lambda: contextlib.nullcontext(object()))
+    monkeypatch.setattr(pipeline_tasks.db_queries, "touch_checked", lambda conn, nos: len(nos))
+    monkeypatch.setattr(pipeline_tasks.notify, "send", lambda text: sent.append(text) or True)
+    monkeypatch.setattr(pipeline_tasks.recheck, "detect_changes", lambda run_dir, rows: {
+        "changed": [], "closed": [], "unchanged": [], "error": ["D"], "why": {"D": "HTTP 429"}})
+    pipeline_tasks.step_detect(str(tmp_path))
+    assert len(sent) == 1 and "확인 못 한 공고 1건" in sent[0] and "• D HTTP 429" in sent[0]
