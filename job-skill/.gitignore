@@ -4,6 +4,7 @@ pages/
 out/
 tiles/
 sample*/
+data/
 targets.tsv
 sampling_log.tsv
 truth.tsv
@@ -12,6 +13,7 @@ truth_review.md
 # 로컬 전용(모델·기록·환경)
 models/
 *.log
+airflow/logs/
 __pycache__/
 .env
 .venv/

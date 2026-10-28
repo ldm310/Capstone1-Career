@@ -13,6 +13,7 @@
 from __future__ import annotations
 
 import csv
+import glob
 import html
 import os
 import re
@@ -162,6 +163,14 @@ def main() -> None:
             continue
 
         for seq, img_url in enumerate(urls, 1):
+            have = [f for f in glob.glob(os.path.join(IMG_DIR, f"{rid}_{seq}.*")) if not f.endswith(".json")]
+            if have:  # 이미 받은 이미지는 다시 받지 않는다(본문 파일 건너뛰기와 같게)
+                name = os.path.basename(have[0])
+                w, h = image_size(have[0])
+                manifest.append({"rec_idx": rid, "seq": seq, "url": img_url, "file": name, "bytes": os.path.getsize(have[0]),
+                                 "width": w, "height": h, "status": 200})
+                print(f"    {name}  (이미 있음)")
+                continue
             status, ctype, data = get(img_url, referer=url, lax_ok=True)
             row = {"rec_idx": rid, "seq": seq, "url": img_url, "file": "", "bytes": len(data),
                    "width": "", "height": "", "status": status}
