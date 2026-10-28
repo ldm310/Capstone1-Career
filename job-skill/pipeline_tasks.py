@@ -26,9 +26,9 @@ from db_load import connect
 HERE = os.path.dirname(os.path.abspath(__file__))
 MODEL, TAG = "gpt-5.6-luna", "-ex"
 RUN_NAME = MODEL + TAG
-DAILY_LIMIT = 5.0      # 하루(KST) ①+② 합산
+DAILY_LIMIT = 5.0      # 하루(KST) ① 매일 수집
 BACKFILL_LIMIT = 10.0  # ③ 한 번 실행
-DAILY_DAGS = ("daily_collect", "recheck_postings")  # 하루 상한을 같이 쓰는 DAG
+DAILY_DAGS = ("daily_collect",)  # 하루 상한을 쓰는 DAG(② 수정 확인은 ① 에 합침)
 
 
 def _abs(run_dir: str) -> str:
@@ -58,47 +58,48 @@ def _has_images(run_dir: str) -> bool:
 
 
 def step_collect(run_dir: str, include_pending: bool, max_new: int | None = None) -> dict:
-    """공고 목록 수집.
-    ①(include_pending): 밀린 공고(추출 결과가 없는 진행 공고)를 맨 위에 두고, 아는 번호가 연속 5개면 멈춘다.
-    ③: 연속 멈춤 없이 목록 끝까지 보며 아는 번호만 건너뛴다 — 시험·실패로 일부만 저장된 뒤 다시 돌려도 이어서 하게.
-    버린 공고는 <run_dir>/excluded.json 에만 두고, DB 기록은 DB 저장에 성공한 뒤(step_load) 한다."""
+    """공고 목록 수집. 두 직무 목록을 경력 필터를 켜고 끝까지 본다(연속 멈춤 없음).
+    새 공고 = 목록 − 아는 번호(DB 공고 + 버린 공고) → targets.tsv. 버린 공고는 excluded.json 에만 두고
+    DB 기록은 DB 저장에 성공한 뒤(step_load) 한다.
+    ①(include_pending): 밀린 공고(추출 결과가 없는 진행 공고)를 targets 맨 위에 두고, 같은 목록으로
+      - '수정'된 진행 공고와 목록에서 사라진 진행 공고를 골라 check.json(다음 태스크 변경 감지)
+      - 목록에 보이는 공고의 마감일을 DB 에 반영(마감일은 본문 밖이라 지문으로는 안 잡힘)
+    ③: 새 공고만."""
     d = _abs(run_dir)
-    with connect() as conn:
-        known = db_queries.known_posting_nos(conn)
-        res = collect.collect_list(d, known, max_new=max_new, stop_after=5 if include_pending else None)
-        pending = db_queries.pending_postings(conn) if include_pending else []
-    with open(os.path.join(d, "excluded.json"), "w", encoding="utf-8") as f:
-        json.dump(res["excluded"], f, ensure_ascii=False)
-    first = {r["rec_idx"] for r in pending}
-    new = [r for r in res["targets"] if r["rec_idx"] not in first]
-    collect.write_targets(d, pending + new)
-    return {"new": len(new), "pending": len(pending), "excluded": len(res["excluded"])}
-
-
-def step_pick_recheck(run_dir: str) -> dict:
-    """공고 목록 확인(②): 두 직무 목록 전체를 보고, 마지막 확인 뒤 '수정'된 진행 공고 + 목록에서 사라진 진행 공고를 고른다.
-    고른 공고는 <run_dir>/check.json 으로 변경 감지에 넘긴다. DB 는 목록을 보는 동안 열어 두지 않는다.
-    목록에 보이는 공고의 마감일은 본문 확인과 상관없이 DB 에 반영한다(마감일은 본문 밖이라 지문으로는 안 잡힘)."""
     today = db_queries.today_kst()
-    with connect() as conn:
-        rows = db_queries.open_postings(conn)
+    with connect() as conn:  # 목록을 보는 동안(1분 안팎) DB 연결을 열어 두지 않는다
+        known = db_queries.known_posting_nos(conn)
+        pending = db_queries.pending_postings(conn) if include_pending else []
+        rows = db_queries.open_postings(conn) if include_pending else []
     listed = collect.scan_lists()
-    check, counts = recheck.select_recheck(listed, rows, today)
-    deadlines = {no: d for no, it in listed.items() if (d := collect.parse_deadline(it.get("deadline_text", ""), today))}
-    with connect() as conn:
-        counts["마감일 바뀜"] = db_queries.update_deadlines(conn, deadlines)
-    d = _abs(run_dir)
+    targets, excluded = collect.select_targets(listed, known, today, max_new=max_new)
     os.makedirs(d, exist_ok=True)
-    with open(os.path.join(d, "check.json"), "w", encoding="utf-8") as f:
-        json.dump(check, f, ensure_ascii=False, default=str)
-    return counts
+    with open(os.path.join(d, "excluded.json"), "w", encoding="utf-8") as f:
+        json.dump(excluded, f, ensure_ascii=False)
+    first = {r["rec_idx"] for r in pending}
+    new = [r for r in targets if r["rec_idx"] not in first]
+    collect.write_targets(d, pending + new)
+    out = {"new": len(new), "pending": len(pending), "excluded": len(excluded)}
+    if include_pending:
+        check, counts = recheck.select_recheck(listed, rows, today)
+        with open(os.path.join(d, "check.json"), "w", encoding="utf-8") as f:
+            json.dump(check, f, ensure_ascii=False, default=str)
+        deadlines = {no: dl for no, it in listed.items() if (dl := collect.parse_deadline(it.get("deadline_text", ""), today))}
+        with connect() as conn:
+            counts["마감일 바뀜"] = db_queries.update_deadlines(conn, deadlines)
+        out.update(counts)
+    return out
 
 
 def step_detect(run_dir: str) -> dict:
-    """변경 감지(②): 고른 공고의 본문만 다시 받아 지문 비교 → 바뀐 공고는 targets.tsv(다시 추출), 결과는 changes.json.
-    그대로인 공고만 확인 시각을 지금으로 바꾼다. 바뀐 공고는 다시 추출해 DB 저장에 성공할 때 바뀐다(실패하면 다음 ②가 다시)."""
+    """변경 감지(①): 고른 공고만 확인 — 목록에서 사라진 공고는 전체 페이지의 마감 표시, 수정된 공고는 본문 지문.
+    바뀐 공고는 targets.tsv 뒤에 붙고(다시 추출), 결과는 changes.json. check.json 이 없으면(③) 아무것도 안 한다.
+    그대로인 공고만 확인 시각을 지금으로 바꾼다. 바뀐 공고는 다시 추출해 DB 저장에 성공할 때 바뀐다(실패하면 다음 날 다시)."""
     d = _abs(run_dir)
-    rows = json.load(open(os.path.join(d, "check.json"), encoding="utf-8"))
+    path = os.path.join(d, "check.json")
+    if not os.path.exists(path):
+        return {"확인": 0, "바뀜": 0, "그대로": 0, "오류": 0}
+    rows = json.load(open(path, encoding="utf-8"))
     res = recheck.detect_changes(d, rows)
     with connect() as conn:
         db_queries.touch_checked(conn, res["unchanged"])
@@ -106,8 +107,11 @@ def step_detect(run_dir: str) -> dict:
 
 
 def step_close(run_dir: str) -> int:
-    """마감 처리(②): 본문이 없어진 공고를 '마감'으로."""
-    res = json.load(open(os.path.join(_abs(run_dir), "changes.json"), encoding="utf-8"))
+    """마감 처리(①): 마감으로 확인된 공고를 '마감'으로. changes.json 이 없으면 0."""
+    path = os.path.join(_abs(run_dir), "changes.json")
+    if not os.path.exists(path):
+        return 0
+    res = json.load(open(path, encoding="utf-8"))
     with connect() as conn:
         return db_queries.mark_closed(conn, res["closed"])
 
@@ -134,7 +138,7 @@ def step_filter(run_dir: str) -> None:
 
 
 def day_spent(day: dt.date, base: str | None = None) -> tuple[float, int]:
-    """그날(KST) ①+② 가 LLM 에 쓴 돈과 추출 수 — 하루 상한용. ③ 은 따로($10)라 세지 않는다.
+    """그날(KST) ① 이 LLM 에 쓴 돈과 추출 수 — 하루 상한용. ③ 은 따로($10)라 세지 않는다.
     DB 가 아니라 실행 폴더의 결과 파일(run_at)로 센다: 아직 DB 에 안 들어간 결과(추출 재시도, 실패한 실행,
     같이 도는 다른 실행)도 빠짐없이 들어가게."""
     base = base or os.path.join(HERE, "data", "runs")
@@ -152,7 +156,7 @@ def day_spent(day: dt.date, base: str | None = None) -> tuple[float, int]:
 def extract_budget(run_dir: str, limit: float, daily: bool) -> float:
     """이번 LLM 추출에 쓸 수 있는 돈.
     ③: 실행 한 번에 limit 에서 이 실행 폴더가 이미 쓴 돈(추출 재시도 때 지난 시도 몫)을 뺀다.
-    ①②: 하루 limit 에서 오늘 ①+② 가 쓴 돈(day_spent — 이 실행 폴더도 들어 있음)을 뺀다."""
+    ①: 하루 limit 에서 오늘 ① 이 쓴 돈(day_spent — 이 실행 폴더도 들어 있음)을 뺀다."""
     spent = day_spent(db_queries.today_kst())[0] if daily else summary(run_dir)["비용"]
     return max(0.0, round(limit - spent, 6))
 

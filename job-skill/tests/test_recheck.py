@@ -91,7 +91,8 @@ def test_select_recheck_picks_modified_and_gone():
            "C": listed(None),     # 등록만(고친 적 없음)
            "X": listed(0)}        # DB 에 없는 공고는 ① 몫
     check, counts = recheck.select_recheck(lst, rows, TODAY)
-    assert [r["rec_idx"] for r in check] == ["A", "D"]          # D: 목록에서 사라짐 → 본문으로 마감 확인
+    assert [r["rec_idx"] for r in check] == ["A", "D"]          # D: 목록에서 사라짐 → 전체 페이지로 마감 확인
+    assert [r["reason"] for r in check] == ["수정", "목록에 없음"]
     assert counts == {"진행": 4, "수정": 1, "목록에 없음": 1}
 
 
@@ -110,3 +111,53 @@ def test_blocked_responses_are_errors_not_closed(tmp_path):
     get = FakeGet({"A": (403, "", b""), "B": (429, "", b""), "C": (400, "", b""), "D": (410, "", b"")})
     res = recheck.detect_changes(str(tmp_path), rows, get=get)
     assert res["error"] == ["A", "B", "C"] and res["closed"] == ["D"]
+
+
+
+# ── 마감은 공고 전체 페이지(jobs/view)의 '접수마감' 표시로 — 본문 페이지(view-detail)는 마감돼도 200·본문 그대로 ──
+VIEW_OPEN = '<html><span class="dday">D-8</span><button class="sri_btn_lg">지원하기</button></html>'
+VIEW_CLOSED = '<html><span class="sri_btn_expired_apply" >접수마감</span><p class="copy end">마감되었습니다.</p></html>'
+
+
+class SplitGet:
+    """전체 페이지(jobs/view)와 본문 페이지(view-detail)를 따로 답한다. 받은 주소를 기록한다."""
+
+    def __init__(self, view, body):
+        self.view, self.body, self.urls = view, body, []
+
+    def __call__(self, url, *a, **k):
+        self.urls.append(url)
+        no = url.split("rec_idx=")[1].split("&")[0]
+        return (self.view if "/jobs/view?" in url else self.body)[no]
+
+
+def gone(no, raw_hash):
+    return {**row(no, raw_hash), "reason": "목록에 없음"}
+
+
+def edited(no, raw_hash):
+    return {**row(no, raw_hash), "reason": "수정"}
+
+
+def test_gone_posting_is_closed_by_full_page_marker(tmp_path):
+    import db_load
+    import recheck
+    base = page()
+    h = lambda no: db_load.content_hash(base, no)
+    rows = [gone("A", h("A")), gone("B", h("B")), gone("C", h("C")), gone("D", h("D")), edited("E", h("E"))]
+    get = SplitGet(view={"A": ok(VIEW_CLOSED), "B": ok(VIEW_OPEN), "C": (404, "", b""), "D": (429, "", b"")},
+                   body={"A": ok(base), "B": ok(base), "E": ok(page("지어낸 자격요건: Go 개발 경험"))})
+    res = recheck.detect_changes(str(tmp_path), rows, get=get)
+    assert res == {"changed": ["E"], "closed": ["A", "C"], "unchanged": ["B"], "error": ["D"]}
+    viewed = sorted(u.split("rec_idx=")[1] for u in get.urls if "/jobs/view?" in u)
+    assert viewed == ["A", "B", "C", "D"]                      # 수정된 공고(E)는 목록에 있어 마감 확인을 하지 않음
+
+
+def test_detect_changes_adds_to_existing_targets(tmp_path):
+    """① 에서는 targets.tsv 에 밀린·새 공고가 먼저 있다. 바뀐 공고는 그 뒤에 붙이고, 이미 있는 번호는 다시 넣지 않는다."""
+    import collect
+    import recheck
+    collect.write_targets(str(tmp_path), [row("P", ""), row("B", "")])
+    rows = [edited("B", "x" * 64), edited("C", "y" * 64)]
+    recheck.detect_changes(str(tmp_path), rows, get=FakeGet({"B": ok(page()), "C": ok(page())}))
+    assert [r["rec_idx"] for r in collect.read_targets(str(tmp_path))] == ["P", "B", "C"]

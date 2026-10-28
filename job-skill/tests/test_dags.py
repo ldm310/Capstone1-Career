@@ -27,28 +27,25 @@ def test_no_import_errors(bag):
 
 
 def test_dag_ids_and_schedules(bag):
-    assert {"backfill_once", "daily_collect", "recheck_postings"} <= set(bag.dag_ids)
+    assert set(bag.dag_ids) == {"backfill_once", "daily_collect"}        # ② 수정 확인은 ① 에 합침(사용자 결정)
     assert bag.get_dag("backfill_once").schedule is None
     assert bag.get_dag("daily_collect").schedule == "0 0 * * *"
-    # 3일 간격(timedelta)은 늦게 켜거나 노트북이 꺼졌다 켜지면 12:00 에서 밀려 ①(00:00)과 겹칠 수 있다 → 날짜 cron
-    assert bag.get_dag("recheck_postings").schedule == "0 12 3-30/3 * *"   # 매달 3·6·9…30일(사용자 결정)
-    for dag_id in ("backfill_once", "daily_collect", "recheck_postings"):
+    for dag_id in ("backfill_once", "daily_collect"):
         d = bag.get_dag(dag_id)
         assert d.timezone.name == "Asia/Seoul" and d.max_active_runs == 1 and d.catchup is False
-    # ①② 는 꺼진 채로 올라오고, ③ 은 일정이 없어 켜진 채(바로 수동 실행)
+    # ① 은 꺼진 채로 올라오고, ③ 은 일정이 없어 켜진 채(바로 수동 실행)
     assert bag.get_dag("backfill_once").is_paused_upon_creation is False
     assert bag.get_dag("daily_collect").is_paused_upon_creation is True
-    assert bag.get_dag("recheck_postings").is_paused_upon_creation is True
 
 
 def test_daily_task_graph(bag):
     d = bag.get_dag("daily_collect")
     cost = d.get_task("notify_cost")
     assert cost.upstream_task_ids == set() and cost.downstream_task_ids == set()
-    assert d.get_task("collect_list").downstream_task_ids == {"fetch_raw"}
+    assert d.get_task("collect_list").downstream_task_ids == {"detect_changes"}
+    assert d.get_task("detect_changes").downstream_task_ids == {"close_postings", "fetch_raw"}
     assert d.get_task("extract_llm").upstream_task_ids == {"fetch_raw", "image_processing.filter_sections"}
-    assert d.get_task("notify_result").upstream_task_ids == {"load_db"}
-    assert "close_postings" not in d.task_ids
+    assert d.get_task("notify_result").upstream_task_ids == {"load_db", "close_postings"}
 
 
 def test_backfill_task_graph(bag):
@@ -60,16 +57,9 @@ def test_backfill_task_graph(bag):
     assert "notify_cost" not in d.task_ids
 
 
-def test_recheck_task_graph(bag):
-    d = bag.get_dag("recheck_postings")
-    assert d.get_task("scan_lists").downstream_task_ids == {"detect_changes"}
-    assert d.get_task("detect_changes").downstream_task_ids == {"close_postings", "fetch_raw"}
-    assert d.get_task("notify_result").upstream_task_ids == {"load_db", "close_postings"}
-
-
 def test_all_tasks_retry_and_alert(bag):
     import notify
-    for dag_id in ("backfill_once", "daily_collect", "recheck_postings"):
+    for dag_id in ("backfill_once", "daily_collect"):
         for t in bag.get_dag(dag_id).tasks:
             cb = t.on_failure_callback
             cbs = cb if isinstance(cb, list) else [cb]
@@ -80,9 +70,9 @@ def test_all_tasks_retry_and_alert(bag):
 def test_shared_resources_use_pools(bag):
     """DAG 끼리 겹쳐 돌아도(노트북이 00:00·12:00 을 넘겨 꺼졌다 켜짐, 켜는 순서 실수) 사람인 초당 1건·GPU 하나·하루 상한을 지키게
     사람인 요청 / GPU / LLM 추출 태스크는 각각 자리 1개짜리 풀을 쓴다."""
-    want = {"collect_list": "saramin", "scan_lists": "saramin", "detect_changes": "saramin", "fetch_raw": "saramin",
+    want = {"collect_list": "saramin", "detect_changes": "saramin", "fetch_raw": "saramin",
             "image_processing.ocr_images": "gpu", "extract_llm": "llm"}
-    for dag_id in ("backfill_once", "daily_collect", "recheck_postings"):
+    for dag_id in ("backfill_once", "daily_collect"):
         d = bag.get_dag(dag_id)
         for tid, pool in want.items():
             if tid in d.task_ids:

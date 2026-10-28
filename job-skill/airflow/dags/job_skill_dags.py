@@ -1,11 +1,13 @@
 """
-채용공고 역량 추출 DAG 3개 (사람인 백엔드·데이터 엔지니어, 경력 0~3년).
+채용공고 역량 추출 DAG 2개 (사람인 백엔드·데이터 엔지니어, 경력 필터 신입·3년 이하·경력무관).
 
-  ③ backfill_once     수동 1회   — 진행 중인 대상 공고 전부를 수집해 DB 저장까지
-  ① daily_collect     매일 00:00 — 새 공고(+ 추출 못 한 밀린 공고)만
-  ② recheck_postings  3일마다 12:00(매달 3·6·9…30일) — 목록에서 '수정'·사라진 공고만 본문 확인 → 바뀐 공고 다시 추출, 없어진 공고 마감
+  ③ backfill_once  수동 1회   — 진행 중인 대상 공고 전부를 수집해 DB 저장까지
+  ① daily_collect  매일 00:00 — 목록 전체를 보고 새 공고(+ 밀린 공고) 수집, '수정'된 공고는 본문 지문 비교로 바뀐 것만 다시 추출,
+                                목록에서 사라진 공고는 전체 페이지의 '접수마감'으로 마감, 마감일 반영
+(예전 ② 수정 확인은 ① 에 합침 — 사람인이 '수정' 표시를 약 24시간만 보여 줘서 매일 봐야 함, 사용자 결정)
 
-①·②는 꺼진 채로 올라온다(③은 일정이 없어 켜진 채). ③이 끝나면 관리 화면에서 ①·②를 켠다.
+① 은 꺼진 채로 올라온다(③ 은 일정이 없어 켜진 채). ③ 이 끝나면 관리 화면에서 ① 을 켠다.
+① 을 켜는 순간 놓친 가장 최근 회차가 한 번 바로 돈다(Airflow catchup=False 기본 동작). 그다음부터 매일 00:00.
 상자 하나하나의 일은 job-skill/pipeline_tasks.py 에 있고, 여기서는 순서만 정한다.
 태스크 사이에는 실행 폴더(data/runs/<dag_id>/<run_id>/)의 파일로 넘기고, XCom 에는 작은 숫자만 넣는다.
 """
@@ -25,8 +27,8 @@ from db_load import connect
 DEFAULT_ARGS = {"retries": 2, "retry_delay": dt.timedelta(minutes=5), "on_failure_callback": notify.on_failure}
 COMMON = dict(default_args=DEFAULT_ARGS, max_active_runs=1, catchup=False, tags=["job-skill"])
 START = pendulum.datetime(2026, 10, 28, tz="Asia/Seoul")
-# 자리 1개짜리 풀(airflow-init 이 만듦): DAG 끼리 겹쳐 돌아도(노트북이 00:00·12:00 을 넘겨 꺼졌다 켜짐, 켜는 순서 실수)
-# 사람인 요청은 한 번에 한 태스크(초당 1건), GPU OCR 도 하나, LLM 추출도 하나씩(하루 상한을 앞 실행이 쓴 뒤에 계산)
+# 자리 1개짜리 풀(airflow-init 이 만듦): ③ 과 ① 이 겹쳐 돌아도(③ 이 끝나기 전에 ① 을 켬 등)
+# 사람인 요청은 한 번에 한 태스크(초당 1건), GPU OCR 도 하나, LLM 추출도 하나씩
 SARAMIN, GPU, LLM = "saramin", "gpu", "llm"
 MAX_NEW = {"max_new": Param(None, type=["null", "integer"], minimum=1,
                             description="시험용: 새 공고를 이 수까지만 (비우면 전부)")}
@@ -79,7 +81,7 @@ def _process(label: str, limit: float, daily: bool):
 
 
 def _today_cost() -> float:
-    """오늘 ①+② LLM 비용(하루 상한과 같은 셈)."""
+    """오늘 ① LLM 비용(하루 상한과 같은 셈)."""
     return pt.day_spent(db_queries.today_kst())[0]
 
 
@@ -109,7 +111,7 @@ def backfill_once():
 def daily_collect():
     @task(task_display_name="비용 알림")
     def notify_cost():
-        """어제(KST) ①+② LLM 비용 합계."""
+        """어제(KST) LLM 비용 합계(DB 기준)."""
         yesterday = db_queries.today_kst() - dt.timedelta(days=1)
         with connect() as conn:
             usd, runs = db_queries.day_cost(conn, yesterday)
@@ -118,30 +120,6 @@ def daily_collect():
     @task(task_display_name="공고 목록 수집", pool=SARAMIN)
     def collect_list():
         return pt.step_collect(_run_dir(), include_pending=True, max_new=_ctx()["params"].get("max_new"))
-
-    @task(task_display_name="결과 알림")
-    def notify_result():
-        got = _ctx()["ti"].xcom_pull(task_ids="collect_list") or {}
-        s = pt.summary(_run_dir())
-        _send_result("매일 수집", {"새 공고": got.get("new", 0), "밀린 공고": got.get("pending", 0),
-                               "추출": s["추출"], "확인 필요": s["확인 필요"], "비용": s["비용"],
-                               "오늘 비용": _today_cost()})
-
-    notify_cost()
-    raw, load = _process("매일 수집", pt.DAILY_LIMIT, daily=True)
-    collect_list() >> raw
-    load >> notify_result()
-
-
-# 매달 3·6·9…30일 12:00 (달이 바뀔 때만 간격이 3~4일, 2월은 27일 다음 3월 3일). 3일 간격(timedelta)은 늦게 켜거나 노트북이 꺼졌다 켜지면
-# 그 시각부터 다시 세어 12:00 에서 밀리고 ①(00:00)과 겹칠 수 있어서 날짜 cron 으로 둔다.
-# (①·② 모두 켜는 순간 놓친 가장 최근 회차가 한 번 바로 돈다 — Airflow catchup=False 기본 동작. 그다음부터 정해진 시각)
-@dag(dag_id="recheck_postings", dag_display_name="② 수정 확인", schedule="0 12 3-30/3 * *", start_date=START,
-     is_paused_upon_creation=True, doc_md=__doc__, **COMMON)
-def recheck_postings():
-    @task(task_display_name="공고 목록 확인", pool=SARAMIN)
-    def scan_lists():
-        return pt.step_pick_recheck(_run_dir())
 
     @task(task_display_name="변경 감지", pool=SARAMIN)
     def detect_changes():
@@ -154,24 +132,24 @@ def recheck_postings():
     @task(task_display_name="결과 알림")
     def notify_result():
         ti = _ctx()["ti"]
-        picked = ti.xcom_pull(task_ids="scan_lists") or {}
+        got = ti.xcom_pull(task_ids="collect_list") or {}
         seen = ti.xcom_pull(task_ids="detect_changes") or {}
         s = pt.summary(_run_dir())
-        _send_result("수정 확인", {"진행": picked.get("진행", 0), "수정": picked.get("수정", 0),
-                               "목록에 없음": picked.get("목록에 없음", 0), "마감일 바뀜": picked.get("마감일 바뀜", 0),
-                               "바뀜": seen.get("바뀜", 0),
-                               "마감": ti.xcom_pull(task_ids="close_postings") or 0, "오류": seen.get("오류", 0),
-                               "추출": s["추출"], "비용": s["비용"], "오늘 비용": _today_cost()})
+        _send_result("매일 수집", {"새 공고": got.get("new", 0), "밀린 공고": got.get("pending", 0),
+                               "수정": got.get("수정", 0), "바뀜": seen.get("바뀜", 0),
+                               "목록에 없음": got.get("목록에 없음", 0), "마감": ti.xcom_pull(task_ids="close_postings") or 0,
+                               "마감일 바뀜": got.get("마감일 바뀜", 0), "오류": seen.get("오류", 0),
+                               "추출": s["추출"], "확인 필요": s["확인 필요"], "비용": s["비용"],
+                               "오늘 비용": _today_cost()})
 
+    notify_cost()
     detect = detect_changes()
-    scan_lists() >> detect
+    collect_list() >> detect
     close = close_postings()
-    raw, load = _process("수정 확인", pt.DAILY_LIMIT, daily=True)
+    raw, load = _process("매일 수집", pt.DAILY_LIMIT, daily=True)
     detect >> [close, raw]
-    done = notify_result()
-    [load, close] >> done
+    [load, close] >> notify_result()
 
 
 backfill_once()
 daily_collect()
-recheck_postings()

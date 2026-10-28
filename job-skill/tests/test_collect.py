@@ -61,70 +61,6 @@ def items_of(numbers):
     return [{"rec_idx": str(n)} for n in numbers]
 
 
-def test_select_new_stops_after_five_known():
-    import collect
-    new, stopped = collect.select_new(items_of([10, 9, 8, 7, 6, 5, 4, 3]), {"7", "6", "5", "4", "3"})
-    assert nos(new) == ["10", "9", "8"] and stopped is True
-
-
-def test_select_new_ignores_short_known_runs():
-    import collect
-    new, stopped = collect.select_new(items_of([10, 9, 8, 7, 6, 5, 4]), {"9", "8"})
-    assert nos(new) == ["10", "7", "6", "5", "4"] and stopped is False
-
-
-def test_select_new_all_known_is_empty():
-    import collect
-    new, stopped = collect.select_new(items_of([6, 5, 4, 3, 2, 1]), {"6", "5", "4", "3", "2", "1"})
-    assert new == [] and stopped is True
-
-
-class FakeGet:
-    """첫 쪽은 fixture, 그다음은 빈 목록. 받은 주소를 기록한다."""
-
-    def __init__(self, status=200):
-        self.urls, self.status = [], status
-
-    def __call__(self, url, *a, **k):
-        self.urls.append(url)
-        if self.status != 200:
-            return self.status, "", b""
-        body = page() if "page=1&" in url else "<html><body></body></html>"
-        return 200, "text/html", body.encode("utf-8")
-
-
-def test_collect_list_filters_and_writes_targets(tmp_path):
-    import collect
-    get = FakeGet()
-    res = collect.collect_list(str(tmp_path), known=set(), get=get, today=TODAY)
-    rows = collect.read_targets(str(tmp_path))
-    # 두 직무 목록 모두 같은 fixture 가 오지만, 겹친 공고는 먼저 본 직무 하나로만
-    assert nos(rows) == ["9000007", "9000006", "9000004", "9000002", "9000001"]
-    assert {r["role"] for r in rows} == {"백엔드"}
-    by = {r["rec_idx"]: r for r in rows}
-    assert by["9000007"]["deadline"] == "2026-11-15" and by["9000006"]["deadline"] == "2026-11-03"
-    assert by["9000004"]["deadline"] == ""
-    assert sorted(res["excluded"]) == [("9000003", "교육생"), ("9000005", "4년 이상")]
-    assert not any("relay" in u for u in get.urls)      # 본문은 요청하지 않는다(4년 이상 포함)
-    assert list(open(tmp_path / "targets.tsv", encoding="utf-8"))[0].rstrip("\n").split("\t") == collect.TARGET_FIELDS
-
-
-def test_collect_list_stops_on_known_run_and_respects_max_new(tmp_path):
-    import collect
-    known = {"9000005", "9000004", "9000003", "9000002", "9000001"}
-    res = collect.collect_list(str(tmp_path), known=known, get=FakeGet(), today=TODAY)
-    assert nos(res["targets"]) == ["9000007", "9000006"]
-    assert res["stopped"] == {"백엔드": True, "데이터 엔지니어": True}
-    res2 = collect.collect_list(str(tmp_path / "b"), known=set(), get=FakeGet(), today=TODAY, max_new=2)
-    assert nos(res2["targets"]) == ["9000007", "9000006"]
-
-
-def test_collect_list_raises_on_list_error(tmp_path):
-    import collect
-    with pytest.raises(collect.ListFetchError):
-        collect.collect_list(str(tmp_path), known=set(), get=FakeGet(status=500), today=TODAY)
-
-
 def test_classify_targets(tmp_path):
     import collect
     rows = [{"rec_idx": n, "company": "가짜", "title": "가짜", "role": "백엔드", "career": "신입", "deadline": "",
@@ -210,26 +146,44 @@ class AllPagesGet:
         return 200, "text/html", ("<html></html>" if self.empty_first else page()).encode("utf-8")
 
 
-def test_collect_list_without_stop_rule_skips_known(tmp_path):
-    """③: 아는 공고가 연속 5개여도 멈추지 않고 건너뛴다 — 부분 실행(시험·실패) 뒤 다시 돌려도 이어서 한다."""
-    import collect
-    known = {"9000007", "9000006", "9000005", "9000004", "9000003"}
-    res = collect.collect_list(str(tmp_path), known=known, get=FakeGet(), today=TODAY, stop_after=None)
-    assert nos(res["targets"]) == ["9000002", "9000001"]
-    assert res["stopped"] == {"백엔드": False, "데이터 엔지니어": False}
-
-
-def test_collect_list_ends_on_repeated_page(tmp_path):
-    import collect
-    get = AllPagesGet()
-    collect.collect_list(str(tmp_path), known=set(), get=get, today=TODAY, stop_after=None)
-    assert len(get.urls) == 4      # 직무마다 1쪽 + 되풀이된 2쪽에서 끝
-
-
 def test_empty_first_page_is_an_error(tmp_path):
     """목록 1쪽이 200인데 공고가 0개 = 화면이 바뀌었거나 막힌 것. '목록 끝'으로 보고 조용히 0건으로 끝내지 않는다."""
     import collect
     with pytest.raises(collect.ListFetchError):
-        collect.collect_list(str(tmp_path), known=set(), get=AllPagesGet(empty_first=True), today=TODAY)
-    with pytest.raises(collect.ListFetchError):
         collect.scan_lists(get=AllPagesGet(empty_first=True), now=NOW)
+
+
+# ── ① 매일 수집: 목록 전체에서 새 공고 고르기(연속 멈춤 없음) ─────────────────
+def test_select_targets_skips_known_and_excludes():
+    import collect
+    listed = collect.scan_lists(get=PagedGet(), now=NOW)
+    targets, excluded = collect.select_targets(listed, known={"9000007"}, today=TODAY)
+    assert nos(targets) == ["9000006", "9000004", "9000002", "9000001"]       # 아는 번호는 건너뜀(멈추지 않음)
+    assert sorted(excluded) == [("9000003", "교육생"), ("9000005", "4년 이상")]
+    by = {r["rec_idx"]: r for r in targets}
+    assert by["9000006"]["deadline"] == "2026-11-03" and by["9000004"]["deadline"] == ""
+    assert by["9000006"]["role"] == "백엔드" and set(targets[0]) >= set(collect.TARGET_FIELDS)
+
+
+def test_select_targets_twice_gives_nothing_new():
+    """멱등성: 고른 공고와 버린 공고가 '아는 번호'가 되면 두 번째에는 새 공고 0건."""
+    import collect
+    listed = collect.scan_lists(get=PagedGet(), now=NOW)
+    targets, excluded = collect.select_targets(listed, known=set(), today=TODAY)
+    known = set(nos(targets)) | {no for no, _ in excluded}
+    assert collect.select_targets(listed, known=known, today=TODAY) == ([], [])
+
+
+def test_select_targets_respects_max_new():
+    import collect
+    listed = collect.scan_lists(get=PagedGet(), now=NOW)
+    targets, _ = collect.select_targets(listed, known=set(), today=TODAY, max_new=2)
+    assert nos(targets) == ["9000007", "9000006"]
+
+
+def test_list_requests_use_career_filter():
+    """사람인 경력 필터(신입·경력 3년 이하·경력무관)를 켠 목록만 받는다(사용자 결정)."""
+    import collect
+    get = PagedGet()
+    collect.scan_lists(get=get, now=NOW)
+    assert get.urls and all("exp_cd=1%2C2&exp_max=3&exp_none=y" in u for u in get.urls)

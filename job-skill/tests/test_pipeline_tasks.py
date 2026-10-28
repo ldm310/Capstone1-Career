@@ -83,25 +83,6 @@ def test_ocr_failure_propagates(monkeypatch, tmp_path):
         pipeline_tasks.step_ocr(str(tmp_path))
 
 
-def test_collect_puts_pending_first(monkeypatch, tmp_path):
-    import collect
-    import pipeline_tasks
-    monkeypatch.setattr(pipeline_tasks, "connect", lambda: contextlib.nullcontext(object()))
-    monkeypatch.setattr(pipeline_tasks.db_queries, "known_posting_nos", lambda conn: set())
-    monkeypatch.setattr(pipeline_tasks.db_queries, "pending_postings", lambda conn: [{"rec_idx": "P1", **ROW}])
-    monkeypatch.setattr(pipeline_tasks.db_queries, "record_excluded", lambda conn, rows: len(rows))
-
-    def fake_collect(run_dir, known, max_new=None, **k):
-        rows = [{"rec_idx": n, **ROW} for n in ("N1", "P1", "N2")]
-        collect.write_targets(run_dir, rows)
-        return {"targets": rows, "excluded": [("X9", "4년 이상")], "listed": 4, "stopped": {}}
-
-    monkeypatch.setattr(pipeline_tasks.collect, "collect_list", fake_collect)
-    res = pipeline_tasks.step_collect(str(tmp_path), include_pending=True)
-    assert [r["rec_idx"] for r in collect.read_targets(str(tmp_path))] == ["P1", "N1", "N2"]
-    assert res == {"new": 2, "pending": 1, "excluded": 1}
-
-
 def test_extract_passes_budget_and_alerts_once(monkeypatch, tmp_path):
     import pipeline_tasks
     write_rows(tmp_path, ["A", "B"])
@@ -161,22 +142,6 @@ def test_fetch_images_skips_existing_image(monkeypatch, tmp_path):
 
 
 # ── ② 수정 확인 태스크 ────────────────────────────────────────────────────
-def test_pick_recheck_writes_check_file(monkeypatch, tmp_path):
-    import datetime as dt
-    import pipeline_tasks
-    checked = dt.datetime(2026, 10, 25, 12, 0, tzinfo=dt.timezone.utc)
-    rows = [{"rec_idx": n, **ROW, "raw_hash": "h" * 64, "last_checked_at": checked} for n in ("A", "B")]
-    monkeypatch.setattr(pipeline_tasks, "connect", lambda: contextlib.nullcontext(object()))
-    monkeypatch.setattr(pipeline_tasks.db_queries, "open_postings", lambda conn: rows)
-    monkeypatch.setattr(pipeline_tasks.db_queries, "update_deadlines", lambda conn, m: len(m))
-    monkeypatch.setattr(pipeline_tasks.collect, "scan_lists",
-                        lambda **k: {"A": {"updated_at": checked + dt.timedelta(days=1), "deadline_text": ""}})
-    res = pipeline_tasks.step_pick_recheck(str(tmp_path))
-    check = json.loads((tmp_path / "check.json").read_text(encoding="utf-8"))
-    assert [r["rec_idx"] for r in check] == ["A", "B"]          # A 수정, B 목록에 없음
-    assert res == {"진행": 2, "수정": 1, "목록에 없음": 1, "마감일 바뀜": 0}
-
-
 def test_detect_touches_unchanged_only(monkeypatch, tmp_path):
     import pipeline_tasks
     (tmp_path / "check.json").write_text(json.dumps([{"rec_idx": n, **ROW, "raw_hash": "h"} for n in "ABCD"]),
@@ -207,13 +172,13 @@ def result(base, dag_id, run, no, cost, run_at):
     (d / f"{no}.json").write_text(json.dumps({"cost_usd": cost, "run_at": run_at}), encoding="utf-8")
 
 
-def test_day_spent_counts_daily_and_recheck_only(tmp_path):
-    """하루 상한은 ①+② 만(③ 은 따로 $10). 결과 파일의 run_at(UTC)을 KST 날짜로 센다 —
+def test_day_spent_counts_daily_only(tmp_path):
+    """하루 상한은 ① 만(③ 은 따로 $10). 결과 파일의 run_at(UTC)을 KST 날짜로 센다 —
     DB 에 아직 안 들어간 결과(재시도·실패한 실행·같이 도는 실행)도 빠짐없이."""
     import datetime as dt
     import pipeline_tasks
     result(tmp_path, "daily_collect", "r1", "A", 1.0, "2026-10-28T03:00:00+00:00")     # KST 10/28 12:00
-    result(tmp_path, "recheck_postings", "r2", "B", 0.5, "2026-10-27T16:00:00+00:00")  # KST 10/28 01:00
+    result(tmp_path, "daily_collect", "r2", "B", 0.5, "2026-10-27T16:00:00+00:00")     # KST 10/28 01:00
     result(tmp_path, "daily_collect", "r0", "C", 3.0, "2026-10-27T14:00:00+00:00")     # KST 10/27 23:00 → 어제
     result(tmp_path, "backfill_once", "r3", "D", 6.0, "2026-10-28T03:00:00+00:00")     # ③ 은 세지 않음
     assert pipeline_tasks.day_spent(dt.date(2026, 10, 28), base=str(tmp_path)) == (1.5, 2)
@@ -232,30 +197,6 @@ def test_extract_budget(monkeypatch, tmp_path):
     assert pipeline_tasks.extract_budget(str(tmp_path), 5.0, daily=True) == 0.0
 
 
-def test_collect_defers_excluded_until_load(monkeypatch, tmp_path):
-    """버린 공고는 수집 때가 아니라 DB 저장에 성공한 뒤 기록한다 — 실패한 ① 의 버린 공고가 다음 날 '아는 번호'로
-    연속 5개 멈춤을 일으켜 그날 공고를 놓치지 않게."""
-    import collect
-    import pipeline_tasks
-    got = {}
-    monkeypatch.setattr(pipeline_tasks, "connect", lambda: contextlib.nullcontext(object()))
-    monkeypatch.setattr(pipeline_tasks.db_queries, "known_posting_nos", lambda conn: set())
-    monkeypatch.setattr(pipeline_tasks.db_queries, "pending_postings", lambda conn: [])
-    monkeypatch.setattr(pipeline_tasks.db_queries, "record_excluded", lambda conn, rows: pytest.fail("수집 때 기록함"))
-
-    def fake_collect(run_dir, known, **k):
-        got.update(k)
-        collect.write_targets(run_dir, [])
-        return {"targets": [], "excluded": [("X9", "4년 이상")], "listed": 1, "stopped": {}}
-
-    monkeypatch.setattr(pipeline_tasks.collect, "collect_list", fake_collect)
-    assert pipeline_tasks.step_collect(str(tmp_path), include_pending=False)["excluded"] == 1
-    assert json.loads((tmp_path / "excluded.json").read_text(encoding="utf-8")) == [["X9", "4년 이상"]]
-    assert got["stop_after"] is None                  # ③: 연속 멈춤 없이 목록 끝까지(아는 번호는 건너뜀)
-    pipeline_tasks.step_collect(str(tmp_path / "d"), include_pending=True)
-    assert got["stop_after"] == 5                     # ①: 연속 5개 멈춤
-
-
 def test_load_records_excluded_after_saving(monkeypatch, tmp_path):
     import pipeline_tasks
     order = []
@@ -271,25 +212,6 @@ def test_load_records_excluded_after_saving(monkeypatch, tmp_path):
     write_rows(tmp_path, [])                         # 새 공고 0건이어도 버린 공고는 기록
     pipeline_tasks.step_load(str(tmp_path))
     assert order == [("버린 공고", [("X9", "4년 이상")])]
-
-
-def test_pick_recheck_updates_deadlines_from_list(monkeypatch, tmp_path):
-    """목록의 마감일로 DB 마감일을 바꾼다 — 고른 공고만이 아니라 목록에 보이는 공고 전부(요청 추가 없음)."""
-    import datetime as dt
-    import pipeline_tasks
-    checked = dt.datetime(2026, 10, 25, 12, 0, tzinfo=dt.timezone.utc)
-    rows = [{"rec_idx": "A", **ROW, "raw_hash": "h", "last_checked_at": checked}]
-    got = {}
-    monkeypatch.setattr(pipeline_tasks, "connect", lambda: contextlib.nullcontext(object()))
-    monkeypatch.setattr(pipeline_tasks.db_queries, "open_postings", lambda conn: rows)
-    monkeypatch.setattr(pipeline_tasks.db_queries, "today_kst", lambda: dt.date(2026, 10, 28))
-    monkeypatch.setattr(pipeline_tasks.db_queries, "update_deadlines", lambda conn, m: got.update(m) or 1)
-    monkeypatch.setattr(pipeline_tasks.collect, "scan_lists", lambda **k: {
-        "A": {"updated_at": None, "deadline_text": "~11.30(월)"},          # 등록만(본문 확인 안 함)이어도 마감일은 반영
-        "N": {"updated_at": None, "deadline_text": "상시채용"}})            # 읽을 수 없는 마감일은 넘기지 않음
-    res = pipeline_tasks.step_pick_recheck(str(tmp_path))
-    assert got == {"A": dt.date(2026, 11, 30)}
-    assert res["마감일 바뀜"] == 1
 
 
 def test_load_failure_is_reported_in_plain_words(monkeypatch, tmp_path):
@@ -323,3 +245,65 @@ def test_load_returns_counts_for_the_log(monkeypatch, tmp_path):
 
     monkeypatch.setattr(pipeline_tasks, "run_script", fake_run)
     assert pipeline_tasks.step_load(str(tmp_path)) == {"공고": 1, "추출 실행(새로)": 1}
+
+
+
+# ── ① 매일 수집: 목록 전체 → 새 공고 + 수정·사라진 공고 고르기 + 마감일 반영 ──────
+def item(no, career="신입", updated_at=None, deadline_text=""):
+    return {"rec_idx": no, "title": "지어낸 공고", "company": "(주)지어낸회사", "career": career, "role": "백엔드",
+            "deadline_text": deadline_text, "updated_text": "", "updated_at": updated_at}
+
+
+@pytest.fixture
+def daily(monkeypatch):
+    """DB·사람인을 가짜로. 호출을 기록한다."""
+    import datetime as dt
+    import pipeline_tasks
+    calls = {}
+    checked = dt.datetime(2026, 10, 25, 12, 0, tzinfo=dt.timezone.utc)
+    monkeypatch.setattr(pipeline_tasks, "connect", lambda: contextlib.nullcontext(object()))
+    monkeypatch.setattr(pipeline_tasks.db_queries, "today_kst", lambda: dt.date(2026, 10, 28))
+    monkeypatch.setattr(pipeline_tasks.db_queries, "known_posting_nos", lambda conn: {"K1", "O1", "O2"})
+    monkeypatch.setattr(pipeline_tasks.db_queries, "pending_postings", lambda conn: [{"rec_idx": "P1", **ROW}])
+    monkeypatch.setattr(pipeline_tasks.db_queries, "open_postings", lambda conn: [
+        {"rec_idx": n, **ROW, "raw_hash": "h", "last_checked_at": checked} for n in ("O1", "O2")])
+    monkeypatch.setattr(pipeline_tasks.db_queries, "update_deadlines", lambda conn, m: calls.setdefault("deadlines", m) and len(m))
+    monkeypatch.setattr(pipeline_tasks.db_queries, "record_excluded", lambda conn, rows: pytest.fail("수집 때 기록함"))
+    monkeypatch.setattr(pipeline_tasks.collect, "scan_lists", lambda **k: {
+        "N1": item("N1"), "K1": item("K1"), "P1": item("P1"), "N2": item("N2", deadline_text="~11.30(월)"),
+        "X9": item("X9", career="교육생"),
+        "O1": item("O1", updated_at=checked + dt.timedelta(days=1), deadline_text="~11.20(금)")})   # O1 수정, O2 사라짐
+    pipeline_tasks._calls = calls
+    return pipeline_tasks
+
+
+def test_daily_collect_writes_targets_check_and_excluded(daily, tmp_path):
+    res = daily.step_collect(str(tmp_path), include_pending=True)
+    assert [r["rec_idx"] for r in daily.collect.read_targets(str(tmp_path))] == ["P1", "N1", "N2"]   # 밀린 공고 먼저, 아는 번호 건너뜀
+    assert json.loads((tmp_path / "excluded.json").read_text(encoding="utf-8")) == [["X9", "교육생"]]
+    check = json.loads((tmp_path / "check.json").read_text(encoding="utf-8"))
+    assert [(r["rec_idx"], r["reason"]) for r in check] == [("O1", "수정"), ("O2", "목록에 없음")]
+    assert res == {"new": 2, "pending": 1, "excluded": 1, "진행": 2, "수정": 1, "목록에 없음": 1, "마감일 바뀜": 2}
+
+
+def test_daily_collect_updates_deadlines_from_list(daily, tmp_path):
+    import datetime as dt
+    daily.step_collect(str(tmp_path), include_pending=True)
+    assert daily._calls["deadlines"] == {"N2": dt.date(2026, 11, 30), "O1": dt.date(2026, 11, 20)} or \
+        daily._calls["deadlines"] == {"O1": dt.date(2026, 11, 20), "N2": dt.date(2026, 11, 30)}
+
+
+def test_backfill_collect_has_no_recheck(daily, monkeypatch, tmp_path):
+    """③ 은 밀린 공고·수정 확인 없이 새 공고만(목록 끝까지, 아는 번호 건너뜀)."""
+    monkeypatch.setattr(daily.db_queries, "open_postings", lambda conn: pytest.fail("③ 은 수정 확인 안 함"))
+    res = daily.step_collect(str(tmp_path), include_pending=False)
+    assert [r["rec_idx"] for r in daily.collect.read_targets(str(tmp_path))] == ["N1", "P1", "N2"]
+    assert not (tmp_path / "check.json").exists() and res == {"new": 3, "pending": 0, "excluded": 1}
+
+
+def test_detect_and_close_without_check_file(monkeypatch, tmp_path):
+    """③ 처럼 check.json·changes.json 이 없으면 아무것도 안 한다."""
+    import pipeline_tasks
+    monkeypatch.setattr(pipeline_tasks, "connect", lambda: pytest.fail("DB 를 열면 안 됨"))
+    assert pipeline_tasks.step_detect(str(tmp_path)) == {"확인": 0, "바뀜": 0, "그대로": 0, "오류": 0}
+    assert pipeline_tasks.step_close(str(tmp_path)) == 0

@@ -1,13 +1,12 @@
 """
 공고 목록 수집 — Airflow ①·③ 의 첫 단계.
 
-사람인 직무 목록(백엔드 84, 데이터엔지니어 83)을 최신순으로 한 쪽씩 받으면서
-  - 이미 아는 공고번호(DB 에 있는 공고 + 버린 공고)가 연속 stop_after(5)개 나오면 그 직무를 멈춘다.
-    그 앞의 처음 보는 공고만 새 공고다. 연속 수는 쪽을 넘어 이어진다.
-  - 최소 요구 연수 4년 이상·교육생·경력 조건 모름은 버리고(본문 요청 없음) 이유를 돌려준다.
-  - 두 직무 목록에 같이 나오는 공고는 먼저 본 직무 하나로만 넣는다.
-    (이번 실행에서 고른 공고는 멈춤 규칙의 '아는 번호'로 세지 않는다 — 겹친 공고 때문에 일찍 멈추지 않게)
-결과는 <run_dir>/targets.tsv. 본문을 받은 뒤 classify_targets 가 글/이미지 종류를 채운다.
+scan_lists: 사람인 직무 목록(백엔드 84, 데이터엔지니어 83)을 경력 필터(신입·경력 3년 이하·경력무관)를 켜고 끝까지 본다.
+  두 직무 합쳐 약 15~28번 요청. 공고마다 마감일 글과 "3시간 전 수정" 같은 글도 읽는다.
+select_targets: 새 공고 = 목록 − 아는 번호(DB 에 있는 공고 + 버린 공고). 아는 번호는 건너뛸 뿐 멈추지 않는다.
+  교육생·4년 이상·경력 조건 모름은 버리고(본문 요청 없음) 이유를 돌려준다.
+  두 번 돌려도 고른 공고·버린 공고가 아는 번호가 되어 새 공고 0건(멱등).
+targets.tsv 에 쓰고, 본문을 받은 뒤 classify_targets 가 글/이미지 종류를 채운다.
 요청은 fetch_images.get(간격 1.2초, 프로젝트 이름 UA)으로만 한다.
 """
 
@@ -27,6 +26,9 @@ from sample_random import LIST, ROLES, TRAINING, min_years, parse_list
 TARGET_FIELDS = ["rec_idx", "company", "title", "role", "career", "deadline", "kind", "text_chars", "images"]
 KST = ZoneInfo("Asia/Seoul")
 MAX_YEARS = 3
+# 사람인 경력 필터: 신입(exp_cd=1)·경력(2) 3년 이하(exp_max=3)·경력무관(exp_none=y) — 사용자 결정(사람인 필터를 믿음).
+# 교육생은 이 필터로 걸러지지 않아 eligible 이 따로 버린다.
+FILTER = "&exp_cd=1%2C2&exp_max=3&exp_none=y"
 _ITEM = re.compile(r'<div id="rec-(\d+)" class="list_item[^"]*">(.*?)<div class="similar_recruit">', re.S)
 _DATE = re.compile(r'<span class="date">\s*(.*?)\s*</span>', re.S)
 _AGO = re.compile(r'<span class="deadlines">\s*(.*?)\s*</span>', re.S)
@@ -94,26 +96,6 @@ def eligible(career: str) -> tuple[bool, str]:
     return True, ""
 
 
-def _scan(items: list[dict], known: set[str], stop_after: int, run: int) -> tuple[list[dict], bool, int]:
-    """(처음 보는 공고, 멈췄는지, 끝났을 때 이어지는 연속 수). 아는 번호가 연속 stop_after 개면 멈춘다(None 이면 안 멈춤)."""
-    new = []
-    for it in items:
-        if it["rec_idx"] in known:
-            run += 1
-            if stop_after is not None and run >= stop_after:
-                return new, True, run
-        else:
-            run = 0
-            new.append(it)
-    return new, False, run
-
-
-def select_new(items: list[dict], known: set[str], stop_after: int = 5) -> tuple[list[dict], bool]:
-    """멈춘 곳 앞의 처음 보는 공고와 멈췄는지."""
-    new, stopped, _ = _scan(items, known, stop_after, 0)
-    return new, stopped
-
-
 def write_targets(run_dir: str, rows: list[dict]) -> None:
     os.makedirs(run_dir, exist_ok=True)
     with open(os.path.join(run_dir, "targets.tsv"), "w", encoding="utf-8", newline="") as f:
@@ -132,7 +114,7 @@ def read_targets(run_dir: str) -> list[dict]:
 
 def _page_items(get, role: str, code: str, page_no: int) -> list[dict]:
     """목록 한 쪽. HTTP 오류, 또는 1쪽인데 공고가 0개(화면이 바뀌었거나 막힘)면 ListFetchError — '목록 끝'으로 착각하지 않게."""
-    status, _, body = get(LIST.format(code=code, page=page_no))
+    status, _, body = get(LIST.format(code=code, page=page_no) + FILTER)
     if status != 200:
         raise ListFetchError(f"{role} 목록 {page_no}쪽 HTTP {status}")
     items = parse_items(body.decode("utf-8", "replace"))
@@ -141,52 +123,8 @@ def _page_items(get, role: str, code: str, page_no: int) -> list[dict]:
     return items
 
 
-def collect_list(run_dir: str, known: set[str], get=fetch_images.get, max_pages: int = 40, stop_after: int | None = 5,
-                 max_new: int | None = None, today: dt.date | None = None) -> dict:
-    """두 직무 목록에서 새 공고를 골라 <run_dir>/targets.tsv 를 쓴다.
-    stop_after=None(③)이면 연속 멈춤 없이 목록 끝까지 보며 아는 번호만 건너뛴다(부분 실행 뒤 다시 돌려도 이어서).
-    빈 쪽, 또는 이 직무에서 이미 본 공고만 있는 쪽(끝을 넘겨 마지막 쪽을 되풀이)에서 그 직무는 끝."""
-    today = today or dt.datetime.now(KST).date()
-    targets, excluded, taken = [], [], set()
-    listed, stopped = 0, {}
-    full = False
-    for role, code in ROLES:
-        run, stopped[role] = 0, False
-        seen: set[str] = set()
-        for page_no in range(1, max_pages + 1):
-            if full:
-                break
-            items = _page_items(get, role, code, page_no)
-            if not items or all(it["rec_idx"] in seen for it in items):
-                break
-            seen.update(it["rec_idx"] for it in items)
-            listed += len(items)
-            new, stop, run = _scan(items, known, stop_after, run)
-            for it in new:
-                no = it["rec_idx"]
-                if no in taken:
-                    continue
-                taken.add(no)
-                ok, reason = eligible(it["career"])
-                if not ok:
-                    excluded.append((no, reason))
-                    continue
-                d = parse_deadline(it["deadline_text"], today)
-                targets.append({"rec_idx": no, "company": it["company"], "title": it["title"], "role": role,
-                                "career": it["career"], "deadline": d.isoformat() if d else "",
-                                "kind": "", "text_chars": "", "images": ""})
-                if max_new is not None and len(targets) >= max_new:
-                    full = True
-                    break
-            if stop:
-                stopped[role] = True
-                break
-    write_targets(run_dir, targets)
-    return {"targets": targets, "excluded": excluded, "listed": listed, "stopped": stopped}
-
-
 def scan_lists(get=fetch_images.get, max_pages: int = 40, now: dt.datetime | None = None) -> dict[str, dict]:
-    """② 수정 확인용: 두 직무 목록을 끝까지 본다(연속 멈춤 없음, 두 직무 합쳐 약 26번 요청).
+    """두 직무 목록을 경력 필터를 켜고 끝까지 본다(연속 멈춤 없음).
     {공고번호: 목록 항목 + role + updated_at(parse_updated)}. 겹친 공고는 먼저 본 직무.
     빈 쪽이나, 이 직무에서 이미 본 공고만 있는 쪽(끝을 넘겨 마지막 쪽을 되풀이)이 나오면 그 직무는 끝."""
     now = now or dt.datetime.now(KST)
@@ -201,6 +139,27 @@ def scan_lists(get=fetch_images.get, max_pages: int = 40, now: dt.datetime | Non
                 seen.add(it["rec_idx"])
                 listed.setdefault(it["rec_idx"], {**it, "role": role, "updated_at": parse_updated(it["updated_text"], now)})
     return listed
+
+
+def select_targets(listed: dict[str, dict], known: set[str], today: dt.date,
+                   max_new: int | None = None) -> tuple[list[dict], list[tuple[str, str]]]:
+    """(새 공고 targets 줄, 버린 공고 [(번호, 이유)]). 목록 순서(백엔드 → 데이터 엔지니어, 최신순) 그대로.
+    max_new 는 시험용: 새 공고를 그 수까지만."""
+    targets, excluded = [], []
+    for no, it in listed.items():
+        if no in known:
+            continue
+        ok, reason = eligible(it["career"])
+        if not ok:
+            excluded.append((no, reason))
+            continue
+        d = parse_deadline(it.get("deadline_text", ""), today)
+        targets.append({"rec_idx": no, "company": it["company"], "title": it["title"], "role": it["role"],
+                        "career": it["career"], "deadline": d.isoformat() if d else "",
+                        "kind": "", "text_chars": "", "images": ""})
+        if max_new is not None and len(targets) >= max_new:
+            break
+    return targets, excluded
 
 
 def classify_targets(run_dir: str) -> dict[str, int]:

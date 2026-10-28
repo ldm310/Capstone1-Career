@@ -18,15 +18,15 @@
 <defs><marker id="a" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#1a1a1a"/></marker></defs>
 <rect width="1680" height="1070" fill="#fff"/>
 <rect x="20" y="20" width="1640" height="1030" fill="none" stroke="#999" stroke-width="1"/>
-<text class="title" x="44" y="58">② 수정 확인 — 두 가지 경우를 잡는 방법</text>
-<text class="id" x="44" y="90">recheck_postings</text>
-<rect x="1384" y="42" width="252" height="32" rx="16" fill="#f2f2f2" stroke="#666" stroke-width="1"/>
-<text class="badge" x="1510.0" y="58">매달 3·6·9…30일 12:00</text>
+<text class="title" x="44" y="58">① 매일 수집 — 수정·마감을 잡는 방법</text>
+<text class="id" x="44" y="90">daily_collect · 변경 감지</text>
+<rect x="1514" y="42" width="122" height="32" rx="16" fill="#f2f2f2" stroke="#666" stroke-width="1"/>
+<text class="badge" x="1575.0" y="58">매일 00:00</text>
 <text class="lane" x="44" y="132">경우 1. 회사가 공고 내용을 고친 경우</text>
-<text class="lanesub" x="44" y="155">목록의 "N시간 전 수정"을 마지막 확인 시각과 비교 → 고친 공고만 본문을 받아 해시로 진짜 바뀌었는지 확인</text>
+<text class="lanesub" x="44" y="155">목록의 "N시간 전 수정"을 마지막 확인 시각과 비교 → 고친 공고만 본문을 받아 해시로 확인 ('수정' 표시는 약 24시간만 보여서 매일 본다)</text>
 <rect x="90" y="205" width="150" height="86" rx="4" fill="#fff" stroke="#1a1a1a" stroke-width="1.3"/>
 <g transform="translate(152.0,219) scale(1.0833333333333333)" fill="none" stroke="#1a1a1a" stroke-width="1.48" stroke-linecap="round" stroke-linejoin="round"><path d="M15 15m-4 0a4 4 0 1 0 8 0a4 4 0 1 0 -8 0" /><path d="M18.5 18.5l2.5 2.5" /><path d="M4 6h16" /><path d="M4 12h4" /><path d="M4 18h4" /></g>
-<text class="nt" x="165.0" y="265">공고 목록 확인</text>
+<text class="nt" x="165.0" y="265">공고 목록 수집</text>
 <text class="sub" x="165.0" y="307">예: "5시간 전 수정"</text>
 <rect x="295" y="205" width="150" height="86" rx="4" fill="#fff" stroke="#1a1a1a" stroke-width="1.3"/>
 <g transform="translate(357.0,219) scale(1.0833333333333333)" fill="none" stroke="#1a1a1a" stroke-width="1.48" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0" /><path d="M12 7v5l3 3" /></g>
@@ -63,24 +63,24 @@
 <path class="ln" d="M1060,248.0 H1115" marker-end="url(#a)"/>
 <path class="ln" d="M370.0,291 V360" marker-end="url(#a)"/><text class="elab_l" x="378.0" y="325.5">아니오 · "등록"만 있음</text>
 <path class="ln" d="M780.0,291 V360" marker-end="url(#a)"/><text class="elab_l" x="788.0" y="325.5">같음</text>
-<text class="exh" x="1100" y="372">예) 마지막 확인이 3일 전일 때</text>
+<text class="exh" x="1100" y="372">예) 마지막 확인이 어제 00:00일 때</text>
 <text class="ex" x="1100" y="396">A  "5시간 전 수정" → 확인 뒤에 고침 → 본문 다름 → 다시 추출</text>
-<text class="ex" x="1100" y="420">B  "1일 전 수정" → 확인 뒤에 고침 → 본문 같음 → 확인 시각만</text>
+<text class="ex" x="1100" y="420">B  "9시간 전 수정" → 확인 뒤에 고침 → 본문 같음 → 확인 시각만</text>
 <text class="ex" x="1100" y="444">C  "10일 전 등록" → 고친 적 없음 → 안 열어 봄</text>
 <line x1="40" y1="492" x2="1640" y2="492" stroke="#ccc" stroke-width="1"/>
 <text class="lane" x="44" y="524">경우 2. 마감일이 안 지났는데 공고가 내려간 경우 (조기 마감 · 상시채용 마감)</text>
-<text class="lanesub" x="44" y="547">DB에는 아직 '진행'인데 목록에서 사라진 공고 → 본문을 받아 정말 없어졌는지 확인 → 없으면 '마감'</text>
+<text class="lanesub" x="44" y="547">DB에는 아직 '진행'인데 목록에서 사라진 공고 → 공고 전체 페이지의 '접수마감' 표시로 확인 → 있으면 '마감'</text>
 <rect x="90" y="700" width="150" height="86" rx="4" fill="#fff" stroke="#1a1a1a" stroke-width="1.3"/>
 <g transform="translate(152.0,714) scale(1.0833333333333333)" fill="none" stroke="#1a1a1a" stroke-width="1.48" stroke-linecap="round" stroke-linejoin="round"><path d="M15 15m-4 0a4 4 0 1 0 8 0a4 4 0 1 0 -8 0" /><path d="M18.5 18.5l2.5 2.5" /><path d="M4 6h16" /><path d="M4 12h4" /><path d="M4 18h4" /></g>
-<text class="nt" x="165.0" y="760">공고 목록 확인</text>
+<text class="nt" x="165.0" y="760">공고 목록 수집</text>
 <text class="sub" x="165.0" y="802">DB엔 '진행' 공고</text>
 <rect x="295" y="700" width="150" height="86" rx="4" fill="#fff" stroke="#1a1a1a" stroke-width="1.3"/>
 <g transform="translate(357.0,714) scale(1.0833333333333333)" fill="none" stroke="#1a1a1a" stroke-width="1.48" stroke-linecap="round" stroke-linejoin="round"><path d="M10 10m-7 0a7 7 0 1 0 14 0a7 7 0 1 0 -14 0" /><path d="M8 8l4 4" /><path d="M12 8l-4 4" /><path d="M21 21l-6 -6" /></g>
 <text class="nt" x="370.0" y="760">목록에서 사라짐</text>
 <text class="sub" x="370.0" y="802">목록에 없는가?</text>
 <rect x="500" y="700" width="150" height="86" rx="4" fill="#fff" stroke="#1a1a1a" stroke-width="1.3"/>
-<g transform="translate(562.0,714) scale(1.0833333333333333)" fill="none" stroke="#1a1a1a" stroke-width="1.48" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2 -2v-2" /><path d="M7 11l5 5l5 -5" /><path d="M12 4l0 12" /></g>
-<text class="nt" x="575.0" y="760">본문 받기</text>
+<g transform="translate(562.0,714) scale(1.0833333333333333)" fill="none" stroke="#1a1a1a" stroke-width="1.48" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4m0 1a1 1 0 0 1 1 -1h14a1 1 0 0 1 1 1v14a1 1 0 0 1 -1 1h-14a1 1 0 0 1 -1 -1z" /><path d="M4 8l16 0" /><path d="M8 4l0 4" /></g>
+<text class="nt" x="575.0" y="760">전체 페이지 확인</text>
 <text class="sub" x="575.0" y="802">그 공고만</text>
 <rect x="910" y="585" width="150" height="86" rx="4" fill="#fff" stroke="#d0342c" stroke-width="1.3"/>
 <g transform="translate(972.0,599) scale(1.0833333333333333)" fill="none" stroke="#d0342c" stroke-width="1.48" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4m0 2a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v0a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2z" /><path d="M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-10" /><path d="M10 12l4 0" /></g>
@@ -88,28 +88,29 @@
 <text class="sub" x="985.0" y="687">상태 = '마감'</text>
 <rect x="910" y="700" width="150" height="86" rx="4" fill="#fff" stroke="#1a1a1a" stroke-width="1.3"/>
 <g transform="translate(972.0,714) scale(1.0833333333333333)" fill="none" stroke="#1a1a1a" stroke-width="1.48" stroke-linecap="round" stroke-linejoin="round"><path d="M18.9 7a8 8 0 0 1 1.1 5v1a6 6 0 0 0 .8 3" /><path d="M8 11a4 4 0 0 1 8 0v1a10 10 0 0 0 2 6" /><path d="M12 11v2a14 14 0 0 0 2.5 8" /><path d="M8 15a18 18 0 0 0 1.8 6" /><path d="M4.9 19a22 22 0 0 1 -.9 -7v-1a8 8 0 0 1 12 -6.95" /></g>
-<text class="nt" x="985.0" y="760">해시 비교</text>
+<text class="nt" x="985.0" y="760">본문 해시 비교</text>
 <text class="sub" x="985.0" y="802">경우 1과 같은 흐름</text>
 <rect x="910" y="815" width="150" height="86" rx="4" fill="#fff" stroke="#666" stroke-width="1.3" stroke-dasharray="5 4"/>
 <g transform="translate(972.0,829) scale(1.0833333333333333)" fill="none" stroke="#666" stroke-width="1.48" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8.1 8.1 0 0 0 -15.5 -2m-.5 -4v4h4" /><path d="M4 13a8.1 8.1 0 0 0 15.5 2m.5 4v-4h-4" /></g>
-<text class="nt" x="985.0" y="875">다음 ②에서 다시</text>
+<text class="nt" x="985.0" y="875">다음 날 다시</text>
 <text class="sub" x="985.0" y="917">마감으로 치지 않음</text>
 <path class="ln" d="M240,743.0 H295" marker-end="url(#a)"/>
 <path class="ln" d="M445,743.0 H500" marker-end="url(#a)"/><text class="elab" x="472.5" y="731.0">예</text>
-<path class="ln" d="M650,743.0 H672 V628.0 H910" marker-end="url(#a)"/><text class="elab" x="791.0" y="616.0">404 · 본문 없음</text>
-<path class="ln" d="M650,743.0 H910" marker-end="url(#a)"/><text class="elab" x="780.0" y="731.0">본문 있음</text>
+<path class="ln" d="M650,743.0 H672 V628.0 H910" marker-end="url(#a)"/><text class="elab" x="791.0" y="616.0">접수마감 · 404</text>
+<path class="ln" d="M650,743.0 H910" marker-end="url(#a)"/><text class="elab" x="780.0" y="731.0">진행 중</text>
 <path class="ln" d="M650,743.0 H672 V858.0 H910" marker-end="url(#a)"/><text class="elab" x="791.0" y="846.0">403 · 429 · 오류</text>
-<text class="exh" x="1130" y="640">왜 따로 잡아야 하나</text>
-<text class="ex" x="1130" y="664">DB에 마감일 11/30이 남아 있으면 웹에는 계속 '진행 중'으로 보인다.</text>
-<text class="ex" x="1130" y="688">그래서 목록에서 사라진 공고는 본문을 열어 확인한다.</text>
-<text class="ex" x="1130" y="712"></text>
-<text class="ex" x="1130" y="736">마감은 되돌릴 수 없어서, 막힘(403·429)·서버 오류는</text>
-<text class="ex" x="1130" y="760">마감으로 치지 않고 다음 ②에서 다시 본다.</text>
+<text class="exh" x="1130" y="640">왜 전체 페이지인가</text>
+<text class="ex" x="1130" y="664">본문 페이지는 마감돼도 200에 본문이 그대로 나온다.</text>
+<text class="ex" x="1130" y="688">전체 페이지에만 '접수마감' 버튼과 '마감되었습니다'가 붙는다.</text>
+<text class="ex" x="1130" y="712">(2026-10-28 확인: 마감 10건 모두 목록에 없음, 진행 10건 모두 있음)</text>
+<text class="ex" x="1130" y="736"></text>
+<text class="ex" x="1130" y="760">마감은 되돌릴 수 없어서, 막힘(403·429)·서버 오류는</text>
+<text class="ex" x="1130" y="784">마감으로 치지 않고 다음 날 다시 본다.</text>
 <line x1="40" y1="945" x2="1640" y2="945" stroke="#ccc" stroke-width="1"/>
 <g transform="translate(90,963) scale(0.8333333333333334)" fill="none" stroke="#1f5fbf" stroke-width="1.92" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5m0 2a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v12a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2z" /><path d="M16 3l0 4" /><path d="M8 3l0 4" /><path d="M4 11l16 0" /><path d="M8 15h2v2h-2z" /></g>
 <text class="note" x="120" y="973">마감일이 연장되면: 목록에 보이는 마감일을 DB에 바로 반영 (마감일은 본문 밖이라 해시로는 안 잡힘)</text>
 <g transform="translate(90,992) scale(0.8333333333333334)" fill="none" stroke="#888" stroke-width="1.92" stroke-linecap="round" stroke-linejoin="round"><path d="M13 21h-7a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v6.5" /><path d="M16 3v4" /><path d="M8 3v4" /><path d="M4 11h16" /><path d="M22 22l-5 -5" /><path d="M17 22l5 -5" /></g>
-<text class="note" x="120" y="1002">마감일이 이미 지난 공고: '진행 공고'(마감일 ≥ 오늘)에서 저절로 빠져서 ②가 따로 안 봄</text>
+<text class="note" x="120" y="1002">마감일이 이미 지난 공고: '진행 공고'(마감일 ≥ 오늘)에서 저절로 빠져서 따로 안 봄</text>
 <g transform="translate(90,1021) scale(0.8333333333333334)" fill="none" stroke="#888" stroke-width="1.92" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0" /><path d="M12 7v5l3 3" /></g>
 <text class="note" x="120" y="1031">마지막 확인 = DB 본문이 사람인 본문과 같다고 마지막으로 확인된 시각 (처음 저장 · 본문 같음 · 다시 추출 성공 때 갱신)</text>
 </svg>

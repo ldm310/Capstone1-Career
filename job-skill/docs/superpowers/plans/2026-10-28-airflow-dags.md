@@ -12,7 +12,15 @@
 
 **Tech Stack:** Python 3.12, Apache Airflow 3.3.2 (`apache/airflow:3.3.2-python3.12`, 사용자 결정), PostgreSQL 17.6, psycopg 3.2.3, openai 2.7.2, paddleocr 3.7.0 + paddlepaddle-gpu 3.2.2(cu126), pytest, Docker Desktop(WSL2, GPU).
 
-**Spec:** `job-skill/docs/superpowers/specs/2026-10-27-airflow-dags-design.md` (그림: `job-skill/docs/dag-backfill.png`, `dag-daily.png`, `dag-recheck.png`)
+**Spec:** `job-skill/docs/superpowers/specs/2026-10-27-airflow-dags-design.md` (그림: `job-skill/docs/dag-backfill.png`, `dag-daily.png`, `recheck-cases.png`)
+
+> **2026-10-28 계획 보강 (Task 5b, 사용자 결정):** ② `recheck_postings`를 없애고 ① `daily_collect`에 합쳤다. 아래 Task 5·5a·8의 ② 관련 내용은 이 보강으로 바뀌었다.
+> - 이유: 실제 목록 2,309건에서 '수정' 표시는 "N시간/N분 전 수정"(116건)뿐, "N일 전 수정" 0건 — 약 24시간 뒤 원래 등록일로 돌아간다. 3일마다 보면 수정을 대부분 놓친다.
+> - ① 은 목록 전체를 사람인 경력 필터(`exp_cd=1,2&exp_max=3&exp_none=y`, 사용자 결정)를 켜고 끝까지 본다. 새 공고 = 목록 − 아는 번호("연속 5개 멈춤" 없앰: `collect.select_targets`). ③ 도 같은 목록 수집을 쓴다.
+> - 같은 목록으로 '수정'된 진행 공고(마지막 확인 뒤)와 목록에서 사라진 진행 공고를 골라(check.json, reason) 변경 감지 태스크가 확인한다. 마감 확인은 공고 전체 페이지(`jobs/view`)의 '접수마감'(`sri_btn_expired_apply`·"마감되었습니다") — 본문 페이지(`view-detail`)는 마감돼도 200·본문 그대로(실제 마감 공고 10건으로 확인).
+> - 바뀐 공고는 targets.tsv 뒤에 붙인다(이미 있는 번호는 안 넣음). 목록 마감일은 ① 에서 반영.
+> - ① 의 태스크: 비용 알림 | 공고 목록 수집 → 변경 감지 → [마감 처리, 공고 원본 수집 → 이미지 처리 → LLM 추출 → DB 저장] → 결과 알림. 하루 상한은 ① 만.
+> - 함수: `collect.select_targets(listed, known, today, max_new)`, `collect.FILTER`, `recheck.VIEW`·`CLOSED_MARKS`, `step_collect`(①: check.json·마감일 반영 포함), `step_detect`·`step_close`(파일이 없으면 0). 없앤 것: `collect.collect_list`·`select_new`·`_scan`, `pipeline_tasks.step_pick_recheck`, DAG `recheck_postings`.
 
 모든 경로는 `job-skill/` 기준이다. 명령은 `job-skill/`에서 실행한다(PowerShell).
 

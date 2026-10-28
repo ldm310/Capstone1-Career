@@ -47,8 +47,8 @@
 | `db/schema.sql` | DB 표 만들기(PostgreSQL DDL). 설명은 [docs/physical-design.md](docs/physical-design.md) |
 | `db_load.py` | DB 저장: 표 만들기(`init`), 사전 동기화(`sync-dict`), 공고·추출 결과 넣기(`load`). 여러 번 돌려도 겹치지 않는다. |
 | `docker-compose.yml`, `.env.example` | 로컬 개발용 PostgreSQL(Docker). 비밀번호는 `.env`(올리지 않음) |
-| `collect.py` | Airflow 수집: 두 직무 목록에서 새 공고 고르기(연속 5개 멈춤, 마감일, 버린 공고), ②용 목록 전체 보기 |
-| `recheck.py` | Airflow ② 수정 확인: 다시 볼 공고 고르기('수정'·사라진 공고), 본문 지문 비교 |
+| `collect.py` | Airflow 수집: 두 직무 목록을 경력 필터를 켜고 끝까지 보기, 새 공고 고르기(목록 − 아는 번호, 마감일, 버린 공고) |
+| `recheck.py` | ① 안의 수정·마감 확인: 다시 볼 공고 고르기('수정'·사라진 공고), 본문 지문 비교, 전체 페이지의 '접수마감' 확인 |
 | `db_queries.py` | 파이프라인이 다음 할 일을 정하려고 DB에서 읽고 쓰는 함수(진행 공고, 밀린 공고, 하루 비용 등) |
 | `notify.py` | Slack 알림(실패, 비용 상한, 결과, 하루 비용). 숫자·상태만 보낸다. |
 | `pipeline_tasks.py` | Airflow 태스크 함수. 실행마다 `data/runs/<dag>/<run>/` 폴더를 만들고 위 스크립트를 돌린다. |
@@ -89,15 +89,16 @@ py -3.12 db_load.py load --run gpt-5.6-luna-ex            #    공고·추출 �
 ## Airflow로 돌리기
 
 노트북의 Docker에서 DAG 3개가 수집 → OCR → LLM 추출 → DB 저장을 자동으로 하고, Slack으로 알린다.
-설계는 [docs/superpowers/specs/2026-10-27-airflow-dags-design.md](docs/superpowers/specs/2026-10-27-airflow-dags-design.md), 태스크 그림은 [③](docs/dag-backfill.png) · [①](docs/dag-daily.png) · [②](docs/dag-recheck.png).
+설계는 [docs/superpowers/specs/2026-10-27-airflow-dags-design.md](docs/superpowers/specs/2026-10-27-airflow-dags-design.md), 태스크 그림은 [③](docs/dag-backfill.png) · [①](docs/dag-daily.png), 수정·마감을 잡는 방법은 [그림](docs/recheck-cases.png).
 
 | DAG | 언제 | 하는 일 |
 |---|---|---|
 | ③ 일회성 전체 수집 `backfill_once` | 관리 화면에서 **직접 한 번** | 진행 중인 대상 공고 전부를 DB 저장까지. LLM 상한은 실행 한 번에 $10 |
-| ① 매일 수집 `daily_collect` | 매일 00:00 | 새 공고 + 추출 못 한 밀린 공고. 시작할 때 어제 LLM 비용을 Slack으로 |
-| ② 수정 확인 `recheck_postings` | 매달 3·6·9…30일 12:00 | 목록에서 '수정'됐거나 사라진 공고만 본문을 확인 → 바뀐 공고 다시 추출, 없어진 공고 마감 |
+| ① 매일 수집 `daily_collect` | 매일 00:00 | 목록 전체를 보고 새 공고 + 밀린 공고 수집, '수정'된 공고는 본문이 바뀐 것만 다시 추출, 목록에서 사라진 공고는 '접수마감'이면 마감, 마감일 반영. 시작할 때 어제 LLM 비용을 Slack으로 |
 
-①과 ②의 LLM 비용은 합쳐서 하루(KST) $5까지만 쓴다. 상한에 닿으면 추출을 멈추고 Slack으로 알린다. 못 한 공고는 다음 ①이 먼저 처리한다.
+목록은 사람인 경력 필터(신입·경력 3년 이하·경력무관)를 켜고 받는다. 예전 ② 수정 확인은 ①에 합쳤다 — 사람인이 '수정' 표시를 약 24시간만 보여 줘서 매일 봐야 한다.
+
+①의 LLM 비용은 하루(KST) $5까지만 쓴다. 상한에 닿으면 추출을 멈추고 Slack으로 알린다. 못 한 공고는 다음 ①이 먼저 처리한다.
 
 **처음 한 번 준비**
 1. `.env`에 Airflow 값을 채운다(`.env.example` 참고). 무작위 값은 이렇게 만든다.
@@ -124,13 +125,12 @@ py -3.12 db_load.py load --run gpt-5.6-luna-ex            #    공고·추출 �
    관리 화면은 http://localhost:8080 (내 컴퓨터에서만)이다. 계정 `admin` / 비밀번호 `admin`(내 컴퓨터에서만 열려서 간단히 둠, 바꾸려면 `.env`의 `AIRFLOW_ADMIN_PASSWORD`).
 
 **돌리는 순서**
-1. ①·②는 꺼진 채로, ③은 켜진 채로 올라온다(③은 일정이 없어 저절로 돌지 않는다).
+1. ①은 꺼진 채로, ③은 켜진 채로 올라온다(③은 일정이 없어 저절로 돌지 않는다).
 2. 관리 화면에서 **③ 일회성 전체 수집**을 실행한다(▶). 시험 삼아 몇 개만 하려면 실행할 때 `max_new`에 숫자를 넣는다.
 3. ③이 끝나면 **①을 켠다.** 켜는 순간 놓친 가장 최근 회차가 한 번 바로 돈다. 그다음부터는 매일 00:00에 돈다.
-4. ①이 끝나면 **②를 켠다.** 마찬가지로 한 번 바로 돌고, 그다음부터는 정해진 날 12:00에 돈다. ①과 ②가 동시에 돌며 GPU를 같이 쓰지 않게 하려고 차례로 켠다.
 
-- 그래도 겹쳐 돌면(노트북이 꺼졌다 켜짐 등) 자리 1개짜리 풀 3개(`saramin`·`gpu`·`llm`, airflow-init이 만듦)가 사람인 요청·GPU OCR·LLM 추출을 한 번에 하나씩만 돌린다.
-- 실행마다 받은 본문·이미지·OCR·추출 결과는 `data/runs/<dag_id>/<run_id>/`에 남는다(저장소에 올리지 않음). 하루 상한은 이 폴더의 ①·② 결과 파일로 센다.
+- ③이 끝나기 전에 ①을 켜서 겹쳐 돌아도 자리 1개짜리 풀 3개(`saramin`·`gpu`·`llm`, airflow-init이 만듦)가 사람인 요청·GPU OCR·LLM 추출을 한 번에 하나씩만 돌린다.
+- 실행마다 받은 본문·이미지·OCR·추출 결과는 `data/runs/<dag_id>/<run_id>/`에 남는다(저장소에 올리지 않음). 하루 상한은 이 폴더의 ① 결과 파일로 센다.
 - 어떤 태스크든 두 번 다시 시도해도 실패하면 Slack으로 알린다. 고친 뒤 관리 화면에서 그 태스크부터 다시 실행하면 된다.
 - DB 저장은 공고마다 따로 커밋한다. 연결 끊김·교착 같은 일시 오류는 그 공고를 3번까지 다시 하고, 다시 해도 같은 오류인 공고는 건너뛰고 나머지를 저장한다. 실패가 남으면 "DB 저장 실패 N건"으로 태스크가 실패해 Airflow가 다시 하고, 그래도 안 되면 Slack으로 알린다(공고번호는 태스크 로그에만).
 - 끄기: `docker compose -f docker-compose.airflow.yml down` (실행 기록은 볼륨 `career-airflow-pgdata`에 남는다).
