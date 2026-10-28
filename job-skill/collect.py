@@ -29,17 +29,35 @@ KST = ZoneInfo("Asia/Seoul")
 MAX_YEARS = 3
 _ITEM = re.compile(r'<div id="rec-(\d+)" class="list_item[^"]*">(.*?)<div class="similar_recruit">', re.S)
 _DATE = re.compile(r'<span class="date">\s*(.*?)\s*</span>', re.S)
+_AGO = re.compile(r'<span class="deadlines">\s*(.*?)\s*</span>', re.S)
+_UNIT = {"분": dt.timedelta(minutes=1), "시간": dt.timedelta(hours=1), "일": dt.timedelta(days=1)}
 
 
 class ListFetchError(RuntimeError):
     """목록 쪽을 받지 못함(HTTP 오류·연결 실패). '목록 끝'으로 착각하지 않고 태스크를 실패시킨다."""
 
 
+def _span(rx: re.Pattern, blk: str) -> str:
+    return re.sub(r"\s+", " ", html.unescape(m.group(1))).strip() if (m := rx.search(blk)) else ""
+
+
 def parse_items(page: str) -> list[dict]:
-    """목록 HTML -> 공고들. sample_random.parse_list 결과 + deadline_text(목록의 마감일 글 그대로)."""
-    dates = {rid: re.sub(r"\s+", " ", html.unescape(m.group(1))).strip() if (m := _DATE.search(blk)) else ""
-             for rid, blk in _ITEM.findall(page)}
-    return [{**it, "deadline_text": dates.get(it["rec_idx"], "")} for it in parse_list(page)]
+    """목록 HTML -> 공고들. sample_random.parse_list 결과 + deadline_text(마감일 글) + updated_text('3시간 전 수정' 같은 글)."""
+    spans = {rid: (_span(_DATE, blk), _span(_AGO, blk)) for rid, blk in _ITEM.findall(page)}
+    return [{**it, "deadline_text": spans.get(it["rec_idx"], ("", ""))[0],
+             "updated_text": spans.get(it["rec_idx"], ("", ""))[1]} for it in parse_list(page)]
+
+
+def parse_updated(text: str, now: dt.datetime) -> dt.datetime | None:
+    """목록의 'N분/N시간/N일 전 수정' -> 늦게 잡은 수정 시각 now - (N-1)단위(N=0 이면 now).
+    표시가 내림인지 반올림인지 몰라 한 단위 여유를 둔다 — 고친 것을 놓치느니 한 번 더 확인한다.
+    '등록'·빈칸 -> None(고친 적 없음). 모르는 형식의 '수정' -> now(꼭 확인)."""
+    t = (text or "").strip()
+    if "수정" not in t:
+        return None
+    if m := re.search(r"(\d+)\s*(분|시간|일)\s*전", t):
+        return now - max(int(m.group(1)) - 1, 0) * _UNIT[m.group(2)]
+    return now
 
 
 def parse_deadline(text: str, today: dt.date) -> dt.date | None:
@@ -154,6 +172,27 @@ def collect_list(run_dir: str, known: set[str], get=fetch_images.get, max_pages:
                 break
     write_targets(run_dir, targets)
     return {"targets": targets, "excluded": excluded, "listed": listed, "stopped": stopped}
+
+
+def scan_lists(get=fetch_images.get, max_pages: int = 40, now: dt.datetime | None = None) -> dict[str, dict]:
+    """② 수정 확인용: 두 직무 목록을 끝까지 본다(연속 멈춤 없음, 두 직무 합쳐 약 26번 요청).
+    {공고번호: 목록 항목 + role + updated_at(parse_updated)}. 겹친 공고는 먼저 본 직무.
+    빈 쪽이나, 이 직무에서 이미 본 공고만 있는 쪽(끝을 넘겨 마지막 쪽을 되풀이)이 나오면 그 직무는 끝."""
+    now = now or dt.datetime.now(KST)
+    listed: dict[str, dict] = {}
+    for role, code in ROLES:
+        seen: set[str] = set()
+        for page_no in range(1, max_pages + 1):
+            status, _, body = get(LIST.format(code=code, page=page_no))
+            if status != 200:
+                raise ListFetchError(f"{role} 목록 {page_no}쪽 HTTP {status}")
+            items = parse_items(body.decode("utf-8", "replace"))
+            if not items or all(it["rec_idx"] in seen for it in items):
+                break
+            for it in items:
+                seen.add(it["rec_idx"])
+                listed.setdefault(it["rec_idx"], {**it, "role": role, "updated_at": parse_updated(it["updated_text"], now)})
+    return listed
 
 
 def classify_targets(run_dir: str) -> dict[str, int]:

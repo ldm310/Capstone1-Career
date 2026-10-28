@@ -58,8 +58,8 @@ def pending_postings(conn) -> list[dict]:
 
 
 def open_postings(conn) -> list[dict]:
-    """진행 공고 (② 수정 확인 대상). targets 칸 + raw_hash."""
-    cur = conn.execute(f"""SELECT {TARGET_COLS}, p.raw_hash
+    """진행 공고 (② 수정 확인 대상). targets 칸 + raw_hash + last_checked_at."""
+    cur = conn.execute(f"""SELECT {TARGET_COLS}, p.raw_hash, p.last_checked_at
                            FROM posting p JOIN company c ON c.id = p.company_id
                            WHERE p.site = %(s)s AND {OPEN}
                            ORDER BY p.site_posting_no""",

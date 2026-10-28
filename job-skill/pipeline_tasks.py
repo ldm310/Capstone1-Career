@@ -20,6 +20,7 @@ import sys
 import collect
 import db_queries
 import notify
+import recheck
 from db_load import connect
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -37,9 +38,9 @@ def run_dir_for(dag_id: str, run_id: str) -> str:
     return f"data/runs/{dag_id}/" + re.sub(r"[^0-9A-Za-z_.-]", "_", run_id)
 
 
-def run_script(script: str, args: list[str], run_dir: str) -> None:
+def run_script(script: str, args: list[str], run_dir: str, python: str | None = None) -> None:
     env = {**os.environ, "OCR_DATA_DIR": run_dir, "PYTHONIOENCODING": "utf-8"}
-    subprocess.run([sys.executable, script, *args], cwd=HERE, env=env, check=True)
+    subprocess.run([python or sys.executable, script, *args], cwd=HERE, env=env, check=True)
 
 
 def _targets(run_dir: str) -> list[dict]:
@@ -69,6 +70,37 @@ def step_collect(run_dir: str, include_pending: bool, max_new: int | None = None
     return {"new": len(new), "pending": len(pending), "excluded": len(res["excluded"])}
 
 
+def step_pick_recheck(run_dir: str) -> dict:
+    """공고 목록 확인(②): 두 직무 목록 전체를 보고, 마지막 확인 뒤 '수정'된 진행 공고 + 목록에서 사라진 진행 공고를 고른다.
+    고른 공고는 <run_dir>/check.json 으로 변경 감지에 넘긴다. DB 는 목록을 보기 전에 읽고 닫는다."""
+    with connect() as conn:
+        rows = db_queries.open_postings(conn)
+    check, counts = recheck.select_recheck(collect.scan_lists(), rows, db_queries.today_kst())
+    d = _abs(run_dir)
+    os.makedirs(d, exist_ok=True)
+    with open(os.path.join(d, "check.json"), "w", encoding="utf-8") as f:
+        json.dump(check, f, ensure_ascii=False, default=str)
+    return counts
+
+
+def step_detect(run_dir: str) -> dict:
+    """변경 감지(②): 고른 공고의 본문만 다시 받아 지문 비교 → 바뀐 공고는 targets.tsv(다시 추출), 결과는 changes.json.
+    그대로인 공고만 확인 시각을 지금으로 바꾼다. 바뀐 공고는 다시 추출해 DB 저장에 성공할 때 바뀐다(실패하면 다음 ②가 다시)."""
+    d = _abs(run_dir)
+    rows = json.load(open(os.path.join(d, "check.json"), encoding="utf-8"))
+    res = recheck.detect_changes(d, rows)
+    with connect() as conn:
+        db_queries.touch_checked(conn, res["unchanged"])
+    return {"확인": len(rows), "바뀜": len(res["changed"]), "그대로": len(res["unchanged"]), "오류": len(res["error"])}
+
+
+def step_close(run_dir: str) -> int:
+    """마감 처리(②): 본문이 없어진 공고를 '마감'으로."""
+    res = json.load(open(os.path.join(_abs(run_dir), "changes.json"), encoding="utf-8"))
+    with connect() as conn:
+        return db_queries.mark_closed(conn, res["closed"])
+
+
 def step_fetch_raw(run_dir: str) -> dict:
     """공고 원본 수집(본문·이미지) → 글/이미지 종류 채우기. targets 가 비면 아무것도 안 함."""
     if not _targets(run_dir):
@@ -78,9 +110,10 @@ def step_fetch_raw(run_dir: str) -> dict:
 
 
 def step_ocr(run_dir: str) -> None:
-    """이미지 OCR — 항상 GPU(--gpu). GPU 가 없으면 스크립트가 실패하고 Airflow 가 재시도·Slack 으로 알린다."""
+    """이미지 OCR — 항상 GPU(--gpu). GPU 가 없으면 스크립트가 실패하고 Airflow 가 재시도·Slack 으로 알린다.
+    PaddleOCR 은 Airflow 와 패키지 버전(PyYAML)이 부딪쳐 이미지 안 별도 가상환경(OCR_PYTHON)에서 돈다."""
     if _has_images(run_dir):
-        run_script("dump_paddle_boxes.py", ["--gpu"], run_dir)
+        run_script("dump_paddle_boxes.py", ["--gpu"], run_dir, python=os.environ.get("OCR_PYTHON") or sys.executable)
 
 
 def step_filter(run_dir: str) -> None:

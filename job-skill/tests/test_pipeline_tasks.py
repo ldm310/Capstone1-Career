@@ -16,7 +16,8 @@ ROW = {"company": "(주)지어낸회사", "title": "지어낸 공고", "role": "
 def pt(monkeypatch):
     import pipeline_tasks
     calls, sent = [], []
-    monkeypatch.setattr(pipeline_tasks, "run_script", lambda script, args, run_dir: calls.append((script, list(args))))
+    monkeypatch.setattr(pipeline_tasks, "run_script",
+                        lambda script, args, run_dir, **k: calls.append((script, list(args), *k.values())))
     monkeypatch.setattr(pipeline_tasks.notify, "send", lambda text: sent.append(text) or True)
     pipeline_tasks._calls, pipeline_tasks._sent = calls, sent
     return pipeline_tasks
@@ -52,11 +53,21 @@ def with_image(run_dir):
                                       "A\t1\tA_1.png\t10\t10\t100\t200\thttps://example.com/a.png\n", encoding="utf-8")
 
 
-def test_ocr_always_uses_gpu(pt, tmp_path):
+def test_ocr_always_uses_gpu(pt, tmp_path, monkeypatch):
+    monkeypatch.setenv("OCR_PYTHON", "/opt/paddle/bin/python")  # 이미지 안의 OCR 전용 가상환경
     write_rows(tmp_path, ["A"])
     with_image(tmp_path)
     pt.step_ocr(str(tmp_path))
-    assert pt._calls == [("dump_paddle_boxes.py", ["--gpu"])]
+    assert pt._calls == [("dump_paddle_boxes.py", ["--gpu"], "/opt/paddle/bin/python")]
+
+
+def test_ocr_python_defaults_to_current(pt, tmp_path, monkeypatch):
+    import sys
+    monkeypatch.delenv("OCR_PYTHON", raising=False)  # 노트북에서 바로 돌릴 때
+    write_rows(tmp_path, ["A"])
+    with_image(tmp_path)
+    pt.step_ocr(str(tmp_path))
+    assert pt._calls == [("dump_paddle_boxes.py", ["--gpu"], sys.executable)]
 
 
 def test_ocr_failure_propagates(monkeypatch, tmp_path):
@@ -64,7 +75,7 @@ def test_ocr_failure_propagates(monkeypatch, tmp_path):
     write_rows(tmp_path, ["A"])
     with_image(tmp_path)
 
-    def boom(script, args, run_dir):
+    def boom(script, args, run_dir, **k):
         raise subprocess.CalledProcessError(1, script)
 
     monkeypatch.setattr(pipeline_tasks, "run_script", boom)
@@ -147,3 +158,43 @@ def test_fetch_images_skips_existing_image(monkeypatch, tmp_path):
     assert urls == []                                   # 본문도 이미지도 다시 받지 않음
     manifest = (tmp_path / "images" / "manifest.tsv").read_text(encoding="utf-8")
     assert "A_1.png" in manifest
+
+
+# ── ② 수정 확인 태스크 ────────────────────────────────────────────────────
+def test_pick_recheck_writes_check_file(monkeypatch, tmp_path):
+    import datetime as dt
+    import pipeline_tasks
+    checked = dt.datetime(2026, 10, 25, 12, 0, tzinfo=dt.timezone.utc)
+    rows = [{"rec_idx": n, **ROW, "raw_hash": "h" * 64, "last_checked_at": checked} for n in ("A", "B")]
+    monkeypatch.setattr(pipeline_tasks, "connect", lambda: contextlib.nullcontext(object()))
+    monkeypatch.setattr(pipeline_tasks.db_queries, "open_postings", lambda conn: rows)
+    monkeypatch.setattr(pipeline_tasks.collect, "scan_lists",
+                        lambda **k: {"A": {"updated_at": checked + dt.timedelta(days=1), "deadline_text": ""}})
+    res = pipeline_tasks.step_pick_recheck(str(tmp_path))
+    check = json.loads((tmp_path / "check.json").read_text(encoding="utf-8"))
+    assert [r["rec_idx"] for r in check] == ["A", "B"]          # A 수정, B 목록에 없음
+    assert res == {"진행": 2, "수정": 1, "목록에 없음": 1}
+
+
+def test_detect_touches_unchanged_only(monkeypatch, tmp_path):
+    import pipeline_tasks
+    (tmp_path / "check.json").write_text(json.dumps([{"rec_idx": n, **ROW, "raw_hash": "h"} for n in "ABCD"]),
+                                         encoding="utf-8")
+    touched = []
+    monkeypatch.setattr(pipeline_tasks, "connect", lambda: contextlib.nullcontext(object()))
+    monkeypatch.setattr(pipeline_tasks.db_queries, "touch_checked", lambda conn, nos: touched.extend(nos) or len(nos))
+    monkeypatch.setattr(pipeline_tasks.recheck, "detect_changes",
+                        lambda run_dir, rows: {"changed": ["B"], "closed": ["C"], "unchanged": ["A"], "error": ["D"]})
+    res = pipeline_tasks.step_detect(str(tmp_path))
+    assert touched == ["A"]          # 바뀐 공고는 다시 추출에 성공해야(DB 저장) 확인 시각이 바뀐다
+    assert res == {"확인": 4, "바뀜": 1, "그대로": 1, "오류": 1}
+
+
+def test_close_marks_closed(monkeypatch, tmp_path):
+    import pipeline_tasks
+    (tmp_path / "changes.json").write_text(json.dumps({"changed": [], "closed": ["C"], "unchanged": [], "error": []}),
+                                           encoding="utf-8")
+    closed = []
+    monkeypatch.setattr(pipeline_tasks, "connect", lambda: contextlib.nullcontext(object()))
+    monkeypatch.setattr(pipeline_tasks.db_queries, "mark_closed", lambda conn, nos: closed.extend(nos) or len(nos))
+    assert pipeline_tasks.step_close(str(tmp_path)) == 1 and closed == ["C"]

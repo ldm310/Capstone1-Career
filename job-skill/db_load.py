@@ -197,7 +197,8 @@ def kept_by_image() -> dict[str, bool]:
 
 def upsert_posting(conn, t: dict, update_raw: bool = True) -> int:
     """공고를 넣거나 고친다. 이미 있는 공고의 원본(raw_path·raw_hash)은 update_raw 가 참일 때만 바꾼다
-    (그 공고를 다시 추출하는 데 성공했을 때만 원본을 새것으로 — 실패하면 옛 원본을 두고 ②가 다시 잡는다)."""
+    (그 공고를 다시 추출하는 데 성공했을 때만 원본을 새것으로 — 실패하면 옛 원본을 두고 ②가 다시 잡는다).
+    마지막 확인 시각도 같은 규칙: 실패한 공고는 옛 시각이 남아 다음 ② 에서 '수정'된 공고로 다시 골라진다."""
     rid = t["rec_idx"]
     page_path = os.path.join(PAGE_DIR, f"{rid}.html")
     page = open(page_path, encoding="utf-8").read()
@@ -216,7 +217,7 @@ def upsert_posting(conn, t: dict, update_raw: bool = True) -> int:
                deadline = coalesce(EXCLUDED.deadline, posting.deadline),
                raw_path = CASE WHEN %(update_raw)s THEN EXCLUDED.raw_path ELSE posting.raw_path END,
                raw_hash = CASE WHEN %(update_raw)s THEN EXCLUDED.raw_hash ELSE posting.raw_hash END,
-               last_checked_at = now()
+               last_checked_at = CASE WHEN %(update_raw)s THEN now() ELSE posting.last_checked_at END
            RETURNING id""",
         {"cid": company_id, "no": rid, "title": t["title"], "role": t.get("role") or None,
          "career": t.get("career") or None, "miny": min_years(t.get("career", "")),

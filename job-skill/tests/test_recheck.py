@@ -64,3 +64,40 @@ def test_connection_error_is_not_closed(tmp_path):
     rows = [row("A", "a" * 64), row("B", "b" * 64)]
     res = recheck.detect_changes(str(tmp_path), rows, get=FakeGet({"A": (None, "", b""), "B": (503, "", b"")}))
     assert res["error"] == ["A", "B"] and res["closed"] == []
+
+
+# ── 목록 기반 고르기: 마지막 확인 뒤 '수정'된 공고 + 목록에서 사라진 공고만 본문을 받는다 ──
+import datetime as dt
+
+KST = dt.timezone(dt.timedelta(hours=9))
+NOW = dt.datetime(2026, 10, 28, 12, 0, tzinfo=KST)
+TODAY = NOW.date()
+
+
+def open_row(no, checked_days_ago, deadline=""):
+    return {**row(no, "h" * 64), "deadline": deadline, "last_checked_at": NOW - dt.timedelta(days=checked_days_ago)}
+
+
+def listed(updated_days_ago=None, deadline_text=""):
+    at = None if updated_days_ago is None else NOW - dt.timedelta(days=updated_days_ago)
+    return {"updated_at": at, "deadline_text": deadline_text}
+
+
+def test_select_recheck_picks_modified_and_gone():
+    import recheck
+    rows = [open_row("A", 3), open_row("B", 3), open_row("C", 3), open_row("D", 3)]
+    lst = {"A": listed(1),        # 마지막 확인(3일 전) 뒤에 수정 → 확인
+           "B": listed(5),        # 수정이 마지막 확인보다 앞 → 이미 본 본문
+           "C": listed(None),     # 등록만(고친 적 없음)
+           "X": listed(0)}        # DB 에 없는 공고는 ① 몫
+    check, counts = recheck.select_recheck(lst, rows, TODAY)
+    assert [r["rec_idx"] for r in check] == ["A", "D"]          # D: 목록에서 사라짐 → 본문으로 마감 확인
+    assert counts == {"진행": 4, "수정": 1, "목록에 없음": 1}
+
+
+def test_select_recheck_takes_deadline_from_list():
+    import recheck
+    rows = [open_row("A", 3, deadline="2026-11-15"), open_row("B", 3, deadline="2026-11-15")]
+    lst = {"A": listed(1, "~11.30(월)"), "B": listed(1, "상시채용")}
+    check, _ = recheck.select_recheck(lst, rows, TODAY)
+    assert [r["deadline"] for r in check] == ["2026-11-30", "2026-11-15"]   # 읽을 수 없는 마감일이면 DB 값 그대로

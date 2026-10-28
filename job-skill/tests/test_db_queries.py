@@ -116,3 +116,26 @@ def test_load_keeps_old_raw_when_not_extracted(db, db_url, tmp_path):
     _load(tmp_path, db_url)                       # 추출 결과 있음 → 원본 갱신
     page = (tmp_path / "pages" / "D.html").read_text(encoding="utf-8")
     assert db.execute("SELECT raw_hash FROM posting WHERE site_posting_no='D'").fetchone()[0] == db_load.content_hash(page, "D")
+
+
+def test_open_postings_has_last_checked_at(db):
+    import db_queries as q
+    add_posting(db, "A")
+    assert isinstance(q.open_postings(db)[0]["last_checked_at"], dt.datetime)
+
+
+def test_load_moves_last_checked_only_when_extracted(db, db_url, tmp_path):
+    """다시 추출에 실패한 공고는 마지막 확인 시각도 그대로 → 다음 ② 가 '수정'으로 다시 잡는다."""
+    old = dt.datetime(2026, 10, 1, 12, 0, tzinfo=KST)
+    add_posting(db, "D", raw_hash="0" * 64)
+    db.execute("UPDATE posting SET last_checked_at = %s WHERE site_posting_no = 'D'", (old,))
+    _write_run(tmp_path, "새로 바뀐 공고 본문 내용입니다")
+    _load(tmp_path, db_url)                       # 추출 결과 없음
+    assert db.execute("SELECT last_checked_at FROM posting WHERE site_posting_no='D'").fetchone()[0] == old
+
+    res = tmp_path / "out" / "extract" / "gpt-5.6-luna-ex"
+    res.mkdir(parents=True)
+    (res / "D.json").write_text(json.dumps({"rec_idx": "D", "model": "gpt-5.6-luna", "input_tokens": 10,
+                                            "output_tokens": 5, "positions": []}), encoding="utf-8")
+    _load(tmp_path, db_url)                       # 추출 결과 있음
+    assert db.execute("SELECT last_checked_at FROM posting WHERE site_posting_no='D'").fetchone()[0] > old

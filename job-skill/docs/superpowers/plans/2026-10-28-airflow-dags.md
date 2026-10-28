@@ -278,6 +278,29 @@
 - [ ] **Step 4: 통과 확인** — 3 passed
 - [ ] **Step 5: 커밋** — `git commit -m "feat: 수정 확인(본문 지문 비교로 변경·마감 감지)"`
 
+### Task 5a: 목록 기반 수정 확인 (2026-10-28 사용자 결정으로 추가)
+
+진행 공고 전부의 본문을 받던 것(약 1,500번)을, 목록 전체(약 26번)를 보고 **마지막 확인 뒤 '수정'된 공고 + 목록에서 사라진 공고**만 받게 바꾼다.
+
+**Files:**
+- Modify: `collect.py`, `recheck.py`, `db_queries.py`, `db_load.py`, `pipeline_tasks.py`, `tests/fixtures/list_page.html`(지어낸 '수정' 글 2개)
+- Test: `tests/test_collect.py`, `tests/test_recheck.py`, `tests/test_db_queries.py`, `tests/test_pipeline_tasks.py`
+
+**Interfaces:**
+- Produces:
+  - `collect.parse_items` 항목에 `"updated_text"`(예: "3시간 전 수정")
+  - `collect.parse_updated(text: str, now: datetime) -> datetime | None` — 'N분/시간/일 전 수정' → `now - (N-1)단위`(N=0이면 now), '등록'·빈칸 → None, 모르는 형식의 '수정' → now
+  - `collect.scan_lists(get=fetch_images.get, max_pages=40, now=None) -> dict[str, dict]` — 두 직무 목록 끝까지. 빈 쪽 또는 이 직무에서 이미 본 공고만 있는 쪽에서 그 직무 끝. 항목 + `role` + `updated_at`. 목록 오류 → `ListFetchError`
+  - `recheck.select_recheck(listed, rows, today) -> (check_rows, {"진행","수정","목록에 없음"})` — 수정 시각 > `last_checked_at` 또는 목록에 없음. 수정된 공고의 deadline 은 목록 마감일(읽을 수 없으면 DB 값)
+  - `db_queries.open_postings` 줄에 `"last_checked_at"`
+  - `db_load.upsert_posting`: `last_checked_at`도 `update_raw`일 때만 now()
+  - `pipeline_tasks.step_pick_recheck(run_dir) -> {"진행","수정","목록에 없음"}` — `<run_dir>/check.json`
+  - `pipeline_tasks.step_detect(run_dir) -> {"확인","바뀜","그대로","오류"}` — `detect_changes` + 그대로인 공고만 `touch_checked`
+  - `pipeline_tasks.step_close(run_dir) -> int` — `changes.json`의 closed 로 `mark_closed`
+
+- [x] 시험: `test_parse_items_reads_updated_text`, `test_parse_updated`(7경우), `test_scan_lists_reads_every_page_without_stopping`, `test_scan_lists_raises_on_list_error`, `test_select_recheck_picks_modified_and_gone`, `test_select_recheck_takes_deadline_from_list`, `test_open_postings_has_last_checked_at`, `test_load_moves_last_checked_only_when_extracted`, `test_pick_recheck_writes_check_file`, `test_detect_touches_unchanged_only`, `test_close_marks_closed`
+- [x] 전체 시험 → 72 passed
+
 ---
 
 ### Task 6: 태스크 함수 — 실행 폴더·단계 실행·GPU 확인·요약
@@ -399,7 +422,7 @@
 - Create: `airflow/dags/job_skill_dags.py`, `tests/test_dags.py`
 
 **Interfaces:**
-- Consumes: `pipeline_tasks.*`, `notify.on_failure`, `notify.send/msg_result/msg_daily_cost`, `db_queries.*`, `recheck.detect_changes`
+- Consumes: `pipeline_tasks.*`(②는 Task 5a 의 `step_pick_recheck`·`step_detect`·`step_close`), `notify.on_failure`, `notify.send/msg_result/msg_daily_cost`, `db_queries.*`
 - Produces (공통 설정):
   - DAG id: `backfill_once`, `daily_collect`, `recheck_postings`
   - 공통 `default_args`: `retries=2`, `retry_delay=timedelta(minutes=5)`, `on_failure_callback=notify.on_failure`
@@ -418,14 +441,12 @@
     - `notify_cost`는 어제(KST) `day_cost`로 `msg_daily_cost`
   - `recheck_postings`
     - 설정: `schedule=timedelta(days=3)`, `is_paused_upon_creation=True`
-    - 순서: `list_open_postings >> detect_changes >> [close_postings, fetch_raw]`, `fetch_raw >> image_processing[...] >> extract_llm >> load_db >> notify_result`, `fetch_raw >> extract_llm`, `close_postings >> notify_result`
-    - `list_open_postings`는 `open_postings` 결과를 `<run_dir>/open.json`에 쓴다.
-    - `detect_changes`는 그 파일로 `recheck.detect_changes`를 실행하고, unchanged·changed에 `touch_checked`를 한다.
-    - `close_postings`는 `changes.json`의 closed로 `mark_closed`를 한다.
+    - 순서: `scan_lists >> detect_changes >> [close_postings, fetch_raw]`, `fetch_raw >> image_processing[...] >> extract_llm >> load_db >> notify_result`, `fetch_raw >> extract_llm`, `close_postings >> notify_result`
+    - `scan_lists` = `step_pick_recheck`, `detect_changes` = `step_detect`, `close_postings` = `step_close` (Task 5a)
     - 예산은 `budget_left(conn, DAILY_LIMIT, 오늘 KST)`
   - **실행 폴더:** 각 태스크는 `pipeline_tasks.run_dir_for(dag_id, run_id)`로 같은 폴더를 쓴다. 태스크 사이에는 파일로 넘기고, XCom에는 작은 숫자만 넣는다.
   - **결과 알림** `notify_result`: `msg_result(라벨, summary + 추가 숫자)`
-    - 라벨: ③ "전체 수집", ① "매일 수집"(+ `"오늘 비용"`), ② "수정 확인"(+ `"확인"`, `"바뀜"`, `"마감"`, `"오늘 비용"`)
+    - 라벨: ③ "전체 수집", ① "매일 수집"(+ `"오늘 비용"`), ② "수정 확인"(+ `"진행"`, `"수정"`, `"목록에 없음"`, `"바뀜"`, `"마감"`, `"오늘 비용"`)
 
 - [ ] **Step 1: 실패하는 시험 작성 — `tests/test_dags.py`** (컨테이너 안에서 실행)
   - `test_no_import_errors`: `DagBag(dag_folder="/opt/airflow/dags", include_examples=False).import_errors == {}`
@@ -439,7 +460,7 @@
     - `collect_list`의 바로 다음은 `{fetch_raw}`이다.
     - `extract_llm`의 바로 앞은 `{fetch_raw, image_processing.filter_sections}`이다.
     - `close_postings` 태스크가 **없다**.
-  - `test_recheck_task_graph`: `detect_changes`의 바로 다음이 `{close_postings, fetch_raw}`, `notify_result`의 바로 앞이 `{load_db, close_postings}`
+  - `test_recheck_task_graph`: `scan_lists`의 바로 다음이 `{detect_changes}`, `detect_changes`의 바로 다음이 `{close_postings, fetch_raw}`, `notify_result`의 바로 앞이 `{load_db, close_postings}`
   - `test_all_tasks_retry_and_alert`: 모든 태스크가 `retries == 2`이고 `on_failure_callback`에 `notify.on_failure`가 있다.
 
 - [ ] **Step 2: 실패 확인**
