@@ -28,6 +28,7 @@ MODEL, TAG = "gpt-5.6-luna", "-ex"
 RUN_NAME = MODEL + TAG
 DAILY_LIMIT = 5.0      # 하루(KST) ① 매일 수집
 BACKFILL_LIMIT = 10.0  # ③ 한 번 실행
+LLM_WORKERS = 8        # 공고 몇 건을 동시에 LLM 에 보낼지 — 계정 한도(분당 5,000번·200만 토큰)의 약 15%, 1,514건이 약 9시간 → 약 1시간
 DAILY_DAGS = ("daily_collect",)  # 하루 상한을 쓰는 DAG(② 수정 확인은 ① 에 합침)
 
 
@@ -195,7 +196,7 @@ def step_extract(run_dir: str, budget_usd: float, dag_label: str, limit: float |
         if os.path.exists(path):
             os.remove(path)
     run_script("extract_skills.py", ["--models", MODEL, "--effort", "low", "--examples", f"--tag={TAG}",
-                                     "--max-usd", f"{budget_usd}"], run_dir)
+                                     "--max-usd", f"{budget_usd}", "--workers", str(LLM_WORKERS)], run_dir)
     items = []
     if os.path.exists(stats_path):  # 공고 하나하나의 추출 실패: 태스크는 계속하고 공고번호·원인·링크를 알린다
         for st in json.load(open(stats_path, encoding="utf-8")):

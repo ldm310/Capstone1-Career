@@ -100,6 +100,7 @@ def test_extract_passes_budget_and_alerts_once(monkeypatch, tmp_path):
     res = pipeline_tasks.step_extract(str(tmp_path), budget_usd=1.5, dag_label="매일 수집", limit=5.0)
     script, args = calls[0]
     assert script == "extract_skills.py" and "--tag=-ex" in args and args[args.index("--max-usd") + 1] == "1.5"
+    assert args[args.index("--workers") + 1] == "8"                      # 공고 8건씩 동시에(OpenAI 한도 분당 200만 토큰의 약 15%)
     assert len(sent) == 1 and "$5.00" in sent[0] and "$5.00" in sent[0] and "1건" in sent[0]
     assert res["stopped"] is True
 

@@ -521,63 +521,99 @@ def fail_reason(e: BaseException) -> str:
             "APITimeoutError": "시간 초과", "InternalServerError": "OpenAI 서버 오류"}.get(type(e).__name__, type(e).__name__)
 
 
+def extract_one(client, model: str, effort: str, rid: str, inp: dict, examples: bool, pin: float, pout: float) -> dict:
+    """공고 하나: LLM 추출 → 모집 단위 검사 → 의심되면 힌트를 붙여 한 번 더(덜 의심스러운 쪽, 비용은 두 번 다 셈).
+    실패하면 예외를 그대로 던진다(run_model 이 그 공고만 건너뜀). 여러 스레드에서 동시에 불린다 — 파일은 쓰지 않는다."""
+    run_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    parsed, raw, tin, tout, sec, status = call_llm(client, model, effort, inp, examples)
+    first = unit_checks(parsed, inp)
+    reason = lambda found: [{"검사": f["검사"], "내용": f["내용"]} for f in found]
+    checks = {"first": reason(first), "retry": None, "used": "first"}
+    final = first
+    if first:
+        p2, raw2, i2, o2, s2, st2 = call_llm(client, model, effort, inp, examples,
+                                             extra="\n".join("- " + f["힌트"] for f in first))
+        second = unit_checks(p2, inp)
+        checks["retry"] = reason(second)
+        tin, tout, sec = tin + i2, tout + o2, sec + s2
+        if len(second) <= len(first):
+            parsed, raw, status, checks["used"], final = p2, raw2, st2, "retry", second
+    return {"rec_idx": rid, "model": model, "effort": effort, "examples": examples,
+            "prompt_version": prompt_version(examples), "dict_version": CD.version.split()[0] if CD.version else "",
+            "input_hash": sha256(llm_input(inp)), "run_at": run_at, "seconds": round(sec, 2),
+            "input_tokens": tin, "output_tokens": tout, "cost_usd": round(tin / 1e6 * pin + tout / 1e6 * pout, 6),
+            "status": status, "checks": checks, "review_reasons": reason(final), "llm_output_raw": raw, **parsed}
+
+
 def run_model(client, model: str, effort: str, inputs: dict[str, dict], examples: bool = False, tag: str = "",
-              max_usd: float | None = None) -> dict:
+              max_usd: float | None = None, workers: int = 1) -> dict:
     """examples=True 면 지시문에 예시 답안을 붙인다. 결과 폴더는 out/extract/<model><tag>/ (같은 모델의 다른 설정을 나눠 저장).
-    max_usd: 이번 실행에서 새로 부른 LLM 비용 합이 이 값 이상이면, 다음 공고를 부르기 전에 멈추고 <EX>/_budget.json 을 쓴다.
-    이미 결과 파일이 있는 공고는 비용 없이 건너뛴다."""
+    이미 결과 파일이 있는 공고는 비용 없이 건너뛴다.
+    workers: 공고 몇 건을 동시에 LLM 에 보낼지(OpenAI 클라이언트는 여러 스레드에서 같이 써도 됨). 결과 파일·집계는 이 스레드에서만.
+    max_usd: 새로 부른 LLM 비용 합이 이 값 이상이면 새 공고를 더 보내지 않고, 이미 보낸 것만 받은 뒤 <EX>/_budget.json 을 쓴다.
+      동시에 보내므로 상한을 넘는 폭은 이미 보낸 공고(최대 workers-1건)만큼이다."""
+    from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
+
     d = os.path.join(EX, model + tag)
     os.makedirs(d, exist_ok=True)
     pin, pout = PRICES.get(model, (0, 0))
     stats = {"model": model, "effort": effort, "in": 0, "out": 0, "sec": 0.0, "usd": 0.0,
              "stopped": False, "spent_new": 0.0, "left": 0, "failed": [], "fail_reasons": {}, "fail_detail": {}, "done_new": 0}
-    todo = list(inputs.items())
-    for i, (rid, inp) in enumerate(todo):
-        path = os.path.join(d, f"{rid}.json")
-        if os.path.exists(path):
-            r = json.load(open(path, encoding="utf-8"))
-        elif max_usd is not None and stats["spent_new"] >= max_usd:
-            stats["stopped"] = True
-            stats["left"] = sum(1 for rid2, _ in todo[i:] if not os.path.exists(os.path.join(d, f"{rid2}.json")))
-            budget = {"stopped": True, "spent": round(stats["spent_new"], 6), "limit": max_usd, "left": stats["left"]}
-            json.dump(budget, open(os.path.join(EX, "_budget.json"), "w", encoding="utf-8"), ensure_ascii=False)
-            print(f"  [{model}] 비용 상한 ${max_usd:.2f} 도달: ${budget['spent']:.4f} 사용, 남은 공고 {stats['left']}건", flush=True)
-            break
-        else:
-            try:
-                run_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
-                parsed, raw, tin, tout, sec, status = call_llm(client, model, effort, inp, examples)
-                first = unit_checks(parsed, inp)
-                reason = lambda found: [{"검사": f["검사"], "내용": f["내용"]} for f in found]
-                checks = {"first": reason(first), "retry": None, "used": "first"}
-                final = first
-                if first:  # 의심되면 힌트를 붙여 한 번 더 — 덜 의심스러운 쪽을 쓴다(비용은 두 번 다 센다)
-                    p2, raw2, i2, o2, s2, st2 = call_llm(client, model, effort, inp, examples,
-                                                         extra="\n".join("- " + f["힌트"] for f in first))
-                    second = unit_checks(p2, inp)
-                    checks["retry"] = reason(second)
-                    tin, tout, sec = tin + i2, tout + o2, sec + s2
-                    if len(second) <= len(first):
-                        parsed, raw, status, checks["used"], final = p2, raw2, st2, "retry", second
-                r = {"rec_idx": rid, "model": model, "effort": effort, "examples": examples,
-                     "prompt_version": prompt_version(examples), "dict_version": CD.version.split()[0] if CD.version else "",
-                     "input_hash": sha256(llm_input(inp)), "run_at": run_at, "seconds": round(sec, 2),
-                     "input_tokens": tin, "output_tokens": tout, "cost_usd": round(tin / 1e6 * pin + tout / 1e6 * pout, 6),
-                     "status": status, "checks": checks, "review_reasons": reason(final), "llm_output_raw": raw, **parsed}
-            except Exception as e:  # 공고 하나의 실패(응답 잘림·거절·잘못된 요청)가 실행 전체를 막지 않게 — 결과 없이 넘어간다
-                stats["failed"].append(rid)
-                why = fail_reason(e)
-                stats["fail_reasons"][why] = stats["fail_reasons"].get(why, 0) + 1
-                stats["fail_detail"][rid] = why
-                print(f"  [{model}] {rid}  추출 실패: {type(e).__name__}: {str(e)[:200]}", flush=True)
-                continue
-            json.dump(r, open(path, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
-            stats["spent_new"] += r["cost_usd"]
-            stats["done_new"] += 1
+
+    def add(rid: str, r: dict) -> None:
         stats["in"] += r["input_tokens"]
         stats["out"] += r["output_tokens"]
         stats["sec"] += r["seconds"]
         print(f"  [{model}] {rid}  {count_line(r)}  {r['seconds']:.1f}s  in {r['input_tokens']} out {r['output_tokens']}", flush=True)
+
+    new = []
+    for rid, inp in inputs.items():
+        path = os.path.join(d, f"{rid}.json")
+        if os.path.exists(path):
+            add(rid, json.load(open(path, encoding="utf-8")))
+        else:
+            new.append((rid, inp))
+
+    queue, running, sent = iter(new), {}, 0
+    with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
+        def send_more() -> None:
+            nonlocal sent
+            while len(running) < max(1, workers) and not stats["stopped"]:
+                if max_usd is not None and stats["spent_new"] >= max_usd:
+                    stats["stopped"] = True
+                    break
+                nxt = next(queue, None)
+                if nxt is None:
+                    break
+                running[pool.submit(extract_one, client, model, effort, nxt[0], nxt[1], examples, pin, pout)] = nxt[0]
+                sent += 1
+
+        send_more()
+        while running:
+            done, _ = wait(running, return_when=FIRST_COMPLETED)
+            for fut in done:
+                rid = running.pop(fut)
+                try:
+                    r = fut.result()
+                except Exception as e:  # 공고 하나의 실패(응답 잘림·거절·잘못된 요청)가 실행 전체를 막지 않게 — 결과 없이 넘어간다
+                    stats["failed"].append(rid)
+                    why = fail_reason(e)
+                    stats["fail_reasons"][why] = stats["fail_reasons"].get(why, 0) + 1
+                    stats["fail_detail"][rid] = why
+                    print(f"  [{model}] {rid}  추출 실패: {type(e).__name__}: {str(e)[:200]}", flush=True)
+                    continue
+                json.dump(r, open(os.path.join(d, f"{rid}.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+                stats["spent_new"] += r["cost_usd"]
+                stats["done_new"] += 1
+                add(rid, r)
+            send_more()
+
+    if stats["stopped"]:
+        stats["left"] = len(new) - sent
+        budget = {"stopped": True, "spent": round(stats["spent_new"], 6), "limit": max_usd, "left": stats["left"]}
+        json.dump(budget, open(os.path.join(EX, "_budget.json"), "w", encoding="utf-8"), ensure_ascii=False)
+        print(f"  [{model}] 비용 상한 ${max_usd:.2f} 도달: ${budget['spent']:.4f} 사용, 남은 공고 {stats['left']}건", flush=True)
+    stats["failed"] = [rid for rid, _ in new if rid in set(stats["failed"])]   # 입력 순서대로
     stats["usd"] = stats["in"] / 1e6 * pin + stats["out"] / 1e6 * pout
     if stats["failed"] and not stats["done_new"]:  # 전부 실패(키 오류·연결 끊김 등) → 태스크 실패로 알린다
         raise RuntimeError(f"[{model}] 새로 부른 공고 {len(stats['failed'])}건이 모두 실패")
@@ -910,6 +946,7 @@ def main() -> None:
     ap.add_argument("--examples", action="store_true", help="프롬프트에 예시 답안을 붙인다(지금 쓰는 설정)")
     ap.add_argument("--tag", default="", help="결과 폴더 이름 뒤에 붙일 말(예: --tag=-ex → out/extract/gpt-5.6-luna-ex/)")
     ap.add_argument("--max-usd", type=float, default=None, help="이번 실행에서 새로 쓸 LLM 비용 상한(달러). 넘으면 멈추고 _budget.json")
+    ap.add_argument("--workers", type=int, default=1, help="공고 몇 건을 동시에 LLM 에 보낼지(Airflow 는 8)")
     args = ap.parse_args()
     models = [m.strip() for m in args.models.split(",") if m.strip()]
     inputs = posting_inputs()
@@ -924,7 +961,8 @@ def main() -> None:
         return
     from openai import OpenAI
     client = OpenAI(max_retries=4, timeout=300)
-    stats = [run_model(client, m, args.effort, inputs, examples=args.examples, tag=args.tag, max_usd=args.max_usd)
+    stats = [run_model(client, m, args.effort, inputs, examples=args.examples, tag=args.tag, max_usd=args.max_usd,
+                       workers=args.workers)
              for m in models]
     for s in stats:
         print(f"{s['model']}: 입력 {s['in']} 출력 {s['out']} 토큰, ${s['usd']:.4f} (공고당 ${s['usd'] / len(inputs):.4f}), "
