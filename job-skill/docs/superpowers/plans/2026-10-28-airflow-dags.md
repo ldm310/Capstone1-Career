@@ -8,9 +8,9 @@
 - **기존 스크립트는 그대로 쓴다.** `fetch_images.py`, `dump_paddle_boxes.py`, `section_split.py`, `extract_skills.py`, `db_load.py`를 실행(run) 폴더마다 `OCR_DATA_DIR=<run 폴더>`로 **subprocess** 실행한다.
   - 이유: `common.py`가 import할 때 경로를 정하므로, 실행 폴더마다 새 프로세스가 필요하다.
 - **새로 만드는 모듈은 실행 폴더를 인자로 받는다.** 수집(`collect.py`), 수정 확인(`recheck.py`), DB 조회(`db_queries.py`), Slack(`notify.py`), 태스크 함수(`pipeline_tasks.py`)
-- **Airflow 3.2.2 (LocalExecutor):** 별도 Docker 묶음(`airflow/`)에서 DAG 파일 하나로 세 DAG를 정의하고, 태스크는 `pipeline_tasks` 함수를 부른다.
+- **Airflow 3.3.2 (LocalExecutor):** 별도 Docker 묶음(`airflow/`)에서 DAG 파일 하나로 세 DAG를 정의하고, 태스크는 `pipeline_tasks` 함수를 부른다.
 
-**Tech Stack:** Python 3.12, Apache Airflow 3.2.2 (`apache/airflow:3.2.2-python3.12`, 3.2 줄의 마지막 패치 — 안정판), PostgreSQL 17.6, psycopg 3.2.3, openai 2.7.2, paddleocr 3.7.0 + paddlepaddle-gpu 3.2.2(cu126), pytest, Docker Desktop(WSL2, GPU).
+**Tech Stack:** Python 3.12, Apache Airflow 3.3.2 (`apache/airflow:3.3.2-python3.12`, 사용자 결정), PostgreSQL 17.6, psycopg 3.2.3, openai 2.7.2, paddleocr 3.7.0 + paddlepaddle-gpu 3.3.2(cu126), pytest, Docker Desktop(WSL2, GPU).
 
 **Spec:** `job-skill/docs/superpowers/specs/2026-10-27-airflow-dags-design.md` (그림: `job-skill/docs/dag-backfill.png`, `dag-daily.png`, `dag-recheck.png`)
 
@@ -342,7 +342,7 @@
     - `../data/paddlex` → `/home/airflow/.paddlex` (모델 캐시)
 
 - [ ] **Step 1: 공식 compose를 바탕으로 줄이기**
-  - `https://airflow.apache.org/docs/apache-airflow/3.2.2/docker-compose.yaml`을 scratchpad에 받는다.
+  - `https://airflow.apache.org/docs/apache-airflow/3.3.2/docker-compose.yaml`을 scratchpad에 받는다.
   - 아래만 남기고 줄인다.
     - **남길 서비스:** postgres(→`airflow-db`, `postgres:17.6`, 볼륨 `airflow-pgdata`, 비밀번호 `${AIRFLOW_DB_PASSWORD}`), airflow-init, apiserver, scheduler, dag-processor
     - **뺄 것:** redis·worker·triggerer·flower·airflow-cli
@@ -359,10 +359,10 @@
   - **GPU:** scheduler 서비스에 `deploy.resources.reservations.devices: [{driver: nvidia, count: all, capabilities: [gpu]}]`
 
 - [ ] **Step 2: 이미지 만들기**
-  - `FROM apache/airflow:3.2.2-python3.12`
+  - `FROM apache/airflow:3.3.2-python3.12`
   - root로 `libgl1 libglib2.0-0`을 설치한다(opencv용).
   - airflow 사용자로 `pip install -r requirements-airflow.txt`를 실행한다. `requirements-airflow.txt`는 이렇게 둔다.
-    - `paddlepaddle-gpu==3.2.2`(`--extra-index-url https://www.paddlepaddle.org.cn/packages/stable/cu126/`)
+    - `paddlepaddle-gpu==3.3.2`(`--extra-index-url https://www.paddlepaddle.org.cn/packages/stable/cu126/`)
     - `paddleocr==3.7.0`
     - `openai==2.7.2`
     - `psycopg[binary]==3.2.3`
