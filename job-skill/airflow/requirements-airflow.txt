@@ -1,0 +1,7 @@
+# Airflow 환경에 더 설치할 것 (버전은 노트북 requirements-paddle.txt 와 맞춤)
+# PaddleOCR 은 PyYAML 버전이 Airflow 와 부딪쳐 Dockerfile 에서 OCR 전용 가상환경(/opt/paddle)에 따로 설치한다.
+openai==2.7.2
+psycopg[binary]==3.2.3
+pillow==12.3.0
+numpy==2.3.5
+pytest==8.4.2

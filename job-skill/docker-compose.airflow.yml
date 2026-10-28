@@ -1,0 +1,135 @@
+# 로컬 Airflow 묶음 (채용공고 역량 추출 DAG) — 공식 docker-compose.yaml(3.3.2)을 LocalExecutor 로 줄인 것
+# 실행: docker compose -f docker-compose.airflow.yml up -d        (이 폴더에서, 서빙 DB 는 docker-compose.yml)
+# 관리 화면: http://localhost:8080 (내 컴퓨터만) · 계정 airflow / 비밀번호는 .env 의 AIRFLOW_ADMIN_PASSWORD
+# 이 파일은 .env 와 같은 폴더에 있어야 ${...} 값을 읽는다.
+name: career-airflow
+
+x-airflow-common:
+  &airflow-common
+  build: ./airflow
+  image: career-airflow:3.3.2
+  env_file:
+    - .env
+  environment:
+    &airflow-common-env
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__CORE__AUTH_MANAGER: airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:${AIRFLOW_DB_PASSWORD}@airflow-db/airflow
+    AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
+    AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+    AIRFLOW__CORE__DEFAULT_TIMEZONE: Asia/Seoul
+    AIRFLOW__CORE__EXECUTION_API_SERVER_URL: 'http://airflow-apiserver:8080/execution/'
+    AIRFLOW__API_AUTH__JWT_SECRET: ${AIRFLOW_JWT_SECRET}
+    AIRFLOW__API_AUTH__JWT_ISSUER: airflow
+    AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: 'true'
+    # 우리 코드(job-skill)를 import 할 수 있게
+    PYTHONPATH: /opt/airflow/job-skill
+    # 서빙 DB: 컨테이너 안에서는 localhost 가 아니라 노트북을 가리키는 host.docker.internal
+    DATABASE_URL: postgresql://career:${POSTGRES_PASSWORD}@host.docker.internal:5433/career
+    OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    PYTHONIOENCODING: utf-8
+    # OCR 단계만 이 파이썬(PaddleOCR 전용 가상환경)으로 돈다
+    OCR_PYTHON: /opt/paddle/bin/python
+  volumes:
+    - ./airflow/dags:/opt/airflow/dags
+    - ./airflow/logs:/opt/airflow/logs
+    - .:/opt/airflow/job-skill
+    - ./data/paddlex:/home/airflow/.paddlex
+  user: "${AIRFLOW_UID:-50000}:0"
+  depends_on:
+    &airflow-common-depends-on
+    airflow-db:
+      condition: service_healthy
+
+services:
+  airflow-db:
+    image: postgres:17.6
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: ${AIRFLOW_DB_PASSWORD:?.env 에 AIRFLOW_DB_PASSWORD 를 적어 주세요}
+      POSTGRES_DB: airflow
+    volumes:
+      - airflow-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "airflow"]
+      interval: 10s
+      retries: 5
+      start_period: 5s
+    restart: unless-stopped
+
+  airflow-apiserver:
+    <<: *airflow-common
+    command: api-server
+    ports:
+      - "127.0.0.1:8080:8080"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/api/v2/monitor/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-init:
+        condition: service_completed_successfully
+
+  airflow-scheduler:
+    <<: *airflow-common
+    command: scheduler
+    healthcheck:
+      test: ["CMD-SHELL", 'airflow jobs check --job-type SchedulerJob --hostname "$${HOSTNAME}"']
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    # LocalExecutor 라 태스크(OCR 포함)가 이 컨테이너에서 돈다 → 노트북 GPU 연결
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-init:
+        condition: service_completed_successfully
+
+  airflow-dag-processor:
+    <<: *airflow-common
+    command: dag-processor
+    healthcheck:
+      test: ["CMD-SHELL", 'airflow jobs check --job-type DagProcessorJob --hostname "$${HOSTNAME}"']
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-init:
+        condition: service_completed_successfully
+
+  airflow-init:
+    <<: *airflow-common
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        mkdir -v -p /opt/airflow/logs /opt/airflow/dags /home/airflow/.paddlex
+        /entrypoint airflow version
+        chown -R "${AIRFLOW_UID:-50000}:0" /opt/airflow/logs /opt/airflow/dags /home/airflow/.paddlex
+    environment:
+      <<: *airflow-common-env
+      _AIRFLOW_DB_MIGRATE: 'true'
+      _AIRFLOW_WWW_USER_CREATE: 'true'
+      _AIRFLOW_WWW_USER_USERNAME: airflow
+      _AIRFLOW_WWW_USER_PASSWORD: ${AIRFLOW_ADMIN_PASSWORD:?.env 에 AIRFLOW_ADMIN_PASSWORD 를 적어 주세요}
+    user: "0:0"
+
+volumes:
+  airflow-pgdata:
+    name: career-airflow-pgdata
