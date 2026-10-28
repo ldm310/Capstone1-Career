@@ -1,3 +1,6 @@
+# 어느 폴더에서 실행해도 같은 컨테이너·볼륨(capstone1-career-docker_*)을 쓰도록 프로젝트 이름을 고정한다.
+name: capstone1-career-docker
+
 services:
   db:
     image: postgres:17
