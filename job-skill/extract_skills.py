@@ -512,16 +512,28 @@ def call_llm(client, model: str, effort: str, inp: dict, examples: bool, extra: 
     return guard(copy.deepcopy(raw), inp["text"]), raw, resp.usage.input_tokens, resp.usage.output_tokens, sec, resp.status
 
 
-def run_model(client, model: str, effort: str, inputs: dict[str, dict], examples: bool = False, tag: str = "") -> dict:
-    """examples=True 면 지시문에 예시 답안을 붙인다. 결과 폴더는 out/extract/<model><tag>/ (같은 모델의 다른 설정을 나눠 저장)."""
+def run_model(client, model: str, effort: str, inputs: dict[str, dict], examples: bool = False, tag: str = "",
+              max_usd: float | None = None) -> dict:
+    """examples=True 면 지시문에 예시 답안을 붙인다. 결과 폴더는 out/extract/<model><tag>/ (같은 모델의 다른 설정을 나눠 저장).
+    max_usd: 이번 실행에서 새로 부른 LLM 비용 합이 이 값 이상이면, 다음 공고를 부르기 전에 멈추고 <EX>/_budget.json 을 쓴다.
+    이미 결과 파일이 있는 공고는 비용 없이 건너뛴다."""
     d = os.path.join(EX, model + tag)
     os.makedirs(d, exist_ok=True)
     pin, pout = PRICES.get(model, (0, 0))
-    stats = {"model": model, "effort": effort, "in": 0, "out": 0, "sec": 0.0, "usd": 0.0}
-    for rid, inp in inputs.items():
+    stats = {"model": model, "effort": effort, "in": 0, "out": 0, "sec": 0.0, "usd": 0.0,
+             "stopped": False, "spent_new": 0.0, "left": 0}
+    todo = list(inputs.items())
+    for i, (rid, inp) in enumerate(todo):
         path = os.path.join(d, f"{rid}.json")
         if os.path.exists(path):
             r = json.load(open(path, encoding="utf-8"))
+        elif max_usd is not None and stats["spent_new"] >= max_usd:
+            stats["stopped"] = True
+            stats["left"] = sum(1 for rid2, _ in todo[i:] if not os.path.exists(os.path.join(d, f"{rid2}.json")))
+            budget = {"stopped": True, "spent": round(stats["spent_new"], 6), "limit": max_usd, "left": stats["left"]}
+            json.dump(budget, open(os.path.join(EX, "_budget.json"), "w", encoding="utf-8"), ensure_ascii=False)
+            print(f"  [{model}] 비용 상한 ${max_usd:.2f} 도달: ${budget['spent']:.4f} 사용, 남은 공고 {stats['left']}건", flush=True)
+            break
         else:
             run_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
             parsed, raw, tin, tout, sec, status = call_llm(client, model, effort, inp, examples)
@@ -543,6 +555,7 @@ def run_model(client, model: str, effort: str, inputs: dict[str, dict], examples
                  "input_tokens": tin, "output_tokens": tout, "cost_usd": round(tin / 1e6 * pin + tout / 1e6 * pout, 6),
                  "status": status, "checks": checks, "review_reasons": reason(final), "llm_output_raw": raw, **parsed}
             json.dump(r, open(path, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+            stats["spent_new"] += r["cost_usd"]
         stats["in"] += r["input_tokens"]
         stats["out"] += r["output_tokens"]
         stats["sec"] += r["seconds"]
@@ -875,7 +888,8 @@ def main() -> None:
     ap.add_argument("--models", default="gpt-5.6-terra,gpt-5.6-luna")
     ap.add_argument("--effort", default="low")
     ap.add_argument("--examples", action="store_true", help="프롬프트에 예시 답안을 붙인다(지금 쓰는 설정)")
-    ap.add_argument("--tag", default="", help="결과 폴더 이름 뒤에 붙일 말(예: -ex → out/extract/gpt-5.6-luna-ex/)")
+    ap.add_argument("--tag", default="", help="결과 폴더 이름 뒤에 붙일 말(예: --tag=-ex → out/extract/gpt-5.6-luna-ex/)")
+    ap.add_argument("--max-usd", type=float, default=None, help="이번 실행에서 새로 쓸 LLM 비용 상한(달러). 넘으면 멈추고 _budget.json")
     args = ap.parse_args()
     models = [m.strip() for m in args.models.split(",") if m.strip()]
     inputs = posting_inputs()
@@ -884,9 +898,14 @@ def main() -> None:
         json.dump(inputs, f, ensure_ascii=False, indent=1)
     for rid, inp in inputs.items():
         print(f"{rid}: 남긴 단락 {inp['kept']}, 뺀 단락 {inp['dropped']}, 글자 {len(norm(inp['text']))}자")
+    if not inputs:  # 새 공고가 없는 날: LLM 을 부르지 않고 끝낸다
+        json.dump([], open(os.path.join(EX, "_stats.json"), "w", encoding="utf-8"))
+        print("추출할 공고가 없습니다.")
+        return
     from openai import OpenAI
     client = OpenAI(max_retries=4, timeout=300)
-    stats = [run_model(client, m, args.effort, inputs, examples=args.examples, tag=args.tag) for m in models]
+    stats = [run_model(client, m, args.effort, inputs, examples=args.examples, tag=args.tag, max_usd=args.max_usd)
+             for m in models]
     for s in stats:
         print(f"{s['model']}: 입력 {s['in']} 출력 {s['out']} 토큰, ${s['usd']:.4f} (공고당 ${s['usd'] / len(inputs):.4f}), "
               f"공고당 {s['sec'] / len(inputs):.1f}s")
