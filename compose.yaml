@@ -1,0 +1,60 @@
+services:
+  db:
+    image: postgres:17
+    container_name: career-db
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_DB: career
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+
+    ports:
+      - "5433:5432"
+
+    volumes:
+      - career-db-data:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+
+    image: career-backend:latest
+    container_name: career-backend
+    restart: unless-stopped
+
+    env_file:
+      - .env
+
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      JDBC_DATABASE_URL: jdbc:postgresql://db:5432/career
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      # app.storage.project-file-dir (프로젝트 설명 PDF 저장 위치)
+      APP_STORAGE_PROJECTFILEDIR: /app/uploads/projects
+
+    ports:
+      - "8080:8080"
+
+    # 컨테이너를 다시 만들어도 업로드한 PDF가 남도록 볼륨에 저장한다.
+    volumes:
+      - career-project-uploads:/app/uploads
+
+    depends_on:
+      db:
+        condition: service_healthy
+
+
+volumes:
+  career-db-data:
+  career-project-uploads:
