@@ -10,7 +10,7 @@
 - **새로 만드는 모듈은 실행 폴더를 인자로 받는다.** 수집(`collect.py`), 수정 확인(`recheck.py`), DB 조회(`db_queries.py`), Slack(`notify.py`), 태스크 함수(`pipeline_tasks.py`)
 - **Airflow 3.3.2 (LocalExecutor):** 별도 Docker 묶음(`airflow/`)에서 DAG 파일 하나로 세 DAG를 정의하고, 태스크는 `pipeline_tasks` 함수를 부른다.
 
-**Tech Stack:** Python 3.12, Apache Airflow 3.3.2 (`apache/airflow:3.3.2-python3.12`, 사용자 결정), PostgreSQL 17.6, psycopg 3.2.3, openai 2.7.2, paddleocr 3.7.0 + paddlepaddle-gpu 3.3.2(cu126), pytest, Docker Desktop(WSL2, GPU).
+**Tech Stack:** Python 3.12, Apache Airflow 3.3.2 (`apache/airflow:3.3.2-python3.12`, 사용자 결정), PostgreSQL 17.6, psycopg 3.2.3, openai 2.7.2, paddleocr 3.7.0 + paddlepaddle-gpu 3.2.2(cu126), pytest, Docker Desktop(WSL2, GPU).
 
 **Spec:** `job-skill/docs/superpowers/specs/2026-10-27-airflow-dags-design.md` (그림: `job-skill/docs/dag-backfill.png`, `dag-daily.png`, `dag-recheck.png`)
 
@@ -362,7 +362,7 @@
   - `FROM apache/airflow:3.3.2-python3.12`
   - root로 `libgl1 libglib2.0-0`을 설치한다(opencv용).
   - airflow 사용자로 `pip install -r requirements-airflow.txt`를 실행한다. `requirements-airflow.txt`는 이렇게 둔다.
-    - `paddlepaddle-gpu==3.3.2`(`--extra-index-url https://www.paddlepaddle.org.cn/packages/stable/cu126/`)
+    - `paddlepaddle-gpu==3.2.2`(`--extra-index-url https://www.paddlepaddle.org.cn/packages/stable/cu126/`)
     - `paddleocr==3.7.0`
     - `openai==2.7.2`
     - `psycopg[binary]==3.2.3`
