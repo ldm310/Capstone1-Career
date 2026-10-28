@@ -95,12 +95,12 @@ def eligible(career: str) -> tuple[bool, str]:
 
 
 def _scan(items: list[dict], known: set[str], stop_after: int, run: int) -> tuple[list[dict], bool, int]:
-    """(처음 보는 공고, 멈췄는지, 끝났을 때 이어지는 연속 수). 아는 번호가 연속 stop_after 개면 멈춘다."""
+    """(처음 보는 공고, 멈췄는지, 끝났을 때 이어지는 연속 수). 아는 번호가 연속 stop_after 개면 멈춘다(None 이면 안 멈춤)."""
     new = []
     for it in items:
         if it["rec_idx"] in known:
             run += 1
-            if run >= stop_after:
+            if stop_after is not None and run >= stop_after:
                 return new, True, run
         else:
             run = 0
@@ -130,25 +130,36 @@ def read_targets(run_dir: str) -> list[dict]:
         return list(csv.DictReader(f, delimiter="\t"))
 
 
-def collect_list(run_dir: str, known: set[str], get=fetch_images.get, max_pages: int = 40, stop_after: int = 5,
+def _page_items(get, role: str, code: str, page_no: int) -> list[dict]:
+    """목록 한 쪽. HTTP 오류, 또는 1쪽인데 공고가 0개(화면이 바뀌었거나 막힘)면 ListFetchError — '목록 끝'으로 착각하지 않게."""
+    status, _, body = get(LIST.format(code=code, page=page_no))
+    if status != 200:
+        raise ListFetchError(f"{role} 목록 {page_no}쪽 HTTP {status}")
+    items = parse_items(body.decode("utf-8", "replace"))
+    if not items and page_no == 1:
+        raise ListFetchError(f"{role} 목록 1쪽에 공고가 없음(화면이 바뀌었거나 막힘)")
+    return items
+
+
+def collect_list(run_dir: str, known: set[str], get=fetch_images.get, max_pages: int = 40, stop_after: int | None = 5,
                  max_new: int | None = None, today: dt.date | None = None) -> dict:
-    """두 직무 목록에서 새 공고를 골라 <run_dir>/targets.tsv 를 쓴다."""
+    """두 직무 목록에서 새 공고를 골라 <run_dir>/targets.tsv 를 쓴다.
+    stop_after=None(③)이면 연속 멈춤 없이 목록 끝까지 보며 아는 번호만 건너뛴다(부분 실행 뒤 다시 돌려도 이어서).
+    빈 쪽, 또는 이 직무에서 이미 본 공고만 있는 쪽(끝을 넘겨 마지막 쪽을 되풀이)에서 그 직무는 끝."""
     today = today or dt.datetime.now(KST).date()
     targets, excluded, taken = [], [], set()
     listed, stopped = 0, {}
     full = False
     for role, code in ROLES:
         run, stopped[role] = 0, False
+        seen: set[str] = set()
         for page_no in range(1, max_pages + 1):
             if full:
                 break
-            url = LIST.format(code=code, page=page_no)
-            status, _, body = get(url)
-            if status != 200:
-                raise ListFetchError(f"{role} 목록 {page_no}쪽 HTTP {status}")
-            items = parse_items(body.decode("utf-8", "replace"))
-            if not items:
+            items = _page_items(get, role, code, page_no)
+            if not items or all(it["rec_idx"] in seen for it in items):
                 break
+            seen.update(it["rec_idx"] for it in items)
             listed += len(items)
             new, stop, run = _scan(items, known, stop_after, run)
             for it in new:
@@ -183,10 +194,7 @@ def scan_lists(get=fetch_images.get, max_pages: int = 40, now: dt.datetime | Non
     for role, code in ROLES:
         seen: set[str] = set()
         for page_no in range(1, max_pages + 1):
-            status, _, body = get(LIST.format(code=code, page=page_no))
-            if status != 200:
-                raise ListFetchError(f"{role} 목록 {page_no}쪽 HTTP {status}")
-            items = parse_items(body.decode("utf-8", "replace"))
+            items = _page_items(get, role, code, page_no)
             if not items or all(it["rec_idx"] in seen for it in items):
                 break
             for it in items:

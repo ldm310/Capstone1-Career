@@ -521,7 +521,7 @@ def run_model(client, model: str, effort: str, inputs: dict[str, dict], examples
     os.makedirs(d, exist_ok=True)
     pin, pout = PRICES.get(model, (0, 0))
     stats = {"model": model, "effort": effort, "in": 0, "out": 0, "sec": 0.0, "usd": 0.0,
-             "stopped": False, "spent_new": 0.0, "left": 0}
+             "stopped": False, "spent_new": 0.0, "left": 0, "failed": [], "done_new": 0}
     todo = list(inputs.items())
     for i, (rid, inp) in enumerate(todo):
         path = os.path.join(d, f"{rid}.json")
@@ -535,32 +535,40 @@ def run_model(client, model: str, effort: str, inputs: dict[str, dict], examples
             print(f"  [{model}] 비용 상한 ${max_usd:.2f} 도달: ${budget['spent']:.4f} 사용, 남은 공고 {stats['left']}건", flush=True)
             break
         else:
-            run_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
-            parsed, raw, tin, tout, sec, status = call_llm(client, model, effort, inp, examples)
-            first = unit_checks(parsed, inp)
-            reason = lambda found: [{"검사": f["검사"], "내용": f["내용"]} for f in found]
-            checks = {"first": reason(first), "retry": None, "used": "first"}
-            final = first
-            if first:  # 의심되면 힌트를 붙여 한 번 더 — 덜 의심스러운 쪽을 쓴다(비용은 두 번 다 센다)
-                p2, raw2, i2, o2, s2, st2 = call_llm(client, model, effort, inp, examples,
-                                                     extra="\n".join("- " + f["힌트"] for f in first))
-                second = unit_checks(p2, inp)
-                checks["retry"] = reason(second)
-                tin, tout, sec = tin + i2, tout + o2, sec + s2
-                if len(second) <= len(first):
-                    parsed, raw, status, checks["used"], final = p2, raw2, st2, "retry", second
-            r = {"rec_idx": rid, "model": model, "effort": effort, "examples": examples,
-                 "prompt_version": prompt_version(examples), "dict_version": CD.version.split()[0] if CD.version else "",
-                 "input_hash": sha256(llm_input(inp)), "run_at": run_at, "seconds": round(sec, 2),
-                 "input_tokens": tin, "output_tokens": tout, "cost_usd": round(tin / 1e6 * pin + tout / 1e6 * pout, 6),
-                 "status": status, "checks": checks, "review_reasons": reason(final), "llm_output_raw": raw, **parsed}
+            try:
+                run_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+                parsed, raw, tin, tout, sec, status = call_llm(client, model, effort, inp, examples)
+                first = unit_checks(parsed, inp)
+                reason = lambda found: [{"검사": f["검사"], "내용": f["내용"]} for f in found]
+                checks = {"first": reason(first), "retry": None, "used": "first"}
+                final = first
+                if first:  # 의심되면 힌트를 붙여 한 번 더 — 덜 의심스러운 쪽을 쓴다(비용은 두 번 다 센다)
+                    p2, raw2, i2, o2, s2, st2 = call_llm(client, model, effort, inp, examples,
+                                                         extra="\n".join("- " + f["힌트"] for f in first))
+                    second = unit_checks(p2, inp)
+                    checks["retry"] = reason(second)
+                    tin, tout, sec = tin + i2, tout + o2, sec + s2
+                    if len(second) <= len(first):
+                        parsed, raw, status, checks["used"], final = p2, raw2, st2, "retry", second
+                r = {"rec_idx": rid, "model": model, "effort": effort, "examples": examples,
+                     "prompt_version": prompt_version(examples), "dict_version": CD.version.split()[0] if CD.version else "",
+                     "input_hash": sha256(llm_input(inp)), "run_at": run_at, "seconds": round(sec, 2),
+                     "input_tokens": tin, "output_tokens": tout, "cost_usd": round(tin / 1e6 * pin + tout / 1e6 * pout, 6),
+                     "status": status, "checks": checks, "review_reasons": reason(final), "llm_output_raw": raw, **parsed}
+            except Exception as e:  # 공고 하나의 실패(응답 잘림·거절·잘못된 요청)가 실행 전체를 막지 않게 — 결과 없이 넘어간다
+                stats["failed"].append(rid)
+                print(f"  [{model}] {rid}  추출 실패: {type(e).__name__}: {str(e)[:200]}", flush=True)
+                continue
             json.dump(r, open(path, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
             stats["spent_new"] += r["cost_usd"]
+            stats["done_new"] += 1
         stats["in"] += r["input_tokens"]
         stats["out"] += r["output_tokens"]
         stats["sec"] += r["seconds"]
         print(f"  [{model}] {rid}  {count_line(r)}  {r['seconds']:.1f}s  in {r['input_tokens']} out {r['output_tokens']}", flush=True)
     stats["usd"] = stats["in"] / 1e6 * pin + stats["out"] / 1e6 * pout
+    if stats["failed"] and not stats["done_new"]:  # 전부 실패(키 오류·연결 끊김 등) → 태스크 실패로 알린다
+        raise RuntimeError(f"[{model}] 새로 부른 공고 {len(stats['failed'])}건이 모두 실패")
     return stats
 
 

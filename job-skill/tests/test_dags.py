@@ -75,3 +75,15 @@ def test_all_tasks_retry_and_alert(bag):
             cbs = cb if isinstance(cb, list) else [cb]
             assert t.retries == 2, (dag_id, t.task_id)
             assert notify.on_failure in cbs, (dag_id, t.task_id)
+
+
+def test_shared_resources_use_pools(bag):
+    """DAG 끼리 겹쳐 돌아도(노트북이 00:00·12:00 을 넘겨 꺼졌다 켜짐, 켜는 순서 실수) 사람인 초당 1건·GPU 하나·하루 상한을 지키게
+    사람인 요청 / GPU / LLM 추출 태스크는 각각 자리 1개짜리 풀을 쓴다."""
+    want = {"collect_list": "saramin", "scan_lists": "saramin", "detect_changes": "saramin", "fetch_raw": "saramin",
+            "image_processing.ocr_images": "gpu", "extract_llm": "llm"}
+    for dag_id in ("backfill_once", "daily_collect", "recheck_postings"):
+        d = bag.get_dag(dag_id)
+        for tid, pool in want.items():
+            if tid in d.task_ids:
+                assert d.get_task(tid).pool == pool, (dag_id, tid)

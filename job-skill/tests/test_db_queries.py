@@ -139,3 +139,18 @@ def test_load_moves_last_checked_only_when_extracted(db, db_url, tmp_path):
                                             "output_tokens": 5, "positions": []}), encoding="utf-8")
     _load(tmp_path, db_url)                       # 추출 결과 있음
     assert db.execute("SELECT last_checked_at FROM posting WHERE site_posting_no='D'").fetchone()[0] > old
+
+
+def test_update_deadlines(db):
+    """② 가 목록에서 본 마감일로 바꾼다 — 본문이 그대로여도(마감일은 본문 밖) 연장된 마감일이 저장되게."""
+    import db_queries as q
+    add_posting(db, "A", deadline=dt.date(2026, 11, 15))
+    add_posting(db, "B", deadline=dt.date(2026, 11, 15))
+    add_posting(db, "C", status="마감", deadline=dt.date(2026, 11, 15))
+    add_posting(db, "E", deadline=TODAY - dt.timedelta(days=1))          # DB 로는 지났지만 목록에 아직 있음(연장)
+    n = q.update_deadlines(db, {"A": dt.date(2026, 11, 30), "B": dt.date(2026, 11, 15), "C": dt.date(2026, 11, 30),
+                                "E": TODAY + dt.timedelta(days=10), "Z": dt.date(2026, 12, 1)})
+    assert n == 2
+    got = dict(db.execute("SELECT site_posting_no, deadline FROM posting").fetchall())
+    assert got == {"A": dt.date(2026, 11, 30), "B": dt.date(2026, 11, 15), "C": dt.date(2026, 11, 15),
+                   "E": TODAY + dt.timedelta(days=10)}

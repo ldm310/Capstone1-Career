@@ -83,3 +83,31 @@ def test_main_with_zero_inputs_exits_cleanly(tmp_path):
                        cwd=HERE, env=env, capture_output=True, text=True, encoding="utf-8")
     assert r.returncode == 0, r.stderr
     assert json.loads((tmp_path / "out" / "extract" / "_stats.json").read_text(encoding="utf-8")) == []
+
+
+class FlakyClient(FakeClient):
+    """bad 번째 호출에서 예외(응답 잘림·거절·잘못된 요청 흉내)."""
+
+    def __init__(self, bad):
+        super().__init__()
+        self.bad = set(bad)
+
+    def _create(self, **kw):
+        if self.calls + 1 in self.bad:
+            self.calls += 1
+            raise RuntimeError("지어낸 LLM 오류")
+        return super()._create(**kw)
+
+
+def test_one_bad_posting_does_not_stop_the_run(ex, tmp_path):
+    """공고 하나가 실패해도 나머지는 추출·저장된다(실패한 공고는 결과 없이 저장 → 다음 ① 의 밀린 공고)."""
+    stats = ex.run_model(FlakyClient(bad={2}), MODEL, "low", inputs(3), examples=True, tag=TAG)
+    d = tmp_path / (MODEL + TAG)
+    assert sorted(p.name for p in d.glob("*.json")) == ["T1.json", "T3.json"]
+    assert stats["failed"] == ["T2"]
+
+
+def test_all_postings_failing_raises(ex):
+    """전부 실패하면(키 오류·연결 끊김 등) 태스크를 실패시켜 Slack 으로 알린다."""
+    with pytest.raises(RuntimeError):
+        ex.run_model(FlakyClient(bad={1, 2, 3}), MODEL, "low", inputs(3), examples=True, tag=TAG)

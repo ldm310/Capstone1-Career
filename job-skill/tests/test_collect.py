@@ -196,3 +196,40 @@ def test_scan_lists_raises_on_list_error():
     import collect
     with pytest.raises(collect.ListFetchError):
         collect.scan_lists(get=PagedGet(status=503), now=NOW)
+
+
+# ── 최종 검토 고침 ─────────────────────────────────────────────────────────
+class AllPagesGet:
+    """모든 쪽이 fixture(끝을 넘긴 쪽에서 마지막 쪽을 되풀이하는 사람인 흉내). empty_first 면 모든 쪽이 빈 목록."""
+
+    def __init__(self, empty_first=False):
+        self.urls, self.empty_first = [], empty_first
+
+    def __call__(self, url, *a, **k):
+        self.urls.append(url)
+        return 200, "text/html", ("<html></html>" if self.empty_first else page()).encode("utf-8")
+
+
+def test_collect_list_without_stop_rule_skips_known(tmp_path):
+    """③: 아는 공고가 연속 5개여도 멈추지 않고 건너뛴다 — 부분 실행(시험·실패) 뒤 다시 돌려도 이어서 한다."""
+    import collect
+    known = {"9000007", "9000006", "9000005", "9000004", "9000003"}
+    res = collect.collect_list(str(tmp_path), known=known, get=FakeGet(), today=TODAY, stop_after=None)
+    assert nos(res["targets"]) == ["9000002", "9000001"]
+    assert res["stopped"] == {"백엔드": False, "데이터 엔지니어": False}
+
+
+def test_collect_list_ends_on_repeated_page(tmp_path):
+    import collect
+    get = AllPagesGet()
+    collect.collect_list(str(tmp_path), known=set(), get=get, today=TODAY, stop_after=None)
+    assert len(get.urls) == 4      # 직무마다 1쪽 + 되풀이된 2쪽에서 끝
+
+
+def test_empty_first_page_is_an_error(tmp_path):
+    """목록 1쪽이 200인데 공고가 0개 = 화면이 바뀌었거나 막힌 것. '목록 끝'으로 보고 조용히 0건으로 끝내지 않는다."""
+    import collect
+    with pytest.raises(collect.ListFetchError):
+        collect.collect_list(str(tmp_path), known=set(), get=AllPagesGet(empty_first=True), today=TODAY)
+    with pytest.raises(collect.ListFetchError):
+        collect.scan_lists(get=AllPagesGet(empty_first=True), now=NOW)

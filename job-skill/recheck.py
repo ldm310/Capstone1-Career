@@ -8,9 +8,9 @@ select_recheck: 두 직무 목록 전체(collect.scan_lists)와 DB 진행 공고
 detect_changes: 고른 공고마다 본문을 다시 받아(fetch_images.get: 간격 1.2초, 프로젝트 이름 UA) 지문을 DB 의 raw_hash 와 비교한다.
 지문은 db_load.content_hash(보이는 글 + 본문 이미지 주소)라서, 요청마다 바뀌는 빈 <font color> 태그는 변경으로 치지 않는다.
   - changed : 지문이 다름 → <run_dir>/pages/<번호>.html 저장 + targets.tsv (다음 단계가 다시 추출)
-  - closed  : 404 같은 응답, 또는 본문 칸(user_content)이 없음 → 마감
+  - closed  : 404·410, 또는 200 인데 본문 칸(user_content)이 없음 → 마감
   - unchanged
-  - error   : 연결 실패·5xx → 사람인 일시 장애일 수 있어 마감으로 치지 않고 건너뜀
+  - error   : 그 밖(연결 실패·5xx·403·429 등) → 일시 장애나 막힘일 수 있어 마감으로 치지 않고 건너뜀(다음 ② 가 다시)
 결과는 <run_dir>/changes.json 에도 쓴다.
 """
 
@@ -51,11 +51,14 @@ def detect_changes(run_dir: str, rows: list[dict], get=fetch_images.get) -> dict
     for r in rows:
         no = r["rec_idx"]
         status, _, body = get(fetch_images.RELAY.format(id=no))
-        if status is None or status >= 500:
+        if status in (404, 410):
+            res["closed"].append(no)
+            continue
+        if status != 200:  # 연결 실패·5xx·403·429 등: 일시 장애나 막힘일 수 있어 마감(되돌릴 수 없음)으로 치지 않는다
             res["error"].append(no)
             continue
-        page = body.decode("utf-8", "replace") if status == 200 else ""
-        if status != 200 or "user_content" not in page:
+        page = body.decode("utf-8", "replace")
+        if "user_content" not in page:
             res["closed"].append(no)
             continue
         if content_hash(page, no) == r["raw_hash"]:

@@ -121,6 +121,12 @@ services:
       - |
         mkdir -v -p /opt/airflow/logs /opt/airflow/dags /home/airflow/.paddlex
         /entrypoint airflow version
+        # 자리 1개짜리 풀 — DAG 끼리 겹쳐 돌아도 사람인 초당 1건·GPU 하나·하루 비용 상한을 지키게(DAG 파일의 pool=)
+        # root 로는 airflow 패키지(airflow 사용자 폴더에 설치)를 못 찾아 /entrypoint 를 거친다. 실패하면 init 도 실패.
+        set -e
+        /entrypoint airflow pools set saramin 1 "사람인 요청(초당 1건)"
+        /entrypoint airflow pools set gpu 1 "GPU OCR(6GB 하나)"
+        /entrypoint airflow pools set llm 1 "LLM 추출(하루 상한)"
         chown -R "${AIRFLOW_UID:-50000}:0" /opt/airflow/logs /opt/airflow/dags /home/airflow/.paddlex
     environment:
       <<: *airflow-common-env

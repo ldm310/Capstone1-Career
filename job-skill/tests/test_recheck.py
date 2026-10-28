@@ -101,3 +101,12 @@ def test_select_recheck_takes_deadline_from_list():
     lst = {"A": listed(1, "~11.30(월)"), "B": listed(1, "상시채용")}
     check, _ = recheck.select_recheck(lst, rows, TODAY)
     assert [r["deadline"] for r in check] == ["2026-11-30", "2026-11-15"]   # 읽을 수 없는 마감일이면 DB 값 그대로
+
+
+def test_blocked_responses_are_errors_not_closed(tmp_path):
+    """403·429 같은 막힘은 마감이 아니다(마감은 되돌릴 수 없음). 404·410 과 본문 없는 200 만 마감."""
+    import recheck
+    rows = [row(n, "x" * 64) for n in ("A", "B", "C", "D")]
+    get = FakeGet({"A": (403, "", b""), "B": (429, "", b""), "C": (400, "", b""), "D": (410, "", b"")})
+    res = recheck.detect_changes(str(tmp_path), rows, get=get)
+    assert res["error"] == ["A", "B", "C"] and res["closed"] == ["D"]

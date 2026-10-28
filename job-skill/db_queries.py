@@ -76,6 +76,19 @@ def mark_closed(conn, nos: list[str]) -> int:
                             (SITE, list(nos))).rowcount
 
 
+def update_deadlines(conn, deadlines: dict[str, dt.date]) -> int:
+    """② 가 목록에서 읽은 마감일로 바꾼다(상태 '진행'이고 값이 다를 때만). 마감일은 본문 밖이라 본문 지문이 같아도 바뀔 수 있다.
+    DB 마감일이 이미 지났어도 목록에 보이면(연장) 바꾼다. 바꾼 수를 돌려준다."""
+    if not deadlines:
+        return 0
+    with conn.transaction():
+        return conn.execute("""UPDATE posting p SET deadline = v.d
+                               FROM unnest(%s::text[], %s::date[]) AS v(no, d)
+                               WHERE p.site = %s AND p.site_posting_no = v.no AND p.status = '진행'
+                                 AND p.deadline IS DISTINCT FROM v.d""",
+                            (list(deadlines), list(deadlines.values()), SITE)).rowcount
+
+
 def touch_checked(conn, nos: list[str]) -> int:
     """② 가 다시 확인한 공고의 마지막 확인 시각을 지금으로."""
     if not nos:

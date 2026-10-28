@@ -25,6 +25,9 @@ from db_load import connect
 DEFAULT_ARGS = {"retries": 2, "retry_delay": dt.timedelta(minutes=5), "on_failure_callback": notify.on_failure}
 COMMON = dict(default_args=DEFAULT_ARGS, max_active_runs=1, catchup=False, tags=["job-skill"])
 START = pendulum.datetime(2026, 10, 28, tz="Asia/Seoul")
+# 자리 1개짜리 풀(airflow-init 이 만듦): DAG 끼리 겹쳐 돌아도(노트북이 00:00·12:00 을 넘겨 꺼졌다 켜짐, 켜는 순서 실수)
+# 사람인 요청은 한 번에 한 태스크(초당 1건), GPU OCR 도 하나, LLM 추출도 하나씩(하루 상한을 앞 실행이 쓴 뒤에 계산)
+SARAMIN, GPU, LLM = "saramin", "gpu", "llm"
 MAX_NEW = {"max_new": Param(None, type=["null", "integer"], minimum=1,
                             description="시험용: 새 공고를 이 수까지만 (비우면 전부)")}
 
@@ -41,13 +44,13 @@ def _run_dir() -> str:
 def _process(label: str, limit: float, daily: bool):
     """공고 원본 수집 → [이미지 처리: 이미지 OCR → 불필요 단락 제거] → LLM 추출 → DB 저장. 글 공고는 원본 수집에서 바로 추출로."""
 
-    @task(task_display_name="공고 원본 수집")
+    @task(task_display_name="공고 원본 수집", pool=SARAMIN)
     def fetch_raw():
         return pt.step_fetch_raw(_run_dir())
 
     @task_group(group_id="image_processing", group_display_name="이미지 처리")
     def image_processing():
-        @task(task_display_name="이미지 OCR")
+        @task(task_display_name="이미지 OCR", pool=GPU)
         def ocr_images():
             pt.step_ocr(_run_dir())
 
@@ -57,7 +60,7 @@ def _process(label: str, limit: float, daily: bool):
 
         ocr_images() >> filter_sections()   # 값을 돌려주면 화살표가 마지막 태스크에만 붙는다
 
-    @task(task_display_name="LLM 추출")
+    @task(task_display_name="LLM 추출", pool=LLM)
     def extract_llm():
         d = _run_dir()
         return pt.step_extract(d, pt.extract_budget(d, limit, daily), label, limit=limit)
@@ -76,8 +79,8 @@ def _process(label: str, limit: float, daily: bool):
 
 
 def _today_cost() -> float:
-    with connect() as conn:
-        return db_queries.day_cost(conn, db_queries.today_kst())[0]
+    """오늘 ①+② LLM 비용(하루 상한과 같은 셈)."""
+    return pt.day_spent(db_queries.today_kst())[0]
 
 
 def _send_result(label: str, counts: dict) -> None:
@@ -88,7 +91,7 @@ def _send_result(label: str, counts: dict) -> None:
      is_paused_upon_creation=False,  # 일정이 없어 켜 둬도 저절로 돌지 않는다 — 바로 수동 실행할 수 있게
      doc_md=__doc__, **COMMON)
 def backfill_once():
-    @task(task_display_name="공고 목록 수집")
+    @task(task_display_name="공고 목록 수집", pool=SARAMIN)
     def collect_list():
         return pt.step_collect(_run_dir(), include_pending=False, max_new=_ctx()["params"].get("max_new"))
 
@@ -112,7 +115,7 @@ def daily_collect():
             usd, runs = db_queries.day_cost(conn, yesterday)
         notify.send(notify.msg_daily_cost(yesterday, usd, runs))
 
-    @task(task_display_name="공고 목록 수집")
+    @task(task_display_name="공고 목록 수집", pool=SARAMIN)
     def collect_list():
         return pt.step_collect(_run_dir(), include_pending=True, max_new=_ctx()["params"].get("max_new"))
 
@@ -136,11 +139,11 @@ def daily_collect():
 @dag(dag_id="recheck_postings", dag_display_name="② 수정 확인", schedule="0 12 */3 * *", start_date=START,
      is_paused_upon_creation=True, doc_md=__doc__, **COMMON)
 def recheck_postings():
-    @task(task_display_name="공고 목록 확인")
+    @task(task_display_name="공고 목록 확인", pool=SARAMIN)
     def scan_lists():
         return pt.step_pick_recheck(_run_dir())
 
-    @task(task_display_name="변경 감지")
+    @task(task_display_name="변경 감지", pool=SARAMIN)
     def detect_changes():
         return pt.step_detect(_run_dir())
 
@@ -155,7 +158,8 @@ def recheck_postings():
         seen = ti.xcom_pull(task_ids="detect_changes") or {}
         s = pt.summary(_run_dir())
         _send_result("수정 확인", {"진행": picked.get("진행", 0), "수정": picked.get("수정", 0),
-                               "목록에 없음": picked.get("목록에 없음", 0), "바뀜": seen.get("바뀜", 0),
+                               "목록에 없음": picked.get("목록에 없음", 0), "마감일 바뀜": picked.get("마감일 바뀜", 0),
+                               "바뀜": seen.get("바뀜", 0),
                                "마감": ti.xcom_pull(task_ids="close_postings") or 0, "오류": seen.get("오류", 0),
                                "추출": s["추출"], "비용": s["비용"], "오늘 비용": _today_cost()})
 
