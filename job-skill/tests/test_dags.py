@@ -30,7 +30,8 @@ def test_dag_ids_and_schedules(bag):
     assert {"backfill_once", "daily_collect", "recheck_postings"} <= set(bag.dag_ids)
     assert bag.get_dag("backfill_once").schedule is None
     assert bag.get_dag("daily_collect").schedule == "0 0 * * *"
-    assert bag.get_dag("recheck_postings").schedule == dt.timedelta(days=3)
+    # 3일 간격(timedelta)은 늦게 켜거나 노트북이 꺼졌다 켜지면 12:00 에서 밀려 ①(00:00)과 겹칠 수 있다 → 날짜 cron
+    assert bag.get_dag("recheck_postings").schedule == "0 12 */3 * *"
     for dag_id in ("backfill_once", "daily_collect", "recheck_postings"):
         d = bag.get_dag(dag_id)
         assert d.timezone.name == "Asia/Seoul" and d.max_active_runs == 1 and d.catchup is False

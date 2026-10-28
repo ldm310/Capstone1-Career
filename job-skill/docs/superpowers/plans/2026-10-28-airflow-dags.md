@@ -427,7 +427,7 @@
   - DAG id: `backfill_once`, `daily_collect`, `recheck_postings`
   - 공통 `default_args`: `retries=2`, `retry_delay=timedelta(minutes=5)`, `on_failure_callback=notify.on_failure`
   - 공통 DAG 설정: `max_active_runs=1`, `catchup=False`
-  - `start_date`는 `pendulum.datetime(2026, 10, 28, tz="Asia/Seoul")`이고, ②만 `pendulum.datetime(2026, 10, 30, 12, tz="Asia/Seoul")`
+  - `start_date`는 셋 다 `pendulum.datetime(2026, 10, 28, tz="Asia/Seoul")` (② 일정은 아래 cron 이 정함)
 - Produces (DAG별, 태스크와 순서는 그림과 같다):
   - `backfill_once`
     - 설정: `schedule=None`, params `max_new: int | None = None`
@@ -440,7 +440,7 @@
     - 예산은 `budget_left(conn, DAILY_LIMIT, 오늘 KST)`
     - `notify_cost`는 어제(KST) `day_cost`로 `msg_daily_cost`
   - `recheck_postings`
-    - 설정: `schedule=timedelta(days=3)`, `is_paused_upon_creation=True`
+    - 설정: `schedule="0 12 */3 * *"`(매달 1·4·7…31일 12:00 — 3일 간격 timedelta 는 늦게 켜면 시각이 밀림, Task 9 Ruling), `is_paused_upon_creation=True`
     - 순서: `scan_lists >> detect_changes >> [close_postings, fetch_raw]`, `fetch_raw >> image_processing[...] >> extract_llm >> load_db >> notify_result`, `fetch_raw >> extract_llm`, `close_postings >> notify_result`
     - `scan_lists` = `step_pick_recheck`, `detect_changes` = `step_detect`, `close_postings` = `step_close` (Task 5a)
     - 예산은 `budget_left(conn, DAILY_LIMIT, 오늘 KST)`

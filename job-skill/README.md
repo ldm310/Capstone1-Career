@@ -47,6 +47,14 @@
 | `db/schema.sql` | DB 표 만들기(PostgreSQL DDL). 설명은 [docs/physical-design.md](docs/physical-design.md) |
 | `db_load.py` | DB 저장: 표 만들기(`init`), 사전 동기화(`sync-dict`), 공고·추출 결과 넣기(`load`). 여러 번 돌려도 겹치지 않는다. |
 | `docker-compose.yml`, `.env.example` | 로컬 개발용 PostgreSQL(Docker). 비밀번호는 `.env`(올리지 않음) |
+| `collect.py` | Airflow 수집: 두 직무 목록에서 새 공고 고르기(연속 5개 멈춤, 마감일, 버린 공고), ②용 목록 전체 보기 |
+| `recheck.py` | Airflow ② 수정 확인: 다시 볼 공고 고르기('수정'·사라진 공고), 본문 지문 비교 |
+| `db_queries.py` | 파이프라인이 다음 할 일을 정하려고 DB에서 읽고 쓰는 함수(진행 공고, 밀린 공고, 하루 비용 등) |
+| `notify.py` | Slack 알림(실패, 비용 상한, 결과, 하루 비용). 숫자·상태만 보낸다. |
+| `pipeline_tasks.py` | Airflow 태스크 함수. 실행마다 `data/runs/<dag>/<run>/` 폴더를 만들고 위 스크립트를 돌린다. |
+| `airflow/`, `docker-compose.airflow.yml` | Airflow 3.3.2 Docker 묶음과 DAG 3개(`airflow/dags/job_skill_dags.py`). 아래 [Airflow로 돌리기](#airflow로-돌리기) |
+| `db/migrations/` | 이미 표가 있는 DB에 적용할 변경(새로 만들 때는 `db/schema.sql`에 이미 들어 있음) |
+| `tests/` | 시험(pytest). 사람인·LLM·Slack은 가짜, DB 시험은 `career-db`에 임시 DB를 만들었다 지운다. |
 | `docs/` | 그림(파이프라인, 추출 방법, LLM 단계, 단위 검사, ERD), [물리 설계](docs/physical-design.md), [기술 스택 결정](docs/pipeline-stack.md), [OCR 비교 실험](docs/ocr-comparison.md) |
 | `run_tesseract.py` 등 | OCR 비교 실험 코드 → [docs/ocr-comparison.md](docs/ocr-comparison.md) |
 
@@ -67,7 +75,7 @@ $env:OCR_DATA_DIR = "sample3"
 py -3.12 fetch_images.py                                  # 2. 이미지 받기
 <venv-paddle>\Scripts\python.exe dump_paddle_boxes.py --gpu   # 3. OCR
 py -3.12 section_split.py --paddle-only                   # 4. 단락 나누기·빼기
-py -3.12 extract_skills.py --models gpt-5.6-luna --examples --tag -ex   # 5. LLM 추출·표준화·단위 검사 (유료)
+py -3.12 extract_skills.py --models gpt-5.6-luna --examples --tag=-ex   # 5. LLM 추출·표준화·단위 검사 (유료)
 py -3.12 db_load.py init                                  # 6. DB: 표 만들기 (처음 한 번)
 py -3.12 db_load.py sync-dict                             #    사전 넣기 (사전을 고칠 때마다)
 py -3.12 db_load.py load --run gpt-5.6-luna-ex            #    공고·추출 결과 넣기
@@ -75,7 +83,62 @@ py -3.12 db_load.py load --run gpt-5.6-luna-ex            #    공고·추출 �
 
 비용은 공고당 약 $0.004다(luna low, 다시 부르기 포함).
 `--examples`는 프롬프트에 예시 답안을 붙인다(지금 쓰는 설정). `--tag`는 결과 폴더 이름 뒤에 붙는다(`out/extract/gpt-5.6-luna-ex/`).
+`-ex`가 `-`로 시작해서 `--tag -ex`라고 띄어 쓰면 옵션으로 읽힌다. 꼭 `--tag=-ex`로 쓴다. `--max-usd 1.0`을 주면 그 금액에서 추출을 멈춘다.
 추출 결과에는 표준화 전 답, 확인 필요 사유(`[{검사, 내용}]`), 프롬프트·사전 버전, 입력 해시, 비용이 함께 저장된다.
+
+## Airflow로 돌리기
+
+노트북의 Docker에서 DAG 3개가 수집 → OCR → LLM 추출 → DB 저장을 자동으로 하고, Slack으로 알린다.
+설계는 [docs/superpowers/specs/2026-10-27-airflow-dags-design.md](docs/superpowers/specs/2026-10-27-airflow-dags-design.md), 태스크 그림은 [③](docs/dag-backfill.png) · [①](docs/dag-daily.png) · [②](docs/dag-recheck.png).
+
+| DAG | 언제 | 하는 일 |
+|---|---|---|
+| ③ 일회성 전체 수집 `backfill_once` | 관리 화면에서 **직접 한 번** | 진행 중인 대상 공고 전부를 DB 저장까지. LLM 상한은 실행 한 번에 $10 |
+| ① 매일 수집 `daily_collect` | 매일 00:00 | 새 공고 + 추출 못 한 밀린 공고. 시작할 때 어제 LLM 비용을 Slack으로 |
+| ② 수정 확인 `recheck_postings` | 매달 1·4·7…28·31일 12:00 | 목록에서 '수정'됐거나 사라진 공고만 본문을 확인 → 바뀐 공고 다시 추출, 없어진 공고 마감 |
+
+①과 ②의 LLM 비용은 합쳐서 하루(KST) $5까지만 쓴다. 상한에 닿으면 추출을 멈추고 Slack으로 알린다. 못 한 공고는 다음 ①이 먼저 처리한다.
+
+**처음 한 번 준비**
+1. `.env`에 Airflow 값을 채운다(`.env.example` 참고). 무작위 값은 이렇게 만든다.
+   ```powershell
+   py -3.12 -c "import base64,os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())"   # AIRFLOW_FERNET_KEY
+   py -3.12 -c "import secrets; print(secrets.token_urlsafe(32))"                             # AIRFLOW_JWT_SECRET, 비밀번호들
+   ```
+   `SLACK_WEBHOOK_URL`에는 Slack 채널 웹훅 주소를 넣는다. `OPENAI_API_KEY`는 Windows 환경변수에 두면 그대로 넘어간다.
+2. Docker Desktop에서 GPU를 쓸 수 있어야 한다(NVIDIA 드라이버 + WSL2).
+3. Paddle GPU 휠(1.9GB)을 미리 받는다. 이미지를 만들 때만 쓰고, 저장소에는 올리지 않는다(`airflow/wheels/`). 끊기면 같은 명령으로 이어받는다.
+   ```powershell
+   curl.exe -C - --create-dirs -o airflow/wheels/paddlepaddle_gpu-3.2.2-cp312-cp312-linux_x86_64.whl https://paddle-whl.cdn.bcebos.com/stable/cu126/paddlepaddle-gpu/paddlepaddle_gpu-3.2.2-cp312-cp312-linux_x86_64.whl
+   ```
+4. 서빙 DB(`docker compose up -d`)가 이미 표가 있는 DB라면 변경을 적용한다(여러 번 해도 안전).
+   ```powershell
+   docker cp db/migrations/001_airflow.sql career-db:/tmp/001_airflow.sql
+   docker exec career-db psql -U career -d career -v ON_ERROR_STOP=1 -f /tmp/001_airflow.sql
+   ```
+5. Airflow를 띄운다. 이미지는 처음에 15~20분 걸리고 약 19GB다.
+   ```powershell
+   docker compose -f docker-compose.airflow.yml build
+   docker compose -f docker-compose.airflow.yml up -d
+   ```
+   관리 화면은 http://localhost:8080 (내 컴퓨터에서만)이다. 계정은 `airflow`, 비밀번호는 `.env`의 `AIRFLOW_ADMIN_PASSWORD`.
+
+**돌리는 순서**
+1. ①·②는 꺼진 채로, ③은 켜진 채로 올라온다(③은 일정이 없어 저절로 돌지 않는다).
+2. 관리 화면에서 **③ 일회성 전체 수집**을 실행한다(▶). 시험 삼아 몇 개만 하려면 실행할 때 `max_new`에 숫자를 넣는다.
+3. ③이 끝나면 **①을 켠다.** 켜는 순간 놓친 가장 최근 회차가 한 번 바로 돈다. 그다음부터는 매일 00:00에 돈다.
+4. ①이 끝나면 **②를 켠다.** 마찬가지로 한 번 바로 돌고, 그다음부터는 정해진 날 12:00에 돈다. ①과 ②가 동시에 돌며 GPU를 같이 쓰지 않게 하려고 차례로 켠다.
+
+- 실행마다 받은 본문·이미지·OCR·추출 결과는 `data/runs/<dag_id>/<run_id>/`에 남는다(저장소에 올리지 않음).
+- 어떤 태스크든 두 번 다시 시도해도 실패하면 Slack으로 알린다. 고친 뒤 관리 화면에서 그 태스크부터 다시 실행하면 된다.
+- 끄기: `docker compose -f docker-compose.airflow.yml down` (실행 기록은 볼륨 `career-airflow-pgdata`에 남는다).
+
+**시험**
+```powershell
+py -3.12 -m pip install -r requirements-dev.txt
+py -3.12 -m pytest tests -q                    # career-db 가 켜져 있어야 한다(임시 DB를 만들었다 지움)
+docker compose -f docker-compose.airflow.yml exec airflow-scheduler python -m pytest /opt/airflow/job-skill/tests -q   # DAG 시험 포함
+```
 
 ## 데이터 원칙
 
