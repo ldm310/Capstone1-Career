@@ -198,3 +198,18 @@ def test_close_marks_closed(monkeypatch, tmp_path):
     monkeypatch.setattr(pipeline_tasks, "connect", lambda: contextlib.nullcontext(object()))
     monkeypatch.setattr(pipeline_tasks.db_queries, "mark_closed", lambda conn, nos: closed.extend(nos) or len(nos))
     assert pipeline_tasks.step_close(str(tmp_path)) == 1 and closed == ["C"]
+
+
+def test_extract_budget_subtracts_this_run(monkeypatch, tmp_path):
+    """추출 재시도 때 지난 시도가 쓴 돈(아직 DB 저장 전)도 빼야 상한을 넘지 않는다."""
+    import pipeline_tasks
+    write_rows(tmp_path, ["A", "B"])
+    d = tmp_path / "out" / "extract" / "gpt-5.6-luna-ex"
+    d.mkdir(parents=True)
+    (d / "A.json").write_text(json.dumps({"cost_usd": 1.25}), encoding="utf-8")
+    monkeypatch.setattr(pipeline_tasks, "connect", lambda: contextlib.nullcontext(object()))
+    monkeypatch.setattr(pipeline_tasks.db_queries, "day_cost", lambda conn, day: (3.0, 10))
+    assert pipeline_tasks.extract_budget(str(tmp_path), 10.0, daily=False) == 8.75   # ③: 실행 한 번 상한
+    assert pipeline_tasks.extract_budget(str(tmp_path), 5.0, daily=True) == 0.75     # ①②: 오늘 DB 비용도 뺌
+    monkeypatch.setattr(pipeline_tasks.db_queries, "day_cost", lambda conn, day: (4.5, 10))
+    assert pipeline_tasks.extract_budget(str(tmp_path), 5.0, daily=True) == 0.0

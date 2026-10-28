@@ -126,6 +126,16 @@ def budget_left(conn, limit: float, day: dt.date) -> float:
     return max(0.0, limit - db_queries.day_cost(conn, day)[0])
 
 
+def extract_budget(run_dir: str, limit: float, daily: bool) -> float:
+    """이번 LLM 추출에 쓸 수 있는 돈. ③ 은 실행 한 번에 limit, ①② 는 하루(KST) limit 에서 DB 에 쌓인 오늘 비용을 뺀다.
+    둘 다 이 실행 폴더에서 이미 쓴 비용(추출 재시도 때 지난 시도 몫, 아직 DB 저장 전)도 뺀다."""
+    left = limit - summary(run_dir)["비용"]
+    if daily:
+        with connect() as conn:
+            left -= db_queries.day_cost(conn, db_queries.today_kst())[0]
+    return max(0.0, round(left, 6))
+
+
 def step_extract(run_dir: str, budget_usd: float, dag_label: str, limit: float | None = None) -> dict:
     """LLM 추출 + 표준화 + 모집 단위 검사. budget_usd 만큼만 쓰고, 상한에 닿으면 Slack 으로 한 번 알린다.
     limit 은 알림에 적을 상한(하루 $5 또는 ③ $10), 없으면 budget_usd."""
