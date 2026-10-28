@@ -24,6 +24,7 @@ import json
 import os
 import re
 import sys
+import time
 from datetime import datetime, timezone
 
 import psycopg
@@ -39,6 +40,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SCHEMA_SQL = os.path.join(HERE, "db", "schema.sql")
 DICT_JSON = os.path.join(HERE, "capabilities.json")
 EX = os.path.join(OUT_DIR, "extract")
+SAVE_TRIES = 3   # 공고 하나 저장을 일시 오류(연결 끊김·교착)일 때 몇 번까지 할지
+RETRY_WAIT = 2   # 다시 하기 전 기다림(초) × 몇 번째
 CAT_KO = {"required": "필수", "preferred": "우대", "duties": "업무", "other": "기타"}
 OTHER = "기타"  # 사전에 맞는 능력이 없을 때 가리키는 능력
 SCHEMA = "job"  # 이 파이프라인의 표는 모두 job 스키마에 있다(BE 표는 public)
@@ -297,46 +300,88 @@ def insert_run(conn, posting_id: int, r: dict, inp: dict | None, path: str, cap_
     return n
 
 
-def load(run: str) -> dict[str, int]:
-    """targets.tsv 의 공고·이미지와 out/extract/<run>/ 의 추출 결과를 넣는다.
-    추출 결과 폴더가 없어도(비용 상한·실패) 공고·이미지는 넣는다 — 다음 ① 때 '밀린 공고'로 다시 추출된다."""
+def save_posting(conn, t: dict, path: str, imgs: dict, kept: dict, inputs: dict, cap_id: dict, tech_id: dict) -> dict[str, int]:
+    """공고 하나를 한 트랜잭션으로(공고·이미지·추출 실행·요건). 실패하면 통째로 되돌려진다. 넣은 수를 돌려준다."""
+    rid, c = t["rec_idx"], {}
+    add = lambda k, v=1: c.__setitem__(k, c.get(k, 0) + v)
+    with conn.transaction():
+        pid = upsert_posting(conn, t, update_raw=os.path.exists(path))
+        add("공고")
+        add("이미지", upsert_images(conn, pid, imgs.get(rid, []), kept))
+        if not os.path.exists(path):
+            print(f"  {rid}: 추출 결과 없음(공고만 넣음)")
+            return c
+        n = insert_run(conn, pid, json.load(open(path, encoding="utf-8")), inputs.get(rid), path, cap_id, tech_id)
+        if n is None:
+            add("추출 실행(이미 있음)")
+            return c
+        add("추출 실행(새로)")
+        for k, v in n.items():
+            add(k, v)
+    return c
+
+
+def load(run: str) -> tuple[dict[str, int], list[str]]:
+    """targets.tsv 의 공고·이미지와 out/extract/<run>/ 의 추출 결과를 넣는다. (넣은 수, 저장 실패한 공고번호).
+    추출 결과 폴더가 없어도(비용 상한·실패) 공고·이미지는 넣는다 — 다음 ① 때 '밀린 공고'로 다시 추출된다.
+    공고마다 따로 저장한다. 연결 끊김·교착 같은 일시 오류는 그 공고를 SAVE_TRIES 번까지 다시 하고(끊긴 연결은 다시 연결),
+    다시 해도 같은 오류(데이터·사전 문제)는 그 공고만 건너뛰고 나머지를 계속 넣는다."""
     run_dir = os.path.join(EX, run)
     targets = load_targets()
     inputs_path = os.path.join(EX, "_inputs.json")
     inputs = json.load(open(inputs_path, encoding="utf-8")) if os.path.exists(inputs_path) else {}
     imgs, kept = image_rows(), kept_by_image()
-    total = {"공고": 0, "이미지": 0, "추출 실행(새로)": 0, "추출 실행(이미 있음)": 0, "자리": 0, "한 줄": 0, "요건": 0, "요건 기술": 0}
+    total = {"공고": 0, "이미지": 0, "추출 실행(새로)": 0, "추출 실행(이미 있음)": 0, "자리": 0, "한 줄": 0, "요건": 0, "요건 기술": 0,
+             "저장 실패": 0}
+    failed: list[str] = []
     if not targets:
-        return total
-    with connect() as conn:
+        return total, failed
+    conn = connect()
+    try:
         cap_id = dict(conn.execute("SELECT name, id FROM capability").fetchall())
         tech_id = dict(conn.execute("SELECT name, id FROM tech").fetchall())
+        conn.commit()
         for t in targets:
             rid = t["rec_idx"]
             if not os.path.exists(os.path.join(PAGE_DIR, f"{rid}.html")):
                 print(f"  {rid}: 본문 파일이 없어 건너뜀")
                 continue
             path = os.path.join(run_dir, f"{rid}.json")
-            with conn.transaction():  # 공고 하나씩: 중간에 실패해도 다른 공고는 그대로
-                pid = upsert_posting(conn, t, update_raw=os.path.exists(path))
-                total["공고"] += 1
-                total["이미지"] += upsert_images(conn, pid, imgs.get(rid, []), kept)
-                if not os.path.exists(path):
-                    print(f"  {rid}: 추출 결과 없음(공고만 넣음)")
+            for attempt in range(1, SAVE_TRIES + 1):
+                try:
+                    c = save_posting(conn, t, path, imgs, kept, inputs, cap_id, tech_id)
+                except psycopg.OperationalError as e:  # 연결 끊김·교착·직렬화 실패 — 다시 하면 될 수 있다
+                    print(f"  {rid}: 저장 실패({attempt}/{SAVE_TRIES}) {type(e).__name__}: {str(e)[:200]}", flush=True)
+                    if attempt == SAVE_TRIES:
+                        failed.append(rid)
+                        break
+                    if conn.closed or conn.broken:
+                        conn = connect()
+                    time.sleep(RETRY_WAIT * attempt)
                     continue
-                n = insert_run(conn, pid, json.load(open(path, encoding="utf-8")), inputs.get(rid), path, cap_id, tech_id)
-                if n is None:
-                    total["추출 실행(이미 있음)"] += 1
-                    continue
-                total["추출 실행(새로)"] += 1
-                for k, v in n.items():
+                except Exception as e:  # 데이터·사전 문제 — 다시 해도 같으니 그 공고만 건너뛴다
+                    print(f"  {rid}: 저장 실패(다시 해도 같은 오류) {type(e).__name__}: {str(e)[:200]}", flush=True)
+                    failed.append(rid)
+                    break
+                for k, v in c.items():
                     total[k] += v
-    return total
+                break
+    finally:
+        conn.close()
+    total["저장 실패"] = len(failed)
+    return total, failed
 
 
 def cmd_load(run: str) -> None:
-    total = load(run)
+    """저장하고 결과를 <데이터>/out/load_result.json 에 쓴다(Airflow 태스크가 읽음). 저장 실패가 남으면 종료 코드 1."""
+    total, failed = load(run)
     print(" · ".join(f"{k} {v}" for k, v in total.items()))
+    os.makedirs(OUT_DIR, exist_ok=True)
+    with open(os.path.join(OUT_DIR, "load_result.json"), "w", encoding="utf-8") as f:
+        json.dump({"total": total, "failed": failed}, f, ensure_ascii=False)
+    if failed:
+        print(f"저장 실패 {len(failed)}건: {', '.join(failed)}", flush=True)
+        sys.exit(1)
 
 
 def main() -> None:

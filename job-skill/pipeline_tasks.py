@@ -182,14 +182,26 @@ def step_extract(run_dir: str, budget_usd: float, dag_label: str, limit: float |
 def step_load(run_dir: str) -> dict:
     """DB 저장. 추출 결과가 없는 공고도 공고로는 넣는다(다음 ① 때 밀린 공고로 다시 추출).
     공고를 저장한 뒤에 버린 공고(excluded.json)를 기록한다 — 앞 단계가 실패한 실행의 버린 공고는 '아는 번호'가 되지 않게."""
+    total = {}
     if _targets(run_dir):
-        run_script("db_load.py", ["load", "--run", RUN_NAME], run_dir)
+        result = os.path.join(_abs(run_dir), "out", "load_result.json")
+        if os.path.exists(result):  # 지난 시도의 결과 — 이번 결과와 헷갈리지 않게
+            os.remove(result)
+        try:
+            run_script("db_load.py", ["load", "--run", RUN_NAME], run_dir)
+        except subprocess.CalledProcessError as e:
+            failed = json.load(open(result, encoding="utf-8"))["failed"] if os.path.exists(result) else []
+            if failed:  # Airflow 가 태스크를 다시 하고, 그래도 안 되면 이 문장이 Slack 실패 알림에 실린다(숫자만)
+                raise RuntimeError(f"DB 저장 실패 {len(failed)}건 — 공고마다 여러 번 다시 해도 실패(공고번호는 태스크 로그)") from e
+            raise
+        if os.path.exists(result):
+            total = json.load(open(result, encoding="utf-8"))["total"]
     path = os.path.join(_abs(run_dir), "excluded.json")
     if os.path.exists(path):
         rows = [tuple(r) for r in json.load(open(path, encoding="utf-8"))]
         with connect() as conn:
             db_queries.record_excluded(conn, rows)
-    return {}
+    return total
 
 
 def summary(run_dir: str) -> dict:

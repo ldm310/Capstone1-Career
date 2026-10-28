@@ -290,3 +290,36 @@ def test_pick_recheck_updates_deadlines_from_list(monkeypatch, tmp_path):
     res = pipeline_tasks.step_pick_recheck(str(tmp_path))
     assert got == {"A": dt.date(2026, 11, 30)}
     assert res["마감일 바뀜"] == 1
+
+
+def test_load_failure_is_reported_in_plain_words(monkeypatch, tmp_path):
+    """저장 실패가 남으면 'DB 저장 실패 N건' 으로 태스크를 실패시킨다(Airflow 재시도 → Slack). 버린 공고는 기록하지 않는다."""
+    import pipeline_tasks
+    write_rows(tmp_path, ["D", "E"])
+    (tmp_path / "excluded.json").write_text('[["X9", "4년 이상"]]', encoding="utf-8")
+    out = tmp_path / "out"
+    out.mkdir()
+    (out / "load_result.json").write_text('{"total": {}, "failed": ["OLD"]}', encoding="utf-8")   # 지난 시도의 찌꺼기
+
+    def fake_run(script, args, run_dir, **k):
+        (out / "load_result.json").write_text(json.dumps({"total": {"공고": 0}, "failed": ["D", "E"]}), encoding="utf-8")
+        raise subprocess.CalledProcessError(1, script)
+
+    monkeypatch.setattr(pipeline_tasks, "run_script", fake_run)
+    monkeypatch.setattr(pipeline_tasks.db_queries, "record_excluded", lambda conn, rows: pytest.fail("실패했는데 기록함"))
+    with pytest.raises(RuntimeError, match="DB 저장 실패 2건"):
+        pipeline_tasks.step_load(str(tmp_path))
+
+
+def test_load_returns_counts_for_the_log(monkeypatch, tmp_path):
+    import pipeline_tasks
+    write_rows(tmp_path, ["D"])
+    out = tmp_path / "out"
+    out.mkdir()
+
+    def fake_run(script, args, run_dir, **k):
+        (out / "load_result.json").write_text(json.dumps({"total": {"공고": 1, "추출 실행(새로)": 1}, "failed": []}),
+                                              encoding="utf-8")
+
+    monkeypatch.setattr(pipeline_tasks, "run_script", fake_run)
+    assert pipeline_tasks.step_load(str(tmp_path)) == {"공고": 1, "추출 실행(새로)": 1}
