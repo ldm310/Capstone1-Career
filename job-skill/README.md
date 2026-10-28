@@ -121,7 +121,7 @@ py -3.12 db_load.py load --run gpt-5.6-luna-ex            #    공고·추출 �
    docker compose -f docker-compose.airflow.yml build
    docker compose -f docker-compose.airflow.yml up -d
    ```
-   관리 화면은 http://localhost:8080 (내 컴퓨터에서만)이다. 계정은 `airflow`, 비밀번호는 `.env`의 `AIRFLOW_ADMIN_PASSWORD`.
+   관리 화면은 http://localhost:8080 (내 컴퓨터에서만)이다. 계정 `admin` / 비밀번호 `admin`(내 컴퓨터에서만 열려서 간단히 둠, 바꾸려면 `.env`의 `AIRFLOW_ADMIN_PASSWORD`).
 
 **돌리는 순서**
 1. ①·②는 꺼진 채로, ③은 켜진 채로 올라온다(③은 일정이 없어 저절로 돌지 않는다).
