@@ -154,3 +154,31 @@ def test_update_deadlines(db):
     got = dict(db.execute("SELECT site_posting_no, deadline FROM posting").fetchall())
     assert got == {"A": dt.date(2026, 11, 30), "B": dt.date(2026, 11, 15), "C": dt.date(2026, 11, 15),
                    "E": TODAY + dt.timedelta(days=10)}
+
+
+
+def test_last_checked_is_when_the_body_was_fetched(db, db_url, tmp_path):
+    """마지막 확인 시각은 DB 에 저장한 시각이 아니라 본문을 받은 시각(받아 둔 페이지 파일의 시각) —
+    받은 뒤 저장하기 전 사이에 고친 공고를 '이미 본 것'으로 놓치지 않게."""
+    fetched = dt.datetime(2026, 10, 28, 1, 0, tzinfo=KST)
+    _write_run(tmp_path, "지어낸 공고 본문 내용입니다")
+    os.utime(tmp_path / "pages" / "D.html", (fetched.timestamp(), fetched.timestamp()))
+    _load(tmp_path, db_url)                       # 새 공고(추출 결과 없음)
+    assert db.execute("SELECT last_checked_at FROM posting WHERE site_posting_no='D'").fetchone()[0] == fetched
+
+    refetched = dt.datetime(2026, 10, 29, 0, 10, tzinfo=KST)
+    os.utime(tmp_path / "pages" / "D.html", (refetched.timestamp(), refetched.timestamp()))
+    res = tmp_path / "out" / "extract" / "gpt-5.6-luna-ex"
+    res.mkdir(parents=True)
+    (res / "D.json").write_text(json.dumps({"rec_idx": "D", "model": "gpt-5.6-luna", "input_tokens": 10,
+                                            "output_tokens": 5, "positions": []}), encoding="utf-8")
+    _load(tmp_path, db_url)                       # 다시 추출 성공 → 이번에 받은 본문의 시각
+    assert db.execute("SELECT last_checked_at FROM posting WHERE site_posting_no='D'").fetchone()[0] == refetched
+
+
+def test_touch_checked_at_given_time(db):
+    import db_queries as q
+    add_posting(db, "B")
+    at = dt.datetime(2026, 10, 28, 0, 5, tzinfo=KST)
+    assert q.touch_checked(db, ["B"], at=at) == 1
+    assert db.execute("SELECT last_checked_at FROM posting WHERE site_posting_no='B'").fetchone()[0] == at

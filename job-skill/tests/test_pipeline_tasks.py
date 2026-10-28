@@ -148,13 +148,17 @@ def test_detect_touches_unchanged_only(monkeypatch, tmp_path):
                                          encoding="utf-8")
     touched = []
     monkeypatch.setattr(pipeline_tasks, "connect", lambda: contextlib.nullcontext(object()))
-    monkeypatch.setattr(pipeline_tasks.db_queries, "touch_checked", lambda conn, nos: touched.extend(nos) or len(nos))
+    stamps = []
+    monkeypatch.setattr(pipeline_tasks.db_queries, "touch_checked",
+                        lambda conn, nos, at=None: touched.extend(nos) or stamps.append(at) or len(nos))
     sent = []
     monkeypatch.setattr(pipeline_tasks.notify, "send", lambda text: sent.append(text) or True)
     monkeypatch.setattr(pipeline_tasks.recheck, "detect_changes",
                         lambda run_dir, rows: {"changed": ["B"], "closed": ["C"], "unchanged": ["A"], "error": ["D"]})
     res = pipeline_tasks.step_detect(str(tmp_path))
     assert touched == ["A"]          # 바뀐 공고는 다시 추출에 성공해야(DB 저장) 확인 시각이 바뀐다
+    import datetime as dt
+    assert stamps[0] is not None and stamps[0] <= dt.datetime.now(dt.timezone.utc)   # 본문을 받기 시작한 시각으로
     assert len(sent) == 1 and "확인 못 한 공고 1건" in sent[0]   # 오류(D)는 링크와 함께 알림
     assert res == {"확인": 4, "바뀜": 1, "그대로": 1, "오류": 1}
 
@@ -373,7 +377,7 @@ def test_detect_alerts_postings_it_could_not_check(monkeypatch, tmp_path):
     (tmp_path / "check.json").write_text(json.dumps([{"rec_idx": "D", **ROW, "raw_hash": "h"}]), encoding="utf-8")
     sent = []
     monkeypatch.setattr(pipeline_tasks, "connect", lambda: contextlib.nullcontext(object()))
-    monkeypatch.setattr(pipeline_tasks.db_queries, "touch_checked", lambda conn, nos: len(nos))
+    monkeypatch.setattr(pipeline_tasks.db_queries, "touch_checked", lambda conn, nos, at=None: len(nos))
     monkeypatch.setattr(pipeline_tasks.notify, "send", lambda text: sent.append(text) or True)
     monkeypatch.setattr(pipeline_tasks.recheck, "detect_changes", lambda run_dir, rows: {
         "changed": [], "closed": [], "unchanged": [], "error": ["D"], "why": {"D": "HTTP 429"}})

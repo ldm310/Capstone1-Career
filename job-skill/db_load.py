@@ -201,18 +201,21 @@ def kept_by_image() -> dict[str, bool]:
 def upsert_posting(conn, t: dict, update_raw: bool = True) -> int:
     """공고를 넣거나 고친다. 이미 있는 공고의 원본(raw_path·raw_hash)은 update_raw 가 참일 때만 바꾼다
     (그 공고를 다시 추출하는 데 성공했을 때만 원본을 새것으로 — 실패하면 옛 원본을 두고 ②가 다시 잡는다).
-    마지막 확인 시각도 같은 규칙: 실패한 공고는 옛 시각이 남아 다음 ② 에서 '수정'된 공고로 다시 골라진다."""
+    마지막 확인 시각도 같은 규칙: 실패한 공고는 옛 시각이 남는다.
+    마지막 확인 시각에는 저장한 시각이 아니라 본문을 받은 시각(받아 둔 페이지 파일의 시각)을 넣는다 —
+    받은 뒤 저장하기 전 사이(③ 은 몇 시간)에 고친 공고를 '이미 본 것'으로 놓치지 않게."""
     rid = t["rec_idx"]
     page_path = os.path.join(PAGE_DIR, f"{rid}.html")
     page = open(page_path, encoding="utf-8").read()
+    fetched_at = datetime.fromtimestamp(os.path.getmtime(page_path), tz=timezone.utc)
     company_id = conn.execute("""INSERT INTO company (name) VALUES (%s)
                                  ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name RETURNING id""",
                               (t["company"],)).fetchone()[0]
     return conn.execute(
         """INSERT INTO posting (company_id, site, site_posting_no, title, site_job_category, career_condition,
-                                min_years, employment_type, kind, deadline, raw_path, raw_hash)
+                                min_years, employment_type, kind, deadline, raw_path, raw_hash, last_checked_at)
            VALUES (%(cid)s, '사람인', %(no)s, %(title)s, %(role)s, %(career)s, %(miny)s, %(emp)s, %(kind)s, %(deadline)s,
-                   %(path)s, %(hash)s)
+                   %(path)s, %(hash)s, %(fetched)s)
            ON CONFLICT (site, site_posting_no) DO UPDATE
            SET company_id = EXCLUDED.company_id, title = EXCLUDED.title, site_job_category = EXCLUDED.site_job_category,
                career_condition = EXCLUDED.career_condition, min_years = EXCLUDED.min_years,
@@ -220,12 +223,13 @@ def upsert_posting(conn, t: dict, update_raw: bool = True) -> int:
                deadline = coalesce(EXCLUDED.deadline, posting.deadline),
                raw_path = CASE WHEN %(update_raw)s THEN EXCLUDED.raw_path ELSE posting.raw_path END,
                raw_hash = CASE WHEN %(update_raw)s THEN EXCLUDED.raw_hash ELSE posting.raw_hash END,
-               last_checked_at = CASE WHEN %(update_raw)s THEN now() ELSE posting.last_checked_at END
+               last_checked_at = CASE WHEN %(update_raw)s THEN EXCLUDED.last_checked_at ELSE posting.last_checked_at END
            RETURNING id""",
         {"cid": company_id, "no": rid, "title": t["title"], "role": t.get("role") or None,
          "career": t.get("career") or None, "miny": min_years(t.get("career", "")),
          "emp": employment_type(t.get("career", "")), "kind": t["kind"], "deadline": t.get("deadline") or None,
-         "path": rel(page_path), "hash": content_hash(page, rid), "update_raw": update_raw}).fetchone()[0]
+         "path": rel(page_path), "hash": content_hash(page, rid), "fetched": fetched_at,
+         "update_raw": update_raw}).fetchone()[0]
 
 
 def upsert_images(conn, posting_id: int, rows: list[dict], kept: dict[str, bool]) -> int:

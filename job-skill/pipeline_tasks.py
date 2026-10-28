@@ -100,9 +100,10 @@ def step_detect(run_dir: str, dag_label: str = "매일 수집") -> dict:
     if not os.path.exists(path):
         return {"확인": 0, "바뀜": 0, "그대로": 0, "오류": 0}
     rows = json.load(open(path, encoding="utf-8"))
+    started = dt.datetime.now(dt.timezone.utc)  # 본문을 받기 시작한 시각 — 마지막 확인은 저장 시각이 아니라 받은 시각(이르게 잡음)
     res = recheck.detect_changes(d, rows)
     with connect() as conn:
-        db_queries.touch_checked(conn, res["unchanged"])
+        db_queries.touch_checked(conn, res["unchanged"], at=started)
     if res["error"]:
         notify.send(notify.msg_skipped(dag_label, "확인 못 한 공고", [(no, res.get("why", {}).get(no, "오류")) for no in res["error"]],
                                        "마감으로 치지 않고 다음 날 다시 확인"))

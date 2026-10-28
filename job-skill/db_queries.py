@@ -89,13 +89,13 @@ def update_deadlines(conn, deadlines: dict[str, dt.date]) -> int:
                             (list(deadlines), list(deadlines.values()), SITE)).rowcount
 
 
-def touch_checked(conn, nos: list[str]) -> int:
-    """② 가 다시 확인한 공고의 마지막 확인 시각을 지금으로."""
+def touch_checked(conn, nos: list[str], at: dt.datetime | None = None) -> int:
+    """다시 확인했더니 본문이 그대로인 공고의 마지막 확인 시각을 at(본문을 받은 시각, 없으면 지금)으로."""
     if not nos:
         return 0
     with conn.transaction():
-        return conn.execute("""UPDATE posting SET last_checked_at = now() WHERE site = %s AND site_posting_no = ANY(%s)""",
-                            (SITE, list(nos))).rowcount
+        return conn.execute("""UPDATE posting SET last_checked_at = coalesce(%s, now())
+                               WHERE site = %s AND site_posting_no = ANY(%s)""", (at, SITE, list(nos))).rowcount
 
 
 def day_cost(conn, day: dt.date) -> tuple[float, int]:
