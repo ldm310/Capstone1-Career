@@ -102,7 +102,7 @@
     - 이미 있는 공고 D의 새 본문을 두고 추출 결과 파일은 두지 않음 → `raw_hash` 그대로
     - 결과 파일을 두면 → `raw_hash`가 새 값
   - `test_day_cost_uses_kst_boundaries`: `run_at`이 `2026-10-27 23:30+09:00`($0.10)과 `2026-10-28 00:10+09:00`($0.20) → `day_cost(2026-10-27) == (0.10, 1)`
-  - `test_mark_closed_and_touch`: `mark_closed(['A'])` → A는 뷰에서 빠진다. `touch_checked(['B'])` → `last_checked_at`이 바뀐다.
+  - `test_mark_closed_and_touch`: `mark_closed(['A'])` → A는 `open_postings`에서 빠진다. `touch_checked(['B'])` → `last_checked_at`이 바뀐다.
 
 - [ ] **Step 3: 시험 실행 → 실패 확인**
   - Run: `py -3.12 -m pytest tests/test_db_queries.py -v`
