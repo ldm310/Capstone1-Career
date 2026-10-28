@@ -195,7 +195,9 @@ def kept_by_image() -> dict[str, bool]:
     return out
 
 
-def upsert_posting(conn, t: dict) -> int:
+def upsert_posting(conn, t: dict, update_raw: bool = True) -> int:
+    """공고를 넣거나 고친다. 이미 있는 공고의 원본(raw_path·raw_hash)은 update_raw 가 참일 때만 바꾼다
+    (그 공고를 다시 추출하는 데 성공했을 때만 원본을 새것으로 — 실패하면 옛 원본을 두고 ②가 다시 잡는다)."""
     rid = t["rec_idx"]
     page_path = os.path.join(PAGE_DIR, f"{rid}.html")
     page = open(page_path, encoding="utf-8").read()
@@ -204,16 +206,22 @@ def upsert_posting(conn, t: dict) -> int:
                               (t["company"],)).fetchone()[0]
     return conn.execute(
         """INSERT INTO posting (company_id, site, site_posting_no, title, site_job_category, career_condition,
-                                min_years, employment_type, kind, raw_path, raw_hash)
-           VALUES (%s, '사람인', %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                                min_years, employment_type, kind, deadline, raw_path, raw_hash)
+           VALUES (%(cid)s, '사람인', %(no)s, %(title)s, %(role)s, %(career)s, %(miny)s, %(emp)s, %(kind)s, %(deadline)s,
+                   %(path)s, %(hash)s)
            ON CONFLICT (site, site_posting_no) DO UPDATE
            SET company_id = EXCLUDED.company_id, title = EXCLUDED.title, site_job_category = EXCLUDED.site_job_category,
                career_condition = EXCLUDED.career_condition, min_years = EXCLUDED.min_years,
                employment_type = EXCLUDED.employment_type, kind = EXCLUDED.kind,
-               raw_path = EXCLUDED.raw_path, raw_hash = EXCLUDED.raw_hash, last_checked_at = now()
+               deadline = coalesce(EXCLUDED.deadline, posting.deadline),
+               raw_path = CASE WHEN %(update_raw)s THEN EXCLUDED.raw_path ELSE posting.raw_path END,
+               raw_hash = CASE WHEN %(update_raw)s THEN EXCLUDED.raw_hash ELSE posting.raw_hash END,
+               last_checked_at = now()
            RETURNING id""",
-        (company_id, rid, t["title"], t.get("role") or None, t.get("career") or None, min_years(t.get("career", "")),
-         employment_type(t.get("career", "")), t["kind"], rel(page_path), content_hash(page, rid))).fetchone()[0]
+        {"cid": company_id, "no": rid, "title": t["title"], "role": t.get("role") or None,
+         "career": t.get("career") or None, "miny": min_years(t.get("career", "")),
+         "emp": employment_type(t.get("career", "")), "kind": t["kind"], "deadline": t.get("deadline") or None,
+         "path": rel(page_path), "hash": content_hash(page, rid), "update_raw": update_raw}).fetchone()[0]
 
 
 def upsert_images(conn, posting_id: int, rows: list[dict], kept: dict[str, bool]) -> int:
@@ -273,6 +281,8 @@ def insert_run(conn, posting_id: int, r: dict, inp: dict | None, path: str, cap_
                         cap, other = OTHER, cap.split(":", 1)[1].strip()
                     elif cap not in cap_id:  # 사전에 없는 능력 이름은 '기타'로
                         cap, other = OTHER, cap
+                    if cap not in cap_id:
+                        raise RuntimeError("사전이 비어 있습니다. 먼저 'db_load.py sync-dict' 를 실행하세요.")
                     req_id = conn.execute("""INSERT INTO requirement (item_id, capability_id, other_name, relation)
                                              VALUES (%s, %s, %s, %s) RETURNING id""",
                                           (item_id, cap_id[cap], other, rq["relation"])).fetchone()[0]
@@ -286,30 +296,30 @@ def insert_run(conn, posting_id: int, r: dict, inp: dict | None, path: str, cap_
     return n
 
 
-def cmd_load(run: str) -> None:
+def load(run: str) -> dict[str, int]:
+    """targets.tsv 의 공고·이미지와 out/extract/<run>/ 의 추출 결과를 넣는다.
+    추출 결과 폴더가 없어도(비용 상한·실패) 공고·이미지는 넣는다 — 다음 ① 때 '밀린 공고'로 다시 추출된다."""
     run_dir = os.path.join(EX, run)
-    if not os.path.isdir(run_dir):
-        sys.exit(f"추출 결과 폴더가 없습니다: {run_dir}")
     targets = load_targets()
     inputs_path = os.path.join(EX, "_inputs.json")
     inputs = json.load(open(inputs_path, encoding="utf-8")) if os.path.exists(inputs_path) else {}
     imgs, kept = image_rows(), kept_by_image()
     total = {"공고": 0, "이미지": 0, "추출 실행(새로)": 0, "추출 실행(이미 있음)": 0, "자리": 0, "한 줄": 0, "요건": 0, "요건 기술": 0}
+    if not targets:
+        return total
     with connect() as conn:
         cap_id = dict(conn.execute("SELECT name, id FROM capability").fetchall())
         tech_id = dict(conn.execute("SELECT name, id FROM tech").fetchall())
-        if OTHER not in cap_id:
-            sys.exit("사전이 비어 있습니다. 먼저 'db_load.py sync-dict' 를 실행하세요.")
         for t in targets:
             rid = t["rec_idx"]
             if not os.path.exists(os.path.join(PAGE_DIR, f"{rid}.html")):
                 print(f"  {rid}: 본문 파일이 없어 건너뜀")
                 continue
+            path = os.path.join(run_dir, f"{rid}.json")
             with conn.transaction():  # 공고 하나씩: 중간에 실패해도 다른 공고는 그대로
-                pid = upsert_posting(conn, t)
+                pid = upsert_posting(conn, t, update_raw=os.path.exists(path))
                 total["공고"] += 1
                 total["이미지"] += upsert_images(conn, pid, imgs.get(rid, []), kept)
-                path = os.path.join(run_dir, f"{rid}.json")
                 if not os.path.exists(path):
                     print(f"  {rid}: 추출 결과 없음(공고만 넣음)")
                     continue
@@ -320,6 +330,11 @@ def cmd_load(run: str) -> None:
                 total["추출 실행(새로)"] += 1
                 for k, v in n.items():
                     total[k] += v
+    return total
+
+
+def cmd_load(run: str) -> None:
+    total = load(run)
     print(" · ".join(f"{k} {v}" for k, v in total.items()))
 
 
