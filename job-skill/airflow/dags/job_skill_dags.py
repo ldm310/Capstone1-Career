@@ -143,11 +143,11 @@ def daily_collect():
                                "오늘 비용": _today_cost()})
 
     notify_cost()
-    detect = detect_changes()
-    collect_list() >> detect
+    collect, detect = collect_list(), detect_changes()
     close = close_postings()
     raw, load = _process("매일 수집", pt.DAILY_LIMIT, daily=True)
-    detect >> [close, raw]
+    collect >> detect >> [close, raw]
+    collect >> raw   # 새·밀린 공고는 목록 수집에서 바로 원본 수집으로(그림에 보이게; 원본 수집은 변경 감지가 끝난 뒤 시작)
     [load, close] >> notify_result()
 
 

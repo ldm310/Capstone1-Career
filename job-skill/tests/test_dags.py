@@ -42,8 +42,10 @@ def test_daily_task_graph(bag):
     d = bag.get_dag("daily_collect")
     cost = d.get_task("notify_cost")
     assert cost.upstream_task_ids == set() and cost.downstream_task_ids == set()
-    assert d.get_task("collect_list").downstream_task_ids == {"detect_changes"}
+    # 새·밀린 공고는 목록 수집에서 바로 원본 수집으로, DB 에 있는 진행 공고만 변경 감지로(그림과 같은 화살표)
+    assert d.get_task("collect_list").downstream_task_ids == {"detect_changes", "fetch_raw"}
     assert d.get_task("detect_changes").downstream_task_ids == {"close_postings", "fetch_raw"}
+    assert d.get_task("fetch_raw").upstream_task_ids == {"collect_list", "detect_changes"}
     assert d.get_task("extract_llm").upstream_task_ids == {"fetch_raw", "image_processing.filter_sections"}
     assert d.get_task("notify_result").upstream_task_ids == {"load_db", "close_postings"}
 

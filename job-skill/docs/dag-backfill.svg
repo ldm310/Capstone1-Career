@@ -62,5 +62,5 @@
 <g transform="translate(90,596) scale(0.8333333333333334)" fill="none" stroke="#d0342c" stroke-width="1.92" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4" /><path d="M10.363 3.591l-8.106 13.534a1.914 1.914 0 0 0 1.636 2.871h16.214a1.914 1.914 0 0 0 1.636 -2.87l-8.106 -13.536a1.914 1.914 0 0 0 -3.274 0z" /><path d="M12 16h.01" /></g>
 <text class="note" x="120" y="606">모든 태스크: 정해진 횟수만큼 다시 시도하고, 그래도 실패하면 바로 Slack 알림</text>
 <g transform="translate(90,625) scale(0.8333333333333334)" fill="none" stroke="#888" stroke-width="1.92" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2 -2v-2" /><path d="M7 11l5 5l5 -5" /><path d="M12 4l0 12" /></g>
-<text class="note" x="120" y="635">사람인 요청 1.2초 간격(초당 1건 이하) · User-Agent는 프로젝트 이름 · Slack에는 숫자·상태만 (공고 내용 X)</text>
+<text class="note" x="120" y="635">사람인 요청 1.2초 간격(초당 1건 이하) · User-Agent는 프로젝트 이름 · Slack에는 숫자·상태와 넘어간 공고의 번호·링크만 (공고 내용 X)</text>
 </svg>
