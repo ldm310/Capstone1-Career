@@ -8,9 +8,9 @@
 - **기존 스크립트는 그대로 쓴다.** `fetch_images.py`, `dump_paddle_boxes.py`, `section_split.py`, `extract_skills.py`, `db_load.py`를 실행(run) 폴더마다 `OCR_DATA_DIR=<run 폴더>`로 **subprocess** 실행한다.
   - 이유: `common.py`가 import할 때 경로를 정하므로, 실행 폴더마다 새 프로세스가 필요하다.
 - **새로 만드는 모듈은 실행 폴더를 인자로 받는다.** 수집(`collect.py`), 수정 확인(`recheck.py`), DB 조회(`db_queries.py`), Slack(`notify.py`), 태스크 함수(`pipeline_tasks.py`)
-- **Airflow 3.3.2 (LocalExecutor):** 별도 Docker 묶음(`airflow/`)에서 DAG 파일 하나로 세 DAG를 정의하고, 태스크는 `pipeline_tasks` 함수를 부른다.
+- **Airflow 3.2.2 (LocalExecutor):** 별도 Docker 묶음(`airflow/`)에서 DAG 파일 하나로 세 DAG를 정의하고, 태스크는 `pipeline_tasks` 함수를 부른다.
 
-**Tech Stack:** Python 3.12, Apache Airflow 3.3.2 (`apache/airflow:3.3.2-python3.12`), PostgreSQL 17.6, psycopg 3.2.3, openai 2.7.2, paddleocr 3.7.0 + paddlepaddle-gpu 3.2.2(cu126), pytest, Docker Desktop(WSL2, GPU).
+**Tech Stack:** Python 3.12, Apache Airflow 3.2.2 (`apache/airflow:3.2.2-python3.12`, 3.2 줄의 마지막 패치 — 안정판), PostgreSQL 17.6, psycopg 3.2.3, openai 2.7.2, paddleocr 3.7.0 + paddlepaddle-gpu 3.2.2(cu126), pytest, Docker Desktop(WSL2, GPU).
 
 **Spec:** `job-skill/docs/superpowers/specs/2026-10-27-airflow-dags-design.md` (그림: `job-skill/docs/dag-backfill.png`, `dag-daily.png`, `dag-recheck.png`)
 
@@ -26,11 +26,15 @@
 - **LLM:** `gpt-5.6-luna`, reasoning `low`, 예시 답안 포함(`--examples`), 결과 폴더 태그 `-ex`
 - **비용 상한:** 하루 **$5**(KST 하루, ①+② 합산, `extraction_run.cost_usd` 기준). ③은 한 번 실행에 **$10**. 넘으면 추출을 멈추고 Slack으로 알린다.
 - **사람인 요청:** 요청 사이 **1.2초 이상**(`fetch_images.get`의 throttle), UA는 `fetch_images.UA`(프로젝트 이름). 브라우저로 꾸미지 않는다.
-- **OCR:** **GPU로만** 돌린다. GPU를 못 쓰면 CPU로 바꾸지 말고 태스크를 실패시켜 Slack으로 알린다.
+- **OCR:** **GPU로만** 돌린다(항상 `--gpu`). GPU가 없으면 OCR 단계가 오류로 실패하고 재시도 뒤 Slack으로 알린다. 별도 GPU 확인 태스크는 없다(환경 확인은 Task 7에서 한 번).
 - **Slack:** 웹훅은 `.env`의 `SLACK_WEBHOOK_URL`이다. 메시지에는 **숫자·상태·오류 종류만** 넣고, 공고 제목·회사·본문은 넣지 않는다.
 - **비밀:** `.env`(DB 비밀번호, Slack 웹훅)는 git에 올리지 않는다. `OPENAI_API_KEY`는 노트북 환경변수에서 넘긴다.
 - **데이터:** 공고 원본·OCR·추출 결과(`data/`)는 git에 올리지 않는다. 시험용 HTML은 **지어낸 내용**으로 만든다.
 - **DB:** 서빙 DB `career-db`(`localhost:5433`, DB·계정 `career`)를 쓰고, 표는 `job` 스키마에 둔다. Airflow 컨테이너에서는 `host.docker.internal:5433`으로 접속한다.
+- **역할:** 파이프라인은 DB에 **저장**한다. 웹에 보여 주기 위한 뷰·조회는 BE 몫이라 만들지 않는다. 파이프라인이 다음 할 일을 정하려고 읽는 조회(아는 공고번호, 진행 공고, 밀린 공고, 오늘 비용)만 코드(`db_queries.py`)에 둔다.
+- **진행 공고:** `status = '진행' AND (deadline IS NULL OR deadline >= 오늘)`
+- **밀린 공고:** 진행 공고 가운데 추출 실행이 하나도 없는 공고. ①은 이걸 **새 공고보다 먼저** 추출한다.
+- **원본 갱신:** 이미 있는 공고의 원본(`raw_path`·`raw_hash`)은 **그 공고를 다시 추출하는 데 성공했을 때만** 바꾼다. 실패하면 옛 원본을 두고, 3일 뒤 ②가 다시 잡는다.
 - **컨테이너:** Airflow 묶음은 api-server · scheduler · dag-processor · airflow-db 4개 + airflow-init(1회)이다. triggerer·Celery·Redis·Flower·Grafana는 넣지 않는다. Docker 메모리 한계는 8GB다.
 - **커밋:** 메시지에 Claude 공동 작성자 줄을 넣지 않는다. 브랜치는 `feature/job-skill`이다.
 
@@ -41,18 +45,18 @@
 - **목록 쪽 요청이 실패(HTTP 오류·시간 초과):** "목록 끝"으로 착각해 조용히 0건으로 끝내면 안 되고, 태스크를 실패시켜(재시도·Slack) 알려야 한다. → Task 2 시험
 - **마감일 글이 예상 밖("상시채용", "채용시 마감", "오늘마감", 비어 있음):** 죽지 않고 마감일을 비워 둔다. 연말에 "~01/05"는 다음 해로 읽는다. → Task 2 시험
 - **비용 상한에 걸려 중간에 멈춤:**
-  - 추출된 것까지만 DB에 넣고, 나머지 공고도 공고로는 저장해 다음 ① 실행 때 "밀린 공고"로 다시 추출한다.
+  - 추출된 것까지만 DB에 넣고, 나머지 공고도 공고로는 저장해 다음 ① 실행 때 "밀린 공고"로 **먼저** 추출한다.
   - Slack 상한 알림은 한 번만 간다.
   - → Task 3, Task 1, Task 6 시험
-- **Docker 안에서 GPU가 안 보임:** OCR 태스크가 CPU로 돌지 않고 바로 실패하며 Slack으로 알린다. → Task 6 시험
+- **Docker 안에서 GPU가 안 보임:** OCR이 CPU로 몰래 돌지 않는다(항상 `--gpu`). 단계가 실패하며 Slack으로 알린다. → Task 6 시험(항상 `--gpu`), Task 7 환경 확인
 
 ---
 
-### Task 1: DB 변경 — 본 공고번호 표, 진행 공고 뷰, 추출 원본 해시, 조회 함수
+### Task 1: DB 변경 — 버린 공고번호 표, 마감일 저장, 원본 갱신 규칙, 파이프라인용 조회 함수
 
 **Files:**
 - Modify: `db/schema.sql` (새 설치용)
-- Create: `db/migrations/001_airflow.sql` (지금 `career-db`에 적용, 여러 번 돌려도 안전하게 `IF NOT EXISTS`/`OR REPLACE`)
+- Create: `db/migrations/001_airflow.sql` (지금 `career-db`에 적용, 여러 번 돌려도 안전하게 `IF NOT EXISTS`)
 - Modify: `db_load.py` (`upsert_posting`, `insert_run`, `cmd_load`)
 - Create: `db_queries.py`
 - Create: `tests/conftest.py`, `tests/test_db_queries.py`, `requirements-dev.txt`
@@ -60,20 +64,19 @@
 **Interfaces:**
 - Produces (DB):
   - 표 `job.listing_seen(site text, site_posting_no text, reason text NOT NULL, first_seen_at timestamptz DEFAULT now(), PRIMARY KEY(site, site_posting_no))` — 버린 공고(4년 이상·교육생·경력 조건 모름)만 기록한다.
-  - 뷰 `job.open_posting` = `posting WHERE status='진행' AND (deadline IS NULL OR deadline >= current_date)`
-  - 칸 `job.extraction_run.raw_hash char(64)` — 추출에 쓴 공고 원본 해시. 마이그레이션에서 기존 줄은 `posting.raw_hash`로 채운다.
+  - 뷰는 만들지 않는다(BE 몫). 추출 실행 표도 바꾸지 않는다.
 - Produces (`db_queries.py`, 모두 `conn: psycopg.Connection`을 받고, search_path는 `job`):
   - `known_posting_nos(conn) -> set[str]` — `posting.site_posting_no` ∪ `listing_seen.site_posting_no` (site='사람인')
   - `record_excluded(conn, rows: list[tuple[str, str]]) -> int` — (공고번호, 이유) 넣기, 겹치면 무시
-  - `pending_postings(conn) -> list[dict]` — 진행 공고(뷰) 가운데 **현재 추출 실행이 없거나** 그 `raw_hash`가 `posting.raw_hash`와 다른 공고
+  - `pending_postings(conn) -> list[dict]` — 진행 공고 가운데 `extraction_run`이 하나도 없는 공고(`NOT EXISTS`), 공고번호 오름차순(오래된 것 먼저)
     - 돌려주는 줄: `{"rec_idx","company","title","role","career","deadline","kind","text_chars","images"}` (`targets.tsv`와 같은 칸, `kind`·`text_chars`·`images`는 빈 문자열)
-  - `open_postings(conn) -> list[dict]` — 뷰의 공고, 위 칸 + `"raw_hash"`
+  - `open_postings(conn) -> list[dict]` — 진행 공고(`status='진행' AND (deadline IS NULL OR deadline >= 오늘 KST)`), 위 칸 + `"raw_hash"`
   - `mark_closed(conn, nos: list[str]) -> int` — `status='마감'`
   - `touch_checked(conn, nos: list[str]) -> int` — `last_checked_at=now()`
   - `day_cost(conn, day: datetime.date) -> tuple[float, int]` — KST 그날 `extraction_run`의 비용 합과 줄 수
 - Produces (`db_load.py`):
   - `targets.tsv`의 `deadline` 칸(`YYYY-MM-DD` 또는 빈칸)을 `posting.deadline`에 넣는다. 칸이 아예 없는 옛 `targets.tsv`(sample3)는 빈칸으로 본다.
-  - `insert_run`이 `raw_hash`를 채운다.
+  - `upsert_posting(conn, t, update_raw: bool) -> int` — 이미 있는 공고는 `update_raw`가 참일 때만 `raw_path`·`raw_hash`를 바꾼다(새 공고는 항상 넣음). `load`는 그 공고의 추출 결과 파일이 이번 실행에 있을 때 `update_raw=True`로 부른다.
   - `load(run: str) -> dict[str, int]`: 기존 `cmd_load` 본문
     - 추출 결과 폴더가 없어도 `sys.exit` 하지 않고 공고·이미지만 넣는다.
     - `targets.tsv`가 비었으면 0을 돌려준다.
@@ -89,11 +92,15 @@
 
 - [ ] **Step 2: 실패하는 시험 작성 — `tests/test_db_queries.py`**
   - `test_known_includes_postings_and_excluded`: 공고 1건(`'100'`) + `record_excluded([('200','4년 이상')])` → `known_posting_nos == {'100','200'}`, 같은 줄을 다시 넣으면 0을 돌려준다.
-  - `test_open_posting_view_hides_past_deadline`: 마감일 어제 / 오늘 / NULL / status='마감' 4건 → `open_postings`에는 "오늘"과 "NULL" 2건만 나온다.
-  - `test_pending_when_no_run_or_hash_changed`:
-    - 실행 없는 공고 A → pending
-    - 현재 실행 `raw_hash`가 같은 B → 아님
-    - 공고 해시가 바뀐 C → pending
+  - `test_open_postings_hides_past_deadline`: 마감일 어제 / 오늘 / NULL / status='마감' 4건 → `open_postings`에는 "오늘"과 "NULL" 2건만 나온다.
+  - `test_pending_is_open_without_run`:
+    - 추출 실행 없는 진행 공고 A → pending
+    - 실행 있는 B → 아님
+    - 실행 없지만 마감일 지난 C → 아님
+    - 순서는 공고번호 오름차순
+  - `test_load_keeps_old_raw_when_not_extracted` (임시 run 폴더 + `db_load.load`):
+    - 이미 있는 공고 D의 새 본문을 두고 추출 결과 파일은 두지 않음 → `raw_hash` 그대로
+    - 결과 파일을 두면 → `raw_hash`가 새 값
   - `test_day_cost_uses_kst_boundaries`: `run_at`이 `2026-10-27 23:30+09:00`($0.10)과 `2026-10-28 00:10+09:00`($0.20) → `day_cost(2026-10-27) == (0.10, 1)`
   - `test_mark_closed_and_touch`: `mark_closed(['A'])` → A는 뷰에서 빠진다. `touch_checked(['B'])` → `last_checked_at`이 바뀐다.
 
@@ -108,14 +115,14 @@
 
 - [ ] **Step 5: 시험 실행 → 통과 확인**
   - Run: `py -3.12 -m pytest tests/test_db_queries.py -v`
-  - Expected: 5 passed
+  - Expected: 6 passed
 
 - [ ] **Step 6: 지금 `career-db`에 마이그레이션 적용 + sample3 다시 넣어 확인**
   - Run: `Get-Content db/migrations/001_airflow.sql -Raw | docker exec -i career-db psql -U career -d career -v ON_ERROR_STOP=1`
   - Run: `$env:OCR_DATA_DIR="sample3"; py -3.12 db_load.py load --run gpt-5.6-luna-ex-chk`
-  - Expected: 오류 없음, 마지막 줄에 `추출 실행(새로) 0 · 추출 실행(이미 있음) 19`. `SELECT count(*) FROM job.extraction_run WHERE raw_hash IS NULL` = 0
+  - Expected: 오류 없음, 마지막 줄에 `추출 실행(새로) 0 · 추출 실행(이미 있음) 19`. `\dt job.*`에 `listing_seen`이 보인다.
 
-- [ ] **Step 7: 커밋** — `git add db/ db_load.py db_queries.py tests/ requirements-dev.txt; git commit -m "feat: DB에 본 공고번호 표·진행 공고 뷰·추출 원본 해시 추가"`
+- [ ] **Step 7: 커밋** — `git add db/ db_load.py db_queries.py tests/ requirements-dev.txt; git commit -m "feat: 버린 공고번호 표·마감일 저장·원본 갱신 규칙·파이프라인용 조회"`
 
 ---
 
@@ -249,7 +256,7 @@
 **Interfaces:**
 - Consumes: `db_load.content_hash(page, rid)`, `fetch_images.RELAY`, `fetch_images.get`, `collect.write_targets`, `collect.TARGET_FIELDS`
 - Produces:
-  - `detect_changes(run_dir: str, rows: list[dict], get=fetch_images.get) -> dict[str, list[str]]` — `rows`는 `db_queries.open_postings` 결과
+  - `detect_changes(run_dir: str, rows: list[dict], get=fetch_images.get) -> dict[str, list[str]]` — `rows`는 `db_queries.open_postings` 결과(진행 공고)
     - 공고마다 본문을 받아 셋으로 나눈다.
       - 본문이 없거나 HTTP 오류(404 등)이거나 `user_content`가 없음 → `"closed"`
       - `content_hash`가 `raw_hash`와 다름 → `"changed"`
@@ -288,10 +295,9 @@
 - Produces (함수, 모두 `run_dir`은 `job-skill` 기준 상대 경로):
   - `run_dir_for(dag_id: str, run_id: str) -> str` — `data/runs/<dag_id>/<run_id에서 영숫자·_.- 외 글자를 _로 바꾼 것>`
   - `run_script(script: str, args: list[str], run_dir: str) -> None` — `subprocess.run([sys.executable, script, *args], cwd=HERE, env={..., "OCR_DATA_DIR": run_dir}, check=True)`
-  - `step_collect(run_dir: str, include_pending: bool, max_new: int | None = None) -> dict` — `known_posting_nos` → `collect_list` → `record_excluded`. `include_pending`이면 `pending_postings`를 targets에 더한다(공고번호로 중복 제거). 돌려주는 값: `{"new": n, "pending": n, "excluded": n}`
+  - `step_collect(run_dir: str, include_pending: bool, max_new: int | None = None) -> dict` — `known_posting_nos` → `collect_list` → `record_excluded`. `include_pending`이면 `pending_postings`를 targets **맨 위에** 두고 새 공고를 그 아래에 둔다(공고번호로 중복 제거). 돌려주는 값: `{"new": n, "pending": n, "excluded": n}`
   - `step_fetch_raw(run_dir: str) -> dict` — targets가 0이면 아무것도 안 함. 아니면 `fetch_images.py` 실행 → `classify_targets`
-  - `class GpuUnavailable(RuntimeError)`, `check_gpu() -> None` — subprocess로 `import paddle; assert paddle.device.cuda.device_count() > 0`. 실패하면 `GpuUnavailable`
-  - `step_ocr(run_dir: str) -> None` — 이미지가 0장(manifest에 파일 없음)이면 아무것도 안 함. 아니면 `check_gpu()` 뒤 `dump_paddle_boxes.py --gpu`
+  - `step_ocr(run_dir: str) -> None` — 이미지가 0장(manifest에 파일 없음)이면 아무것도 안 함. 아니면 `dump_paddle_boxes.py --gpu`(항상 GPU, CPU 경로 없음)
   - `step_filter(run_dir: str) -> None` — 이미지 0장이면 아무것도 안 함. 아니면 `section_split.py --paddle-only`
   - `budget_left(conn, limit: float, day: datetime.date) -> float` — `max(0, limit - day_cost(conn, day)[0])`
   - `step_extract(run_dir: str, budget_usd: float, dag_label: str) -> dict`
@@ -305,7 +311,9 @@
 - [ ] **Step 1: 실패하는 시험 작성** — `run_script`를 가짜로 바꿔 호출을 기록한다.
   - `test_run_dir_for_sanitizes`: `run_dir_for("daily_collect", "scheduled__2026-10-28T00:00:00+09:00")` == `"data/runs/daily_collect/scheduled__2026-10-28T00_00_00_09_00"`
   - `test_empty_run_skips_everything`: 빈 targets로 `step_fetch_raw`·`step_ocr`·`step_filter`·`step_extract`·`step_load` → `run_script` 호출 0번, `summary` == `{"새 공고":0,"추출":0,"확인 필요":0,"비용":0.0}`
-  - `test_ocr_fails_without_gpu`: 이미지 1장 있는 run 폴더 + `check_gpu`가 `GpuUnavailable`를 던짐 → `step_ocr`가 예외를 그대로 던지고 `dump_paddle_boxes.py` 호출 0번
+  - `test_ocr_always_uses_gpu`: 이미지 1장 있는 run 폴더 → `run_script("dump_paddle_boxes.py", ["--gpu"], …)` 한 번, `--gpu` 없는 호출 0번
+  - `test_ocr_failure_propagates`: 가짜 `run_script`가 `CalledProcessError`를 던지면 `step_ocr`도 그대로 던진다(재시도·Slack은 Airflow 몫)
+  - `test_collect_puts_pending_first`: `pending_postings`가 `[P1]`, 새 공고 `[N1, N2]` → `targets.tsv` 순서 `P1, N1, N2`, P1이 새 공고에도 있으면 한 번만
   - `test_extract_passes_budget_and_alerts_once`: `run_script`가 `_budget.json`을 만들어 두게 함 → 인자에 `--max-usd 1.5`, `notify.send` 1번
   - `test_extract_with_no_budget_left_skips_llm`: `budget_usd=0` → `run_script` 호출 0번, `notify.send` 1번
   - `test_fetch_images_skips_existing_image`: 이미 `{rid}_1.png`가 있으면 가짜 `get`에 그 이미지 주소 호출 0번(`fetch_images.main`을 임시 run 폴더로)
@@ -334,7 +342,7 @@
     - `../data/paddlex` → `/home/airflow/.paddlex` (모델 캐시)
 
 - [ ] **Step 1: 공식 compose를 바탕으로 줄이기**
-  - `https://airflow.apache.org/docs/apache-airflow/3.3.2/docker-compose.yaml`을 scratchpad에 받는다.
+  - `https://airflow.apache.org/docs/apache-airflow/3.2.2/docker-compose.yaml`을 scratchpad에 받는다.
   - 아래만 남기고 줄인다.
     - **남길 서비스:** postgres(→`airflow-db`, `postgres:17.6`, 볼륨 `airflow-pgdata`, 비밀번호 `${AIRFLOW_DB_PASSWORD}`), airflow-init, apiserver, scheduler, dag-processor
     - **뺄 것:** redis·worker·triggerer·flower·airflow-cli
@@ -351,7 +359,7 @@
   - **GPU:** scheduler 서비스에 `deploy.resources.reservations.devices: [{driver: nvidia, count: all, capabilities: [gpu]}]`
 
 - [ ] **Step 2: 이미지 만들기**
-  - `FROM apache/airflow:3.3.2-python3.12`
+  - `FROM apache/airflow:3.2.2-python3.12`
   - root로 `libgl1 libglib2.0-0`을 설치한다(opencv용).
   - airflow 사용자로 `pip install -r requirements-airflow.txt`를 실행한다. `requirements-airflow.txt`는 이렇게 둔다.
     - `paddlepaddle-gpu==3.2.2`(`--extra-index-url https://www.paddlepaddle.org.cn/packages/stable/cu126/`)
