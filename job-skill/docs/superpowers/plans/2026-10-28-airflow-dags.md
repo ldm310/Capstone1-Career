@@ -440,7 +440,7 @@
     - 예산은 `budget_left(conn, DAILY_LIMIT, 오늘 KST)`
     - `notify_cost`는 어제(KST) `day_cost`로 `msg_daily_cost`
   - `recheck_postings`
-    - 설정: `schedule="0 12 */3 * *"`(매달 1·4·7…31일 12:00 — 3일 간격 timedelta 는 늦게 켜면 시각이 밀림, Task 9 Ruling), `is_paused_upon_creation=True`
+    - 설정: `schedule="0 12 3-30/3 * *"`(매달 3·6·9…30일 12:00, 사용자 결정 — 3일 간격 timedelta 는 늦게 켜면 시각이 밀림, Task 9 Ruling), `is_paused_upon_creation=True`
     - 순서: `scan_lists >> detect_changes >> [close_postings, fetch_raw]`, `fetch_raw >> image_processing[...] >> extract_llm >> load_db >> notify_result`, `fetch_raw >> extract_llm`, `close_postings >> notify_result`
     - `scan_lists` = `step_pick_recheck`, `detect_changes` = `step_detect`, `close_postings` = `step_close` (Task 5a)
     - 예산은 `budget_left(conn, DAILY_LIMIT, 오늘 KST)`

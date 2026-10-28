@@ -3,7 +3,7 @@
 
   ③ backfill_once     수동 1회   — 진행 중인 대상 공고 전부를 수집해 DB 저장까지
   ① daily_collect     매일 00:00 — 새 공고(+ 추출 못 한 밀린 공고)만
-  ② recheck_postings  3일마다 12:00(매달 1·4·7…31일) — 목록에서 '수정'·사라진 공고만 본문 확인 → 바뀐 공고 다시 추출, 없어진 공고 마감
+  ② recheck_postings  3일마다 12:00(매달 3·6·9…30일) — 목록에서 '수정'·사라진 공고만 본문 확인 → 바뀐 공고 다시 추출, 없어진 공고 마감
 
 ①·②는 꺼진 채로 올라온다(③은 일정이 없어 켜진 채). ③이 끝나면 관리 화면에서 ①·②를 켠다.
 상자 하나하나의 일은 job-skill/pipeline_tasks.py 에 있고, 여기서는 순서만 정한다.
@@ -133,10 +133,10 @@ def daily_collect():
     load >> notify_result()
 
 
-# 매달 1·4·7…28·31일 12:00 (달이 바뀔 때만 간격이 1~2일). 3일 간격(timedelta)은 늦게 켜거나 노트북이 꺼졌다 켜지면
+# 매달 3·6·9…30일 12:00 (달이 바뀔 때만 간격이 3~4일, 2월은 27일 다음 3월 3일). 3일 간격(timedelta)은 늦게 켜거나 노트북이 꺼졌다 켜지면
 # 그 시각부터 다시 세어 12:00 에서 밀리고 ①(00:00)과 겹칠 수 있어서 날짜 cron 으로 둔다.
 # (①·② 모두 켜는 순간 놓친 가장 최근 회차가 한 번 바로 돈다 — Airflow catchup=False 기본 동작. 그다음부터 정해진 시각)
-@dag(dag_id="recheck_postings", dag_display_name="② 수정 확인", schedule="0 12 */3 * *", start_date=START,
+@dag(dag_id="recheck_postings", dag_display_name="② 수정 확인", schedule="0 12 3-30/3 * *", start_date=START,
      is_paused_upon_creation=True, doc_md=__doc__, **COMMON)
 def recheck_postings():
     @task(task_display_name="공고 목록 확인", pool=SARAMIN)
