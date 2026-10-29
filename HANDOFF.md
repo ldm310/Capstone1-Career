@@ -661,3 +661,4 @@
   - 방법(제안, 설계 문서 5.2의 3-1): main·develop에 닿지 않는 내 commit(남아 있는 브랜치, 내가 연 PR 원본)과 덩어리(연속 5줄 이상)를 대조한다. 내 commit이 먼저일 때만 인정한다(PR 생성 시각 우선).
   - 남이 먼저 가진 덩어리는 「출처 불명」으로 둔다. 「복사 대조(내 브랜치)」 등급으로 STAT에 넣는다.
   - 다른 ref는 출처 확인에만 쓴다(결정 9번 유지).
+- 2026-10-29: 설계 문서(`docs/superpowers/specs/2026-10-28-github-competency-design.md`)를 사용자가 승인했다. 다음은 계획(superpowers writing-plans)이다.
