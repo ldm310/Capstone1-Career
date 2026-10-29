@@ -30,6 +30,8 @@ CLONE_FILTER = 'blob:limit=512k'  # 이 크기 이상인 blob은 받지 않는�
 BRANCHES = ('main', 'master', 'develop', 'dev', 'develope')  # 기본 브랜치와 함께 보는 브랜치(결정 9번, dev·develope는 2026-10-29 결정)
 SEARCH_PAGES = 10  # 검색 API가 주는 최대: 100개씩 10쪽 = 1,000개(그 뒤 쪽은 422)
 ENV = gitenv.env()  # 읽기용 git 환경(토큰 없음)
+ASCII_LOWER = str.maketrans('ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz')
+UTF8 = ('utf-8', 'utf8')  # git이 다시 읽지 않는 commit encoding(대소문자 무관). 빈 값은 encoding 머리 없음(UTF-8)
 SHA = re.compile(r'[0-9a-f]{40}|[0-9a-f]{64}')  # commit SHA(SHA-1·SHA-256)
 STATUS = re.compile(r'[A-Z]+[0-9]*')  # --name-status의 상태: A·D·M·T, R100·C075(경로 둘), merge의 합친 diff는 부모마다 한 글자(MM·RM, 경로 하나)
 SYNCED = 'career-synced'  # clone·fetch가 끝까지 성공한 캐시에만 .git 안에 남기는 완료 표지(끊긴 clone을 가려낸다)
@@ -58,7 +60,7 @@ class BlameError(RuntimeError):
 
 
 class LogFormatError(ValueError):
-    """git log 출력이 기대한 모양(-z, NUL 구분)이 아님. 어림잡아 읽지 않고 그 레포만 실패로 둔다(extract 2단계)."""
+    """git 출력이 기대한 모양이 아님(log -z의 칸 배치, ls-tree에 같은 경로가 두 번). 어림잡아 읽지 않고 그 레포만 실패로 둔다(extract 2단계)."""
 
 
 class Api:
@@ -136,9 +138,27 @@ def parse_login(url):
 
 
 def git(path, *args, timeout=120, env=None):
-    """git 명령 하나(출력은 글자로). env를 주지 않으면 읽기용 ENV로 돈다."""
-    return subprocess.run(['git', '-C', str(path), *args], capture_output=True, encoding='utf-8', errors='replace',
-                          env=ENV if env is None else env, timeout=timeout, check=True).stdout
+    """git 명령 하나. 출력은 바이트로 받아 UTF-8 + surrogateescape로 글자로 바꾼다(줄바꿈 바꾸기 없음): 경로·이름의 바이트가 그대로 남고,
+    그 글자를 다시 git 인자로 넘기면 원래 바이트가 간다(\\r·잘못된 UTF-8 경로가 다른 경로와 합쳐지지 않는다). env를 주지 않으면 읽기용 ENV로 돈다."""
+    return subprocess.run(['git', '-C', str(path), *args], capture_output=True, env=ENV if env is None else env,
+                          timeout=timeout, check=True).stdout.decode('utf-8', 'surrogateescape')
+
+
+def ascii_lower(s):
+    """ASCII A-Z만 소문자로 바꾼다. str.lower()는 켈빈 기호(U+212A) 같은 글자를 ASCII로 접어 다른 메일을 내 메일로 만든다."""
+    return s.translate(ASCII_LOWER)
+
+
+def shown(p):
+    """경로를 메시지·저장용 글자로: UTF-8이 아닌 바이트는 \\x80처럼 적는다(surrogate 글자는 sqlite에 넣을 수 없다). git에는 쓰지 않는다."""
+    return p.encode('utf-8', 'surrogateescape').decode('utf-8', 'backslashreplace')
+
+
+def storable(p):
+    """그대로 UTF-8로 저장할 수 있는 글자인가(surrogateescape로 남은 바이트가 없다)."""
+    try: p.encode('utf-8')
+    except UnicodeEncodeError: return False
+    return True
 
 
 def sync(full, cache, token, url=None):
@@ -197,18 +217,21 @@ def ranges(lines):
 
 
 def log_commits(path, revs, env=None, changes=False):
-    """git log를 NUL 구분(-z)으로 한 번 읽어 commit마다 (SHA, 메일(소문자), 이름, [(상태, [경로…])])를 log 순서로 돌려준다.
-    작성자는 commit에 적힌 값(%ae·%an)이다(.mailmap 미적용). 머리 세 칸(%H·%ae·%an)과 경로는 자리로만 읽는다:
+    """git log를 NUL 구분(-z)으로 한 번 읽어 commit마다 (SHA, 메일(ASCII 소문자), 이름, [(상태, [경로…])])를 log 순서로 돌려준다.
+    작성자는 commit에 적힌 값(%ae·%an)이다(.mailmap 미적용). 머리 네 칸(%H·%e·%ae·%an)과 경로는 자리로만 읽는다:
     NUL은 commit 머리에도 경로에도 들어갈 수 없으므로, 이름·메일·경로에 \\x01·\\x02·줄바꿈 같은 어떤 바이트가 있어도 새 기록을 열지 못한다.
+    encoding 머리(%e)가 UTF-8이 아닌 commit은 메일·이름을 None으로 둔다: git은 그런 commit을 그 encoding으로 다시 읽어 보여 주므로
+    (UTF-7의 me@ex+AGE-mple.com이 me@example.com으로 보인다) 원래 바이트와 다른 신원이 나온다. 본인도 이름 일치도 아니다(fail closed).
     changes면 바뀐 경로도 읽는다(-M --name-status --diff-merges=dense-combined): 보통 commit은 첫 상태 앞에 \\n이 붙고,
     merge는 머리 뒤에 빈 칸이 하나 온다(바뀐 경로가 없어도). 모양이 다르면 LogFormatError를 던진다(어림잡아 읽지 않는다)."""
     diff = ('-M', '--name-status', '--diff-merges=dense-combined') if changes else ()
-    tokens = git(path, 'log', '-z', '--format=%H%x00%ae%x00%an', *diff, *revs, timeout=600, env=env).split('\0')
+    tokens = git(path, 'log', '-z', '--format=%H%x00%e%x00%ae%x00%an', *diff, *revs, timeout=600, env=env).split('\0')
     if tokens.pop() != '': raise LogFormatError('git log 출력이 NUL로 끝나지 않음')
     out, i, n = [], 0, len(tokens)
     while i < n:
-        if i + 2 >= n or not SHA.fullmatch(tokens[i]): raise LogFormatError(f'git log 출력의 {i}번째 칸에 commit 머리가 없음')
-        sha, mail, name, entries, i = tokens[i], tokens[i + 1].lower(), tokens[i + 2], [], i + 3
+        if i + 3 >= n or not SHA.fullmatch(tokens[i]): raise LogFormatError(f'git log 출력의 {i}번째 칸에 commit 머리가 없음')
+        sha, encoding, mail, name, entries, i = tokens[i], tokens[i + 1], tokens[i + 2], tokens[i + 3], [], i + 4
+        mail, name = (ascii_lower(mail), name) if ascii_lower(encoding) in ('', *UTF8) else (None, None)
         if changes and i < n:
             if tokens[i] == '': i += 1                                 # merge: 합친 diff 앞의 빈 칸
             elif tokens[i][:1] == '\n': tokens[i] = tokens[i][1:]      # 보통 commit: 첫 상태 앞의 \n
@@ -222,15 +245,19 @@ def log_commits(path, revs, env=None, changes=False):
 
 
 def kind_of(mail, name, emails, names):
-    """작성자 구분: 메일(소문자)이 본인 메일이면 own, 이름만 같으면 name_only(추정), 아니면 other."""
+    """작성자 구분: 메일(ASCII 소문자)이 본인 메일이면 own, 이름만 같으면 name_only(추정), 아니면 other.
+    emails는 ascii_lower로 바꾼 값이어야 한다. 믿을 수 없는 신원(메일 None: encoding이 UTF-8이 아닌 commit)은 other다."""
+    if mail is None: return 'other'
     return 'own' if mail in emails else 'name_only' if name in names else 'other'
 
 
 def own_commits(path, revs, api_shas, emails, names):
-    """main·develop에서 닿는 commit을 SHA 기준으로 한 번만 세고, 본인 여부를 근거별로 나눈다(작성자는 log_commits로 읽은 commit 원본)."""
+    """main·develop에서 닿는 commit을 SHA 기준으로 한 번만 세고, 본인 여부를 근거별로 나눈다(작성자는 log_commits로 읽은 commit 원본).
+    encoding이 UTF-8이 아닌 commit은 API가 본인 commit이라 해도 세지 않는다(신원을 원래 바이트로 확인할 수 없다)."""
     rows = log_commits(path, revs)
     kinds = {}
     for sha, mail, name, _ in rows:
+        if mail is None: continue
         if sha in api_shas: kinds[sha] = 'api'
         elif mail in emails: kinds[sha] = 'email'
         elif name in names: kinds[sha] = 'name_only'
@@ -324,11 +351,13 @@ def blame(path, sha, emails, names, env=None):
     gitenv.env(...)로 만든 환경이어야 한다."""
     env = ENV if env is None else env
     count, units = dict(own=0, name_only=0, other=0, files=0), []
-    entries = []
+    entries, seen = [], set()
     # ls-tree -l은 GIT_NO_LAZY_FETCH로 돈다: 부분 clone이 받지 않은 blob을 크기 보느라 내려받지 않는다(크기 칸이 BAD)
     for entry in git(path, 'ls-tree', '-r', '-l', '-z', sha, env={**env, 'GIT_NO_LAZY_FETCH': '1'}).split('\0'):
         if not entry: continue
-        meta, p = entry.split('\t', 1)
+        meta, p = entry.split('\t', 1)  # 경로는 바이트 그대로(surrogateescape) 읽었다가 그대로 blame에 넘긴다
+        if p in seen: raise LogFormatError('ls-tree 출력에 같은 경로가 두 번 나옴')  # 망가진 트리: 어느 파일의 줄인지 가릴 수 없다
+        seen.add(p)
         _, kind, blob, size = meta.split()
         # 부분 clone이 받지 않은 blob은 크기가 BAD로 나온다: 숫자와 상관없이 건너뛴다(512KiB 이상이라 paths.skipped와 같은 파일)
         if kind == 'blob' and size != 'BAD' and not skipped(p, int(size)): entries.append((p, blob))
@@ -446,8 +475,9 @@ def extract(login, token, cache, max_size_mb=None, *, api=None, remote_url=lambd
         res['external_pr_repos'] = sorted({full for full, (_, kind) in found.items() if kind != 'owner'} | set(failed))
 
         # 1단계: clone + API로 본인 commit(계정에 연결된 것)을 먼저 모아 신원 묶음을 만든다.
-        emails |= {f"{user['id']}+{login}@users.noreply.github.com".lower(), f'{login}@users.noreply.github.com'.lower()}
-        if user.get('email'): emails.add(user['email'].lower())
+        # 메일은 ASCII만 소문자로 바꾼다(git 쪽 log_commits와 같다): str.lower()는 켈빈 기호 같은 글자를 ASCII로 접는다
+        emails |= {ascii_lower(f"{user['id']}+{login}@users.noreply.github.com"), ascii_lower(f'{login}@users.noreply.github.com')}
+        if user.get('email'): emails.add(ascii_lower(user['email']))
         names.add(login)  # git 이름을 계정 이름으로 쓰는 경우가 많다. 이름 일치는 추정으로만 쓴다.
         work = []
         for r, kind in repos:
@@ -466,7 +496,7 @@ def extract(login, token, cache, max_size_mb=None, *, api=None, remote_url=lambd
             try:
                 for b in heads:
                     for c in api.pages(f'/repos/{full}/commits', {'sha': b, 'author': login, 'per_page': 100}):
-                        api_shas.add(c['sha']); emails.add(c['commit']['author']['email'].lower()); names.add(c['commit']['author']['name'])
+                        api_shas.add(c['sha']); emails.add(ascii_lower(c['commit']['author']['email'])); names.add(c['commit']['author']['name'])
             except StopCheck as e: row['error'] = f'API 실패: {e}'; continue  # 한도 소진(RateLimited)도 이 레포만 미확인
             row['heads'] = heads
             work.append((row, path, api_shas))
@@ -476,12 +506,14 @@ def extract(login, token, cache, max_size_mb=None, *, api=None, remote_url=lambd
         # 2단계: 본인 commit·본인 줄(로컬) → 실행·활용 기록(API)
         for row, path, api_shas in work:
             try: local, units = analyze_repo(path, row['heads'], api_shas, emails, names)
-            except BlameError as e: row['error'] = f'blame 실패: {e.path}'; continue  # 파일 하나가 빠진 결과로 판정하지 않는다(다시 수집할 때까지 제외)
+            except BlameError as e: row['error'] = f'blame 실패: {shown(e.path)}'; continue  # 파일 하나가 빠진 결과로 판정하지 않는다(다시 수집할 때까지 제외)
             except ValueError as e: row['error'] = f'git 출력 해석 실패: {e}'; continue  # LogFormatError·UnicodeDecodeError도 ValueError다: 어림잡아 세지 않는다
             except (subprocess.CalledProcessError, subprocess.TimeoutExpired, GitError) as e:  # 레포 하나가 실패해도 나머지는 계속한다
                 row['error'] = f'분석 실패({type(e).__name__})'; continue
             row.update(local)
-            res['evidence'] += [dict(repo=row['full'], **u) for u in units]
+            # UTF-8이 아닌 경로의 단위는 저장할 증거로 내보내지 않는다(줄은 위 evals에 그대로 센다): sqlite는 그 경로를 그대로 담지 못하고,
+            # 바꿔 적은 경로는 뒤 단계(skills·assess)가 그 이름의 다른 파일을 읽게 만들 수 있다
+            res['evidence'] += [dict(repo=row['full'], **u) for u in units if storable(u['path'])]
             if not any(e['own'] for e in row['evals'].values()):  # 본인 줄이 없으면 실행·활용 기록은 판정에 쓰이지 않는다 → API 아낌
                 row['activity'] = dict(skipped=True); continue
             try:

@@ -43,7 +43,8 @@ def env(token=None, replace_base=None):
               ('core.attributesFile', '/dev/null'),  # 사용자 전역 attributes(~/.config/git/attributes)도 읽지 않는다
               # 설정 파일·blob으로 읽는 .mailmap을 끈다(bare 레포가 기본으로 읽는 HEAD:.mailmap 포함). 작업 트리의 .mailmap은 설정으로 끌 수 없어서
               # clone은 checkout 없이 받는다(extract.sync)
-              ('mailmap.file', ''), ('mailmap.blob', ''), ('log.mailmap', 'false')]
+              ('mailmap.file', ''), ('mailmap.blob', ''), ('log.mailmap', 'false'),
+              ('core.precomposeUnicode', 'false')]  # macOS clone이 켜 두는 설정: 켜져 있으면 명령줄의 NFD 경로(한글 등)를 NFC로 바꿔 파일을 못 찾는다
     if token:
         basic = base64.b64encode(f'x-access-token:{token}'.encode()).decode()
         config.append(('http.https://github.com/.extraheader', f'AUTHORIZATION: basic {basic}'))

@@ -13,6 +13,7 @@ import sqlite3
 import subprocess
 import sys
 import tempfile
+import unicodedata
 import unittest
 import urllib.error
 from pathlib import Path
@@ -28,29 +29,35 @@ HERE = Path(__file__).resolve().parent
 
 
 def blame_reference(path, sha, emails, names, env=None):
-    """정답 기준: 경로·내용 필터(paths.skipped·generated)를 거친 모든 파일을 blame한다. git 출력은 바이트로 읽고, 줄은 git이 내준 줄 번호 그대로 센다.
+    """정답 기준: 경로·내용 필터(paths.skipped·generated)를 거친 모든 파일을 blame한다. git 출력은 바이트로 읽고 경로도 그 바이트 그대로
+    git에 돌려준다(줄바꿈 바꾸기·U+FFFD 없음). 줄은 git이 내준 줄 번호 그대로 센다. 메일은 ASCII A-Z만 소문자로 바꿔 비교한다(bytes.lower).
+    단위의 경로는 extract.blame처럼 UTF-8 + surrogateescape로 읽은 글자다.
     git은 extract.blame과 같은 환경으로 돈다(None이면 extract.ENV: 사용자 git 설정과 분리하고 mailmap 설정을 끈 환경)."""
     env = extract.ENV if env is None else env
+    run = lambda *args, check=False: subprocess.run(['git', '-C', str(path), *args], capture_output=True, check=check, env=env)
+    mails = {e.encode('utf-8', 'surrogateescape').lower() for e in emails}  # bytes.lower()는 ASCII만 바꾼다
+    people = {n.encode('utf-8', 'surrogateescape') for n in names}
     count, units = dict(own=0, name_only=0, other=0, files=0), []
-    for entry in extract.git(path, 'ls-tree', '-r', '-l', '-z', sha, env=env).split('\0'):
+    for entry in run('ls-tree', '-r', '-l', '-z', sha, check=True).stdout.split(b'\0'):
         if not entry: continue
-        meta, p = entry.split('\t', 1)
+        meta, raw = entry.split(b'\t', 1)
         _, kind, blob, size = meta.split()
-        if kind != 'blob' or paths.skipped(p, int(size)): continue
-        head = subprocess.run(['git', '-C', str(path), 'cat-file', 'blob', blob], capture_output=True, check=True, env=env).stdout[:paths.HEAD_BYTES]
+        p = raw.decode('utf-8', 'surrogateescape')
+        if kind != b'blob' or paths.skipped(p, int(size)): continue
+        head = run('cat-file', 'blob', blob, check=True).stdout[:paths.HEAD_BYTES]
         if paths.generated(p, head): continue
-        r = subprocess.run(['git', '-C', str(path), 'blame', '-w', '--line-porcelain', sha, '--', p], capture_output=True, env=env)
+        r = run('blame', '-w', '--line-porcelain', sha, '--', raw)
         if r.returncode: continue
         count['files'] += 1
         mine, by_line, mail, author, line = [], {}, None, None, None
         for row in r.stdout.split(b'\n'):
             if re.match(rb'[0-9a-f]{40,64} \d+ \d+', row): line = int(row.split()[2])
-            elif row.startswith(b'author-mail '): mail = row[13:-1].decode('utf-8', 'replace').lower()
-            elif row.startswith(b'author '): author = row[7:].decode('utf-8', 'replace')
+            elif row.startswith(b'author-mail '): mail = row[13:-1].lower()
+            elif row.startswith(b'author '): author = row[7:]
             elif row.startswith(b'\t'): by_line[line] = (mail, author)
         for n, (mail, author) in sorted(by_line.items()):
-            if mail in emails: count['own'] += 1; mine.append(n)
-            elif author in names: count['name_only'] += 1
+            if mail in mails: count['own'] += 1; mine.append(n)
+            elif author in people: count['name_only'] += 1
             else: count['other'] += 1
         if mine: units.append(dict(sha=sha, path=p, lines=extract.ranges(mine)))
     return count, units
@@ -859,9 +866,34 @@ class Collect(unittest.TestCase):
 MAILMAP = 'Me <me@example.com> <mate@example.com>\n'  # 팀원 메일(mate@)의 commit을 내 이름·메일로 바꾸라는 .mailmap 한 줄
 
 
+class RawRepo:
+    """원시 객체로 만드는 bare 레포(작업 트리 없음): 파일 시스템이 담지 못하는 경로(잘못된 UTF-8, \\r, NFD)와 commit 머리(encoding)를
+    그대로 넣는다. commit마다 트리 전체({경로 바이트: 내용 바이트}, 한 단계)나 트리 SHA를 준다. 원격으로 바로 쓰도록 upload-pack filter를 허용한다."""
+    def __init__(self, root):
+        self.path, self.t, self.head = Path(root), 1_760_000_000, None
+        subprocess.run([*GIT, 'init', '-q', '--bare', '-b', 'main', str(self.path)], check=True, capture_output=True)
+        self.run('config', 'uploadpack.allowFilter', 'true')
+
+    def run(self, *args, data=None):
+        return subprocess.run([*GIT, '-C', str(self.path), *args], input=data, capture_output=True, check=True).stdout.strip()
+
+    def commit(self, who, files=None, tree=None, encoding=None, tz=b'+0900'):
+        if tree is None:
+            rows = b''.join(b'100644 blob %s\t%s\0' % (self.run('hash-object', '-w', '--stdin', data=body), p) for p, body in files.items())
+            tree = self.run('mktree', '-z', data=rows)
+        self.t += 60
+        name, mail = (x.encode() if isinstance(x, str) else x for x in who)
+        ident = b'%s <%s> %d %s' % (name, mail, self.t, tz)
+        head = b'tree %s\n' % tree + (b'parent %s\n' % self.head.encode() if self.head else b'') + b'author %s\ncommitter %s\n' % (ident, ident)
+        self.head = self.run('hash-object', '-t', 'commit', '-w', '--stdin', data=head + (b'encoding %s\n' % encoding if encoding else b'') + b'\nwork\n').decode()
+        self.run('update-ref', 'refs/heads/main', self.head)
+        return self.head
+
+
 class Identity(unittest.TestCase):
     """레포가 귀속을 바꾸지 못한다: 팀원이 레포에 심은 .mailmap(팀원 메일 → 나)이나, 이름·메일·파일 이름에 넣은 구분 바이트가
     팀원 줄을 내 줄로 바꾸면 안 된다. 방어는 겹쳐 있다. 작성자는 history도 blame도 commit 원본(git log -z의 %ae·%an, NUL 구분)으로만 읽고,
+    encoding 머리가 UTF-8이 아닌 commit은 본인으로 세지 않으며(git이 다시 읽어 보여 준 신원이라서), 메일은 ASCII A-Z만 소문자로 비교한다.
     분석은 checkout 없는 clone(extract.sync)에서 mailmap 설정을 끈 환경(gitenv.env)으로 한다.
     blame에는 .mailmap을 끄는 옵션이 없고 작업 트리의 .mailmap은 설정으로 끌 수 없어서(git 2.55 실측), porcelain의 author-mail은 쓰지 않는다."""
 
@@ -991,6 +1023,56 @@ class Identity(unittest.TestCase):
                 count, units = extract.blame(path, sha, EMAILS, NAMES)
             self.assertEqual((count['own'], count['other'], units), (0, 6, []))  # blame 길은 탔지만(app.py) 내 commit을 지도에서 못 찾아 other
 
+    def test_foreign_commit_encoding_never_counts_as_mine(self):
+        """commit 머리의 encoding이 UTF-8이 아니면 git은 commit 전체를 다시 읽어(%ae·blame 모두) 원래와 다른 메일을 보여 준다:
+        UTF-7의 me@ex+AGE-mple.com과 ISO-2022-JP의 me@example.com\\x1b(B가 me@example.com으로 보인다. 그런 commit은 본인도 이름 일치도 아니다
+        (history·own_commits·blame, API가 본인 commit이라 해도). encoding을 UTF-8(utf8, 대소문자 무관)로 적은 내 commit은 그대로 내 것이다."""
+        cases = {'utf7': (b'me@ex+AGE-mple.com', b'UTF-7', b'-0500'),  # UTF-7에서 +는 base64 시작이라 시간대 +0900이 있으면 다시 읽기가 실패한다
+                 'iso2022jp': (b'me@example.com\x1b(B', b'ISO-2022-JP', b'+0900')}
+        for case, (mail, enc, tz) in cases.items():
+            with self.subTest(case=case), tempfile.TemporaryDirectory() as d:
+                d = Path(d)
+                raw, mine = RawRepo(d / 'src.git'), lines('me', 3).encode()
+                c0 = raw.commit(ME, {b'mine.py': mine}, encoding=b'UTF-8')
+                c1 = raw.commit(ME, {b'mine.py': mine, b'more.py': lines('me', 2).encode()}, encoding=b'utf8')
+                files = {b'mine.py': mine, b'more.py': lines('me', 2).encode(), b'evil.py': lines('mate', 10).encode()}
+                c2 = raw.commit(('Mate', mail), files, encoding=enc, tz=tz)
+                files[b'mine.py'] = mine + lines('mate', 4).encode()
+                c3 = raw.commit(('Mate', mail), files, encoding=enc, tz=tz)  # 내 파일에 덧붙임(blame 길)
+                files[b'legacy.py'] = lines('mate', 2).encode()
+                sha = raw.commit(('Me', 'someone@example.com'), files, encoding=b'EUC-KR')  # 이름만 같은 사람의 EUC-KR commit: 이름 일치로도 세지 않는다
+                path = extract.sync('o/r', d / 'cache', None, raw.path.as_uri())
+                self.assertEqual(extract.git(path, 'log', '-1', '--format=%ae', c3), 'me@example.com\n')  # git이 보여 주는 메일은 실제로 내 메일이다
+                count, units = extract.blame(path, sha, EMAILS, NAMES)
+                self.assertEqual(count, dict(own=3 + 2, name_only=0, other=10 + 4 + 2, files=4))
+                self.assertEqual(sorted((u['path'], u['lines']) for u in units), [('mine.py', [[1, 3]]), ('more.py', [[1, 2]])])
+                touches, added, reach = extract.history(path, sha, EMAILS, NAMES)
+                self.assertEqual((added, reach), ({'mine.py': 'own', 'more.py': 'own', 'evil.py': 'other', 'legacy.py': 'other'}, {'mine.py', 'more.py'}))
+                kinds, _ = extract.own_commits(path, ['refs/remotes/origin/main'], {c2}, EMAILS, NAMES)
+                self.assertEqual(kinds, {c0: 'email', c1: 'email'})
+
+    def test_email_case_folding_is_ascii_only(self):
+        """메일은 ASCII A-Z만 소문자로 바꿔 비교한다. 파이썬 str.lower()는 켈빈 기호(U+212A)를 ASCII k로 바꿔, kim@kakao.com 사용자에게
+        kim@\\u212aakao.com·\\u212aim@kakao.com 팀원 commit을 붙였다. API 쪽 메일과 git 쪽 메일 모두 같다. 대문자 ASCII로 쓴 내 메일은 그대로 내 것이다."""
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            kim = ('Kim', 'kim@kakao.com')
+            src = source(d / 'src').commit(kim, {'mine.py': lines('me', 3)})
+            src.commit(('Mate', 'kim@Kakao.com'), {'evil.py': lines('mate', 10)})
+            src.commit(('Mate', 'Kim@kakao.com'), {'mine.py': lines('me', 3) + lines('mate', 4)})  # 내 파일에 덧붙임(blame 길)
+            src.commit(('Kim', 'KIM@KAKAO.COM'), {'up.py': lines('me', 2)})  # 대문자 ASCII로 쓴 내 메일
+            remote = bare(d / 'src.git', src.path)
+            api = Listing({**repo_routes('o/r'), '/users/me': dict(login='me', id=7, email='KIM@Kakao.com')}, owner=[meta('o/r')])  # API 쪽 메일도 대문자
+            res = extract.extract('me', None, d / 'cache', api=api, remote_url=lambda full: remote.as_uri())
+            row, sha = res['repos'][0], src.head()
+            self.assertNotIn('error', row)
+            self.assertEqual([c['kind'] for c in row['commits']], ['email', 'email'])  # 내 commit 둘만
+            self.assertEqual({k: row['evals'][sha][k] for k in ('own', 'name_only', 'other')}, dict(own=3 + 2, name_only=0, other=10 + 4))
+            got = extract.blame(d / 'cache' / 'o__r', sha, {'kim@kakao.com'}, set())
+            self.assertEqual(got[0]['own'], 5)
+            self.assertEqual(got, blame_reference(d / 'cache' / 'o__r', sha, {'kim@kakao.com'}, set()))  # 대조 기준도 ASCII만 소문자로
+        self.assertEqual(extract.ascii_lower('KIM@KAKAO.COM'), 'kim@Kakao.com')  # API 쪽 메일에 쓰는 함수도 같다
+
     def test_line_break_like_characters_in_author_names_do_not_break_the_run(self):
         """str.splitlines가 줄바꿈으로 보는 글자(\\x0b·\\x0c·\\x1c~\\x1e·\\x85·U+2028·U+2029)가 작성자 이름에 있어도 실행이 멈추지 않고,
         팀원 commit은 팀원 것으로 남는다(git 출력은 NUL로만 나눈다)."""
@@ -1006,6 +1088,84 @@ class Identity(unittest.TestCase):
             self.assertNotIn('error', row)
             self.assertEqual(([c['kind'] for c in row['commits']], row['reachable']), (['email'], 9))  # 본인 commit은 내 것 하나뿐
             self.assertEqual({k: row['evals'][src.head()][k] for k in ('own', 'name_only', 'other')}, dict(own=3, name_only=0, other=16))
+
+
+class ExactPaths(unittest.TestCase):
+    """경로는 바이트 그대로 읽고 그대로 git에 돌려준다(UTF-8로 못 읽는 바이트는 surrogateescape, 줄바꿈 바꾸기 없음).
+    글자로 바꾸며 \\r·\\r\\n이 \\n이 되고 잘못된 UTF-8이 U+FFFD가 되면, 여러 파일이 한 경로로 합쳐져 그 이름의 진짜 파일을 합쳐진 수만큼 셌다."""
+
+    def test_colliding_paths_are_counted_byte_exact(self):
+        cases = {  # 내 파일, 팀원 파일들(내 파일과 같은 경로로 합쳐지던 이름), 바이트 그대로 센 정답 (own, other, files)
+            'cr': ({b'x\n': 20}, {b'x\r': 1}, (20, 1, 2)),
+            'invalid_utf8': ({'y�'.encode(): 10}, {b'y' + bytes([b]): 1 for b in (0x80, 0x81, 0xfe, 0xff, 0xc0)}, (10, 5, 6)),
+            'crlf': ({b'z\n.py': 7}, {b'z\r\n.py': 30, b'z\r.py': 30}, (7, 60, 3)),
+        }
+        for case, (mine, theirs, (own, other, files)) in cases.items():
+            with self.subTest(case=case), tempfile.TemporaryDirectory() as d:
+                d = Path(d)
+                raw = RawRepo(d / 'src.git')
+                tree = {p: lines('me', n).encode() for p, n in mine.items()}
+                raw.commit(ME, tree)
+                sha = raw.commit(MATE, {**tree, **{p: lines('mate', n).encode() for p, n in theirs.items()}})
+                path = extract.sync('o/r', d / 'cache', None, raw.path.as_uri())
+                count, units = extract.blame(path, sha, EMAILS, NAMES)
+                self.assertEqual(count, dict(own=own, name_only=0, other=other, files=files))
+                self.assertEqual(units, [dict(sha=sha, path=p.decode('utf-8', 'surrogateescape'), lines=[[1, n]]) for p, n in mine.items()])
+                self.assertEqual((count, units), blame_reference(path, sha, EMAILS, NAMES))  # 대조 기준도 바이트 그대로
+
+    def test_decomposed_hangul_path_is_blamed_as_written(self):
+        """macOS의 clone은 core.precomposeUnicode=true를 적고, 그러면 git이 명령줄의 NFD 경로를 NFC로 바꿔 blame이 'no such path'로 실패했다.
+        gitenv가 이 설정을 끄므로 트리에 적힌 NFD 경로 그대로 blame한다(내 파일을 팀원이 고쳐 blame 길로 간다)."""
+        nfd = unicodedata.normalize('NFD', '한글.py')
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            raw = RawRepo(d / 'src.git')
+            raw.commit(ME, {nfd.encode(): lines('me', 5).encode()})
+            sha = raw.commit(MATE, {nfd.encode(): (lines('me', 5) + lines('mate', 2)).encode()})
+            res = extract.extract('me', None, d / 'cache', api=Listing(repo_routes('o/r'), owner=[meta('o/r')]), remote_url=lambda full: raw.path.as_uri())
+            row = res['repos'][0]
+            self.assertNotIn('error', row)
+            self.assertEqual({k: row['evals'][sha][k] for k in ('own', 'other', 'files')}, dict(own=5, other=2, files=1))
+            self.assertEqual([(u['path'], u['lines']) for u in res['evidence']], [(nfd, [[1, 5]])])
+
+    def test_non_utf8_path_of_mine_is_counted_but_not_stored_as_evidence(self):
+        """UTF-8이 아닌 내 파일 이름도 바이트 그대로 blame해 센다. 다만 저장할 증거 단위로는 내보내지 않는다: sqlite는 그 경로를 그대로 담지 못하고,
+        바꿔 적은 경로(U+FFFD·\\x80 표기)는 뒤 단계가 그 이름의 다른 파일을 읽게 만들 수 있다. 저장은 깨지지 않는다."""
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            raw = RawRepo(d / 'src.git')
+            ok, mine = lines('me', 3).encode(), lines('me', 5).encode()
+            raw.commit(ME, {b'w\x80.py': mine, b'ok.py': ok})
+            sha = raw.commit(MATE, {b'w\x80.py': mine + lines('mate', 2).encode(), b'ok.py': ok})  # 내 파일을 팀원이 고침(blame 길)
+            res = extract.extract('me', None, d / 'cache', api=Listing(repo_routes('o/r'), owner=[meta('o/r')]), remote_url=lambda full: raw.path.as_uri())
+            row = res['repos'][0]
+            self.assertNotIn('error', row)
+            self.assertEqual({k: row['evals'][sha][k] for k in ('own', 'other', 'files')}, dict(own=5 + 3, other=2, files=2))
+            self.assertEqual([u['path'] for u in res['evidence']], ['ok.py'])
+            path = d / 'cache' / 'o__r'
+            got = extract.blame(path, sha, EMAILS, NAMES)  # blame 자체는 바이트 그대로의 경로로 단위를 낸다
+            self.assertEqual(sorted(u['path'] for u in got[1]), ['ok.py', 'w\udc80.py'])
+            self.assertEqual(got, blame_reference(path, sha, EMAILS, NAMES))
+            db = d / 'g.sqlite'
+            store.save(db, res, store.add_account(db, 'me', '본인', '시험', '2026-10-29'))
+            con = sqlite3.connect(db)
+            try: self.assertEqual(con.execute('SELECT path, line_start, line_end FROM evidence_line').fetchall(), [('ok.py', 1, 3)])
+            finally: con.close()
+
+    def test_duplicate_tree_entries_mark_only_that_repo(self):  # 같은 경로가 트리에 두 번(망가진 트리, fsck 실패): 어림잡아 세지 않고 그 레포만 실패
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            raw = RawRepo(d / 'src.git')
+            entry = b'100644 a.py\0' + bytes.fromhex(raw.run('hash-object', '-w', '--stdin', data=lines('me', 2).encode()).decode())
+            sha = raw.commit(ME, tree=raw.run('hash-object', '-t', 'tree', '-w', '--stdin', '--literally', data=entry + entry))
+            ok = source(d / 'ok').commit(ME, {'ok.py': lines('me', 4)})
+            remotes = {'me/dup': raw.path, 'me/ok': bare(d / 'ok.git', ok.path)}
+            api = Listing({**repo_routes('me/dup'), **repo_routes('me/ok')}, owner=[meta('me/dup'), meta('me/ok')])
+            res = extract.extract('me', None, d / 'cache', api=api, remote_url=lambda full: remotes[full].as_uri())
+            rows = {row['full']: row for row in res['repos']}
+            self.assertTrue(rows['me/dup'].get('error', '').startswith('git 출력 해석 실패: '), rows['me/dup'].get('error'))
+            self.assertEqual(rows['me/ok']['evals'][ok.head()]['own'], 4)
+            with self.assertRaises(extract.LogFormatError): extract.blame(d / 'cache' / 'me__dup', sha, EMAILS, NAMES)
 
 
 def isolated(env):
