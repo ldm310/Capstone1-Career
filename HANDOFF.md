@@ -662,3 +662,4 @@
   - 남이 먼저 가진 덩어리는 「출처 불명」으로 둔다. 「복사 대조(내 브랜치)」 등급으로 STAT에 넣는다.
   - 다른 ref는 출처 확인에만 쓴다(결정 9번 유지).
 - 2026-10-29: 설계 문서(`docs/superpowers/specs/2026-10-28-github-competency-design.md`)를 사용자가 승인했다. 다음은 계획(superpowers writing-plans)이다.
+- 2026-10-29: 계획을 3개로 나눴다(superpowers writing-plans). 계획 1(역량 추출 엔진, 작업 12개)은 `docs/superpowers/plans/2026-10-29-extraction-engine.md`에 썼다. 계획 2(분석 서버 + 단계별 화면)와 계획 3(팀 FE·BE 합치기)은 계획 1 뒤에 쓴다. 계획 3은 최신 feature/BE를 읽은 뒤 쓴다. 실행 방식은 subagent-driven-development(제안, 사용자 확인 대기)다.
