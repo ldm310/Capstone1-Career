@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <title>그림 1 — 전체 서비스 구조</title>
+    <link rel="stylesheet" href="../kit/diagram.css" />
+    <style>
+      /* 배치: 설계서 5장 (canvas 기준 px, 내용 폭 1088, 열 사이 38px)
+         열: c1 입력 0–160 · c2 01 198–358 · c3 목표 직무 · 02 396–632 · c4 A · B · 공고 670–860 · c5 03 898–1088
+         높이는 내용 높이. 꺾는 위치 midX(페이지 기준) = 캔버스 x + 56 → 228 · 704 · 932 */
+      .canvas { height: 788px; } /* s04 아래 끝(787) + 1 */
+      .canvas > .card { position: absolute; }
+      .card > .tags { margin-bottom: 8px; }
+
+      /* 02 본문: 단계 순서 4줄 (그림 3과 같은 단계 이름) */
+      .seq { margin-top: 6px; display: flex; flex-direction: column; gap: 5px; font-size: 14.5px; line-height: 1.55; color: var(--muted); }
+      .seq .row { display: flex; align-items: center; gap: 6px; }
+      .seq .tag { margin: 0; }
+      .seq b { color: var(--text); font-weight: 700; }
+
+      /* A · B 아래 줄: 그림 참조 + 제안 칩 */
+      .foot-row { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
+      .foot-row .ref { margin-top: 0; }
+
+      .sub { font-size: 13px; color: var(--muted); font-weight: 500; }
+      .card-body .status { vertical-align: 1px; }
+      .nw { white-space: nowrap; }
+      #s04 .head-row .ref { margin-top: 0; }
+
+      /* 최종 목표 상자 (캔버스 밖, .card 아님) */
+      .goal { margin-top: 16px; background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; }
+      .goal-row { display: flex; gap: 10px; align-items: flex-start; font-size: 16px; font-weight: 600; line-height: 1.55; color: var(--ink); }
+      .goal-row .note-label { margin-top: 1px; }
+      .goal-row b { color: var(--green-ink); font-weight: 700; }
+      .scope-row { display: flex; gap: 10px; align-items: flex-start; margin-top: 8px; font-size: 14px; line-height: 1.55; color: var(--muted); }
+      .scope-row .status { flex: none; margin-top: 1px; }
+      .scope-row b { color: var(--text); font-weight: 700; }
+
+      /* 범례 '입력 · 수집' 색 상자 (그림 2와 같음) */
+      .sw.gray { background: #e9eeeb; border-color: #d3dbd6; }
+
+      /* 상자 위치 (설계서 5장 표) */
+      #in-role { left: 396px; top: 0; width: 236px; }
+      #in-gh { left: 0; top: 154px; width: 160px; }
+      #in-doc { left: 0; top: 301px; width: 160px; }
+      #s01 { left: 198px; top: 200px; width: 160px; }
+      #s02 { left: 396px; top: 178px; width: 236px; }
+      #sa { left: 670px; top: 100px; width: 190px; }
+      #sb { left: 670px; top: 302px; width: 190px; }
+      #in-job { left: 670px; top: 518px; width: 140px; }
+      #s03 { left: 898px; top: 179px; width: 190px; }
+      #s04 { left: 0; top: 672px; width: 1088px; }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <div class="fig-head"><span class="badge">그림 1 / 9</span><span class="section-tag">전체</span></div>
+      <h1 class="title">전체 서비스 구조</h1>
+      <p class="subtitle">자료를 증거로 정리해(01) <b>기술별 LV를 한 번 판정</b>하고(02), 그 LV로 <b>내 STAT</b>(A)과 <b>공고 적합도</b>(B)를 계산해 <b>메타인지 리포트</b>(03)로 보여줌<br>새 자료가 오거나 목표 직무 · 공고가 바뀌면 필요한 범위만 다시 평가(04)</p>
+      <div class="goal">
+        <div class="goal-row"><span class="note-label">최종 목표</span><span>서류에서 떨어진 신입 · 주니어(데이터 · 백엔드 지망)가 근거 있는 진단으로 <b>지금 위치 · 이대로라면 · 무엇부터 강화할지</b> 알고 다음 지원을 준비</span></div>
+        <div class="scope-row"><span class="status plan">v2 목표 설계</span><span>그림 1 ~ 8은 목표 설계 · 이 흐름 중 지금 레포에 있는 것은 <b>01 일부(정규식 기술 탐지 · 공고 수집)</b>뿐 · 구성요소별 현재 구현 상태는 그림 9</span></div>
+      </div>
+
+      <div class="canvas">
+        <div class="card input tight" id="in-role">
+          <span class="tag">입력 · 01</span>
+          <div class="card-title">목표 직무</div>
+          <div class="card-body">백엔드 · 데이터 <span class="sub">(AI 등은 추후 확장)</span><br>→ 직무 기준표 <span class="status open">v1 작성 전</span></div>
+        </div>
+        <div class="card input tight" id="in-gh">
+          <span class="tag">입력 · 01</span>
+          <div class="card-title">GitHub</div>
+          <div class="card-body">본인 commit · diff<br>실행 · 이슈 · PR · 배포</div>
+        </div>
+        <div class="card input tight" id="in-doc">
+          <span class="tag">입력 · 01</span>
+          <div class="card-title">PDF · MD</div>
+          <div class="card-body">이력서 · 프로젝트 · 학습 정리</div>
+        </div>
+        <div class="card tight" id="s01">
+          <div class="tags"><span class="tag">수집</span><span class="tag rule">규칙 정리</span></div>
+          <div class="head-row"><span class="step">01</span><div class="card-title">자료 수집 ·<br>증거 정리</div></div>
+          <div class="card-body">출처 · 버전 · 위치가 붙은 증거 단위로 정리</div>
+          <span class="ref">그림 2</span>
+        </div>
+        <div class="card tight" id="s02">
+          <div class="tags"><span class="tag llm">LLM 해석</span><span class="tag rule">규칙 판정</span></div>
+          <div class="head-row"><span class="step">02</span><div class="card-title">역량 평가 엔진</div></div>
+          <div class="seq">
+            <div>도구 신호 + LLM 해석 → 규칙 판정</div>
+            <div class="row"><span>→</span><span class="tag risk">위험 항목만 추가 LLM 재검토</span></div>
+            <div class="row"><span>→</span><span class="tag hold">미해결은 승급 보류</span></div>
+            <div>→ <b>기술별 LV</b> · 근거 없으면 미확인</div>
+          </div>
+          <span class="ref">그림 3 · 4</span>
+        </div>
+        <div class="card tight" id="sa">
+          <div class="tags"><span class="tag rule">규칙 계산</span></div>
+          <div class="head-row"><span class="step">A</span><div class="card-title">내 STAT</div></div>
+          <div class="card-body">핵심 기술의 단계별 도달률<br>→ 막힌 단계 · 지원자 유형</div>
+          <div class="foot-row"><span class="ref">그림 5</span><span class="status open">계산 방식 제안</span></div>
+        </div>
+        <div class="card tight" id="sb">
+          <div class="tags"><span class="tag llm">LLM 추출</span><span class="tag rule">규칙 계산</span></div>
+          <div class="head-row"><span class="step b">B</span><div class="card-title">공고 적합도</div></div>
+          <div class="card-body">공고 요구 LV 대비 내 LV 충족도 → 적합도 · 등급</div>
+          <div class="foot-row"><span class="ref">그림 6</span><span class="status open">계산 방식 제안</span></div>
+        </div>
+        <div class="card input tight" id="in-job">
+          <span class="tag">입력 · 01</span>
+          <div class="card-title">관심 채용공고</div>
+          <div class="card-body">URL · 텍스트</div>
+        </div>
+        <div class="card output tight" id="s03">
+          <div class="tags"><span class="tag rule">규칙 계산</span><span class="tag llm">LLM 문장</span></div>
+          <div class="head-row"><span class="step">03</span><div class="card-title">메타인지 리포트</div></div>
+          <div class="card-body">① 나는 이런 지원자<br>② 이대로 지원하면<br>③ 이것부터 강화<br>④ 다음 LV에 필요한 증거</div>
+          <span class="ref">그림 7</span>
+        </div>
+        <div class="card soft" id="s04">
+          <div class="head-row"><span class="step">04</span><div class="card-title">새 자료 업데이트 · 재평가</div><span class="ref">그림 8</span></div>
+          <div class="card-body">새 본인 commit · 문서 새 버전 → <b>01부터</b> · 목표 직무 변경 → <b>02부터</b> · 관심 공고만 추가 · 변경 → <b>B · 03만</b> (LV는 그대로)<br>이전 결과와 비교해 변경 이유 · 이력을 남기고 알림 · 학습 완료나 commit 생성만으로는 승급하지 않음</div>
+        </div>
+      </div>
+
+      <div class="note"><span class="note-label">설계 고민</span><div><b>자료를 LLM에 넣고 점수를 받지 않음</b>: LV는 31개 조건(L0-01 ~ L5-07)의 누적 규칙으로, STAT · 적합도는 그 LV로 규칙이 계산하고 LLM은 증거 해석 · <span class="nw">공고 문장 추출</span> · <span class="nw">리포트 문장만</span> 맡고 수치는 정하지 않음 → 같은 조건 판정이면 같은 LV, 어떤 조건 때문인지 보여줄 수 있음. <b>기술별 LV는 02에서 한 번만 판정</b>해 <span class="nw">A · B가 같이 씀</span> → 내 STAT과 공고 적합도가 같은 LV0 ~ 5 기준으로 설명되고, 공고만 바뀌면 LV 재판정 없이 B · 03만 다시 계산(그림 8).</div></div>
+      <p class="footnote">A · B의 계산 방식과 등급 규칙은 제안 · 미정(팀 확정 전) — 그림 5 · 6. 직무 기준표 v1은 작성 전이고, 핵심 기술 목록 · 선정 근거도 미정.</p>
+      <div class="legend">
+        <span><i class="sw gray"></i>입력 · 수집</span><span><i class="sw llm"></i>LLM</span><span><i class="sw rule"></i>규칙·계산</span><span><i class="sw risk"></i>위험·선별 검토</span><span><i class="sw hold"></i>보류·경고</span><span><i class="sw out"></i>출력</span>
+        <span><svg class="lg" width="28" height="8"><line x1="0" y1="4" x2="28" y2="4" stroke="#8fa89a" stroke-width="2.5"/></svg>데이터 흐름</span>
+        <span><svg class="lg" width="28" height="8"><line x1="0" y1="4" x2="28" y2="4" stroke="#1f6f4a" stroke-width="3"/></svg>재판정·반복</span>
+        <span><svg class="lg" width="28" height="8"><line x1="0" y1="4" x2="28" y2="4" stroke="#8fa89a" stroke-width="2.5" stroke-dasharray="6 4"/></svg>참고·피드백</span>
+        <span><span class="status open">제안 · 미정</span> 팀 확정 전</span>
+      </div>
+    </div>
+    <script src="../kit/connect.js"></script>
+    <script>
+      // 화살표: 설계서 4장 (midX는 페이지 기준 = 캔버스 x + 56)
+      edges([
+        { from: "in-gh", to: "s01", toAt: 0.3, midX: 56 + 172 },
+        { from: "in-doc", to: "s01", toAt: 0.7, midX: 56 + 172 },
+        { from: "s01", to: "s02", toAt: "align" },
+        // 44px 사이 라벨: 화살표머리(끝에서 11px) 밑동이 라벨 배경에 가리지 않게 4px 위로
+        { from: "in-role", to: "s02", fromSide: "bottom", toSide: "top", label: "적용 조건", labelDy: -4 },
+        { from: "in-role", to: "sa", fromSide: "right", toSide: "top", label: "핵심 기술" },
+        { from: "s02", to: "sa", fromAt: 0.3, midX: 56 + 648 },
+        { from: "s02", to: "sb", fromAt: 0.7, midX: 56 + 648 },
+        // 같은 이유로 위로 가는 화살표의 라벨은 4.5px 아래로
+        { from: "in-job", to: "sb", fromSide: "top", toSide: "bottom", toAt: "align", label: "공고 원문", labelDy: 4.5 },
+        { from: "sa", to: "s03", toAt: 0.3, midX: 56 + 876 },
+        { from: "sb", to: "s03", toAt: 0.7, midX: 56 + 876 },
+        { from: "s03", to: "s04", fromSide: "bottom", toSide: "top", toAt: "align", kind: "ref", label: "보완 학습 후 새 자료" },
+        // 반복선 라벨: 04 위 변에서 22px 위 → labelAt = 22 ÷ (s04 top − 대상 카드 bottom)
+        { from: "s04", to: "s01", fromSide: "top", toSide: "bottom", fromAt: "align", kind: "loop", label: "01부터", labelAt: 0.077 },
+        { from: "s04", to: "s02", fromSide: "top", toSide: "bottom", fromAt: "align", kind: "loop", label: "02부터", labelAt: 0.084 },
+        { from: "s04", to: "sb", fromSide: "top", toSide: "bottom", fromAt: "align", toAt: 0.87, kind: "loop", label: "B · 03만", labelAt: 0.111 },
+      ]);
+    </script>
+  </body>
+</html>

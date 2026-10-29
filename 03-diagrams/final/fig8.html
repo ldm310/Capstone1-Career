@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <title>그림 8 — 새 자료 업데이트 · 재평가</title>
+    <link rel="stylesheet" href="../kit/diagram.css" />
+    <style>
+      /* 배치: 설계서 5장 (canvas 기준 px, 내용 폭 1088, 캔버스 높이 696)
+         열: 트리거 0–196 │ 01 276–426 │ 02 466–642 │ A·B 682–886 │ 03 928–1088
+         행: 1행 0–140 │ 2행 180–320 │ 3행 360–500 │ 아래 줄 560–696 */
+      .canvas { height: 696px; }
+      .canvas > .card { position: absolute; }
+
+      /* 행: 같은 행의 카드는 top · height를 같게 둬서 트리거 선 1~3, 아래 줄 선 10·11이 곧게 간다 */
+      .row1 { top: 0; height: 140px; }
+      .row2 { top: 180px; height: 140px; }
+      .row3 { top: 360px; height: 140px; }
+      .rowb { top: 560px; height: 136px; }
+
+      /* 열 */
+      .trg { left: 0; width: 196px; }
+      #s01 { left: 276px; width: 150px; }
+      #s02 { left: 466px; width: 176px; }
+      #sa, #sb { left: 682px; width: 204px; }
+      #s03 { left: 928px; width: 160px; }
+      #notify { left: 0; width: 330px; }
+      #hist { left: 379px; width: 330px; }
+      #cmp { left: 758px; width: 330px; }
+
+      /* 줄바꿈 금지 (설계서 5장) */
+      .nw { white-space: nowrap; }
+
+      /* 범례 '트리거 · 저장' 회색 상자 (설계서 7장, 그림 2 r1과 같은 방식) */
+      .sw.gray { background: #e9eeeb; border-color: #d5ddd8; }
+
+      /* 각주 상태 칩 (설계서 5장). 오른쪽 4px 여백은 뒤에 띄어쓰기가 없는 맨 앞 칩(계획)에만 둔다.
+         문장 중간 칩(제안 · 미정)은 앞뒤 띄어쓰기만으로 좌우 간격을 같게 맞춘다 (제작 중 조정). */
+      .footnote .status { vertical-align: 1px; margin: 0; }
+      .footnote .status:first-child { margin-right: 4px; }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <div class="fig-head"><span class="badge">그림 8 / 9</span><span class="section-tag">04 재평가</span></div>
+      <h1 class="title">새 자료 업데이트 · 재평가</h1>
+      <p class="subtitle">무엇이 바뀌었는지에 따라 <b>다시 계산할 범위</b>를 나누고, 변경 이유를 이력으로 남김</p>
+      <div class="canvas">
+        <!-- 트리거 (회색 입력 카드) -->
+        <div class="card input tight trg row1" id="t-new">
+          <span class="tag">트리거</span>
+          <div class="card-title">새 자료</div>
+          <div class="card-body">GitHub 새 본인 commit<br />PDF · MD 새 버전</div>
+        </div>
+        <div class="card input tight trg row2" id="t-role">
+          <span class="tag">트리거</span>
+          <div class="card-title">목표 직무 변경</div>
+          <div class="card-body">적용 조건 · 핵심 기술이 바뀜<br />증거는 그대로</div>
+        </div>
+        <div class="card input tight trg row3" id="t-job">
+          <span class="tag">트리거</span>
+          <div class="card-title">관심 공고 추가 · 변경</div>
+          <div class="card-body">기술별 LV ·<br />내 STAT은 그대로</div>
+        </div>
+
+        <!-- 다시 계산하는 단계 (흰 카드: 단계 번호 + 제목 → 본문 → 그림 참조) -->
+        <div class="card tight row1" id="s01">
+          <div class="head-row"><span class="step">01</span><div class="card-title">증거 정리</div></div>
+          <div class="card-body">새 증거 추가 ·<br />기존 근거 보존</div>
+          <span class="ref">그림 2</span>
+        </div>
+        <div class="card tight row2" id="s02">
+          <div class="head-row"><span class="step">02</span><div class="card-title">역량 평가</div></div>
+          <div class="card-body">기존 근거 + 새 증거로<br />기술별 LV 다시 판정</div>
+          <span class="ref">그림 3 · 4</span>
+        </div>
+        <div class="card tight row1" id="sa">
+          <div class="head-row"><span class="step">A</span><div class="card-title">내 STAT</div></div>
+          <div class="card-body">단계별 도달률 ·<br />지원자 유형 재계산</div>
+          <span class="ref">그림 5</span>
+        </div>
+        <div class="card tight row3" id="sb">
+          <div class="head-row"><span class="step b">B</span><div class="card-title">공고 적합도</div></div>
+          <div class="card-body">점수 재계산 · 요구 추출은<br />새 · 바뀐 공고만</div>
+          <span class="ref">그림 6</span>
+        </div>
+        <div class="card tight row2" id="s03">
+          <div class="head-row"><span class="step">03</span><div class="card-title">메타인지 리포트</div></div>
+          <div class="card-body">네 칸 다시 계산</div>
+          <span class="ref">그림 7</span>
+        </div>
+
+        <!-- 비교 · 기록 · 알림 (아래 줄, 오른쪽 → 왼쪽으로 읽음) -->
+        <div class="card tight rowb" id="cmp">
+          <span class="tag rule">규칙</span>
+          <div class="card-title">이전 결과와 비교</div>
+          <div class="card-body">기술별 LV · 조건 상태 · 내 STAT ·<br />공고 적합도 · 강화 순위의 변화</div>
+        </div>
+        <div class="card tight rowb" id="hist">
+          <span class="tag">저장</span>
+          <div class="card-title">변경 이유 · 이력 기록</div>
+          <div class="card-body">무엇이 바뀌었고, 무엇 때문인지<br />새 근거(조건 ID · 인용) · 직무 · 공고 변경</div>
+        </div>
+        <div class="card output tight rowb" id="notify">
+          <span class="tag out">출력</span>
+          <div class="card-title">사용자 알림</div>
+          <div class="card-body">예: Spring LV1 → LV2 (L2-04 근거 확인) · <span class="nw">A사 0.75 → 0.88, Middle → High</span></div>
+        </div>
+      </div>
+      <div class="note"><span class="note-label">설계 고민</span><div>매번 전체를 다시 돌리지 않고 <b>바뀐 것에 따라 시작점을 나눔</b> — 공고만 바뀌면 02의 LLM 해석 · 위험 항목 재검토를 건너뛰고 <b>B · 03만</b>, 공고가 그대로면 B는 <span class="nw">요구 추출(LLM)</span> 없이 점수만 다시 계산해 LLM 호출을 줄임. LV는 <b>조건을 충족하는 근거가 확인될 때만</b> 오름(같은 기준표 · 누적 규칙, 그림 4) — 학습 완료나 <span class="nw">commit 생성만으로는</span> 승급하지 않음 <span class="nw">(예: 테스트 파일만 늘고 실행 결과가 없으면</span> <span class="nw">Spring L2-04 불인정 → LV1 유지)</span>. 결과를 덮어쓰지 않고 기존 근거는 <span class="nw">버전과 함께 보존,</span> 바뀐 값마다 <b>원인(조건 ID · 인용)</b>을 이력에 남김.</div></div>
+      <div class="footnote"><span class="status plan">계획</span>재평가(04)는 아직 레포에 없는 v2 목표 설계 (구성요소별 현재 상태는 그림 9) · 알림 수치는 예시(가상 공고) · STAT · 적합도 계산 방식은 <span class="status open">제안</span> · 등급 기준은 <span class="status open">미정</span> (그림 5 · 6)</div>
+      <div class="legend">
+        <span><i class="sw gray"></i>트리거 · 저장</span><span><i class="sw rule"></i>규칙·계산</span><span><i class="sw out"></i>출력</span>
+        <span><svg class="lg" width="28" height="8"><line x1="0" y1="4" x2="28" y2="4" stroke="#8fa89a" stroke-width="2.5"/></svg>데이터 흐름</span>
+        <span><svg class="lg" width="28" height="8"><line x1="0" y1="4" x2="28" y2="4" stroke="#1f6f4a" stroke-width="3"/></svg>재판정·반복</span>
+      </div>
+    </div>
+    <script src="../kit/connect.js"></script>
+    <script>
+      /* 화살표: 설계서 4장 표 · 호출 그대로 (1~3 트리거 = loop, 4~11 = flow) */
+      edges([
+        { from: "t-new", to: "s01", kind: "loop", label: "01부터", labelDy: -18 },
+        { from: "t-role", to: "s02", kind: "loop", toAt: "align", label: "직무 기준표 교체 → 02부터" },
+        { from: "t-job", to: "sb", kind: "loop", toAt: "align", label: "공고 원문 저장 → B · 03만" },
+        { from: "s01", to: "s02", fromSide: "right", toSide: "top", toAt: 24 / 176 },
+        { from: "s02", to: "sa", fromSide: "right", toSide: "bottom", fromAt: 0.3, toAt: 24 / 204 },
+        { from: "s02", to: "sb", fromSide: "right", toSide: "top", fromAt: 0.7, toAt: 24 / 204 },
+        { from: "sa", to: "s03", fromSide: "right", toSide: "left", toAt: 0.3 },
+        { from: "sb", to: "s03", fromSide: "right", toSide: "left", toAt: 0.7 },
+        { from: "s03", to: "cmp", fromSide: "bottom", toSide: "top", toAt: "align" },
+        { from: "cmp", to: "hist", fromSide: "left", toSide: "right" },
+        { from: "hist", to: "notify", fromSide: "left", toSide: "right" },
+      ]);
+    </script>
+  </body>
+</html>

@@ -1,0 +1,508 @@
+/* Career 다이어그램 공용 스타일 — 원본 그림 1~9의 팔레트·카드·범례를 재현한다. */
+@font-face {
+  font-family: "Pretendard";
+  src: url("PretendardVariable.woff2") format("woff2-variations"),
+    url("PretendardVariable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-display: block;
+}
+:root {
+  --bg: #f4f6f4;
+  --ink: #13271e;
+  --text: #2a3a32;
+  --muted: #66756d;
+  --line: #dbe3de;
+  --card: #ffffff;
+  --input: #f1f4f2;
+  --green: #1f7a55;
+  --green-ink: #1a5c40;
+  --green-dark: #163d2c;
+  --green-soft: #e3f1e8;
+  --green-line: #bcd9c7;
+  --blue: #2f5f9e;
+  --blue-ink: #2d4f86;
+  --blue-soft: #e7eefa;
+  --blue-line: #c3d3ee;
+  --orange-ink: #a35f1c;
+  --orange-soft: #fdf1e4;
+  --orange-line: #efcfa8;
+  --red: #b4502f;
+  --red-ink: #9c3f22;
+  --red-soft: #fcebe5;
+  --red-line: #f1c4b6;
+  --yellow-ink: #776424;
+  --yellow-soft: #f5f1df;
+  --yellow-line: #e3d9ae;
+  --purple-ink: #6b4fa0;
+  --purple-soft: #f2edf9;
+  --purple-line: #d9cdee;
+  --example: #f4f7fb;
+  --example-line: #d9e3ef;
+  --edge: #8fa89a;
+  --loop: #1f6f4a;
+}
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+html,
+body {
+  background: var(--bg);
+}
+body {
+  font-family: "Pretendard", "Apple SD Gothic Neo", sans-serif;
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+
+/* 페이지와 머리말 */
+.page {
+  position: relative;
+  width: 1200px;
+  padding: 48px 56px 36px;
+  background: var(--bg);
+}
+.fig-head {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 22px;
+}
+.badge {
+  background: var(--green-soft);
+  color: var(--green-ink);
+  font-weight: 700;
+  font-size: 15px;
+  padding: 7px 14px;
+  border-radius: 8px;
+}
+.section-tag {
+  background: #fff;
+  border: 1px solid var(--line);
+  color: var(--text);
+  font-weight: 600;
+  font-size: 15px;
+  padding: 6px 13px;
+  border-radius: 8px;
+}
+.title {
+  font-size: 44px;
+  font-weight: 800;
+  color: var(--ink);
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+.subtitle {
+  margin-top: 12px;
+  font-size: 18px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+.subtitle b,
+.hl {
+  color: var(--green-ink);
+  font-weight: 700;
+}
+.canvas {
+  position: relative;
+  margin-top: 34px;
+}
+
+/* 카드 */
+.card {
+  position: relative;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 16px 18px;
+  box-shadow: 0 1px 2px rgba(20, 40, 30, 0.04);
+}
+.card.input {
+  background: var(--input);
+}
+.card.output {
+  border: 2px solid var(--green);
+}
+.card.risk {
+  background: var(--orange-soft);
+  border-color: var(--orange-line);
+}
+.card.hold {
+  background: #fffaf8;
+  border-color: var(--red-line);
+}
+.card.ext {
+  background: #fbf9fe;
+  border: 1.5px dashed var(--purple-line);
+}
+.card.planned {
+  border-style: dashed;
+  border-width: 1.5px;
+}
+.card.example {
+  background: var(--example);
+  border-color: var(--example-line);
+  box-shadow: none;
+}
+.card.soft {
+  background: #eef5f0;
+  border-color: var(--green-line);
+}
+.card.tight {
+  padding: 12px 14px;
+}
+.card-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--ink);
+  line-height: 1.35;
+}
+.card-title.sm {
+  font-size: 16px;
+}
+.card-body {
+  margin-top: 6px;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--muted);
+}
+.card-body b {
+  color: var(--text);
+  font-weight: 700;
+}
+.card-body .warn {
+  color: var(--red-ink);
+  font-weight: 700;
+}
+.head-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* 태그 */
+.tag {
+  display: inline-block;
+  font-size: 12.5px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 6px;
+  margin-bottom: 8px;
+  background: #e9eeeb;
+  color: #55645c;
+  line-height: 1.4;
+}
+.tag.llm {
+  background: var(--blue-soft);
+  color: var(--blue-ink);
+}
+.tag.rule,
+.tag.org {
+  background: var(--green-soft);
+  color: var(--green-ink);
+}
+.tag.out {
+  background: var(--green-dark);
+  color: #fff;
+}
+.tag.risk {
+  background: var(--orange-soft);
+  color: var(--orange-ink);
+  border: 1px solid var(--orange-line);
+}
+.tag.hold {
+  background: var(--red-soft);
+  color: var(--red-ink);
+}
+.tag.check {
+  background: var(--yellow-soft);
+  color: var(--yellow-ink);
+}
+.tag.ext {
+  background: var(--purple-soft);
+  color: var(--purple-ink);
+}
+.tag.tool {
+  background: #e9f0f4;
+  color: #35596e;
+}
+.tags {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.tags .tag {
+  margin-bottom: 0;
+}
+
+/* 단계 번호 · 그림 참조 */
+.step {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  height: 30px;
+  padding: 0 7px;
+  border-radius: 7px;
+  background: var(--green);
+  color: #fff;
+  font-weight: 800;
+  font-size: 15px;
+  flex: none;
+}
+.step.b {
+  background: var(--blue);
+}
+.ref {
+  display: inline-block;
+  margin-top: 10px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--green-ink);
+  background: var(--green-soft);
+  padding: 3px 8px;
+  border-radius: 6px;
+}
+
+/* 구현 상태 (현재 구현 상황 표시) */
+.status {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+.status.done {
+  color: var(--green-ink);
+  background: var(--green-soft);
+  border-color: var(--green-line);
+}
+.status.exp {
+  color: var(--blue-ink);
+  background: var(--blue-soft);
+  border-color: var(--blue-line);
+}
+.status.plan {
+  color: var(--yellow-ink);
+  background: var(--yellow-soft);
+  border-color: var(--yellow-line);
+}
+.status.open {
+  color: var(--red-ink);
+  background: var(--red-soft);
+  border-color: var(--red-line);
+}
+
+/* 칩 · 표 · 막대 */
+.chip {
+  display: inline-block;
+  padding: 5px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #fff;
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--ink);
+}
+.chip .lv {
+  color: var(--green);
+}
+.chip.dim {
+  border-style: dashed;
+  color: var(--muted);
+  font-weight: 500;
+}
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.mini-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  color: var(--text);
+}
+.mini-table th {
+  color: var(--muted);
+  font-weight: 600;
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+}
+.mini-table td {
+  padding: 7px 8px;
+  border-bottom: 1px solid #eaefeb;
+}
+.mini-table tr.hit td {
+  background: var(--red-soft);
+  color: var(--red-ink);
+  font-weight: 700;
+}
+.mini-table .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.bar-row {
+  display: grid;
+  grid-template-columns: 130px 1fr 44px 48px;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+}
+.bar {
+  height: 10px;
+  background: #e3e8e5;
+  border-radius: 6px;
+  overflow: hidden;
+}
+.bar > i {
+  display: block;
+  height: 100%;
+  background: var(--green);
+  border-radius: 6px;
+}
+.bar.warn > i {
+  background: var(--red);
+}
+
+/* 묶음 상자 */
+.group {
+  position: relative;
+  border: 1.5px dashed #c9d4ce;
+  border-radius: 18px;
+  padding: 30px 16px 16px;
+}
+.group-label {
+  position: absolute;
+  top: -12px;
+  left: 16px;
+  background: var(--bg);
+  padding: 0 8px;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+/* 설계 고민 · 범례 */
+.note {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  margin-top: 30px;
+  font-size: 15.5px;
+  line-height: 1.6;
+  color: var(--text);
+}
+.note-label {
+  flex: none;
+  background: var(--green);
+  color: #fff;
+  font-weight: 700;
+  font-size: 14px;
+  padding: 3px 10px;
+  border-radius: 6px;
+  margin-top: 2px;
+}
+.note b {
+  color: var(--green-ink);
+}
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+  font-size: 13.5px;
+  color: var(--muted);
+  align-items: center;
+}
+.legend .sw {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  vertical-align: -2px;
+  margin-right: 6px;
+  border: 1px solid var(--line);
+}
+.sw.llm {
+  background: var(--blue-soft);
+  border-color: var(--blue-line);
+}
+.sw.rule {
+  background: var(--green-soft);
+  border-color: var(--green-line);
+}
+.sw.risk {
+  background: var(--orange-soft);
+  border-color: var(--orange-line);
+}
+.sw.hold {
+  background: var(--red-soft);
+  border-color: var(--red-line);
+}
+.sw.out {
+  background: #fff;
+  border: 2px solid var(--green);
+}
+.sw.tool {
+  background: #e9f0f4;
+  border-color: #c9d8e1;
+}
+.legend .ln {
+  display: inline-block;
+  width: 26px;
+  height: 0;
+  border-top: 2.5px solid var(--edge);
+  vertical-align: middle;
+  margin-right: 6px;
+}
+.legend .ln.loop {
+  border-top: 3px solid var(--loop);
+}
+.legend .ln.ref {
+  border-top: none;
+  height: 2.5px;
+  background: repeating-linear-gradient(90deg, var(--edge) 0 7px, transparent 7px 12px);
+}
+.legend .ln.risk {
+  border-top: 2.5px solid #c0782d;
+}
+.legend .ln.no {
+  border-top: 2.5px solid var(--red);
+}
+.legend svg.lg {
+  display: inline-block;
+  vertical-align: middle;
+  margin-right: 6px;
+}
+/* 위험 분기(주황)·아니오(빨강) 선이 있는 그림은 같은 svg.lg 에 stroke="#c0782d" / "#b4502f" 를 쓴다 */
+.footnote {
+  margin-top: 10px;
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+/* 화살표 레이어 (connect.js가 그림) */
+svg.edges {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  overflow: visible;
+  z-index: 5;
+}
+svg.edges text {
+  font-family: "Pretendard", sans-serif;
+  font-weight: 700;
+}

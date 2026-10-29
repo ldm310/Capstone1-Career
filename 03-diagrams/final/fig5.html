@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <title>그림 5 — 내 STAT 계산</title>
+    <link rel="stylesheet" href="../kit/diagram.css" />
+    <style>
+      /* 머리말 제안 배지: 머리말 줄 크기에 맞춤 (설계서 2장) */
+      .fig-head .status { font-size: 13.5px; padding: 5px 12px; border-radius: 8px; }
+
+      /* 배치: 설계서 5장 (canvas 기준 px, 내용 폭 1088) — 왼쪽 열 520 · 통로 80 · 오른쪽 열 488 */
+      .canvas { height: 986px; }
+      .canvas > .card, .canvas > .col-head { position: absolute; }
+      .col-head { font-size: 14px; font-weight: 700; color: var(--muted); }
+      #h-left { left: 0; top: 0; }
+      #h-right { left: 600px; top: 0; }
+      /* 왼쪽 계산 단계: 상자 사이 32px, 흐름선은 x = 260 */
+      #in { left: 0; top: 32px; width: 520px; }
+      #calc { left: 0; top: 198px; width: 520px; }
+      #stuck { left: 0; top: 385px; width: 520px; }
+      #type { left: 0; top: 527px; width: 520px; }
+      #out { left: 0; top: 839px; width: 520px; }
+      /* 오른쪽 예시: 짝 상자의 화살표 y가 패널 가운데에 오도록 */
+      #ex-in { left: 600px; top: 38px; width: 488px; }
+      #ex-bars { left: 600px; top: 190px; width: 488px; }
+      #ex-stuck { left: 600px; top: 405px; width: 488px; }
+      #cmp { left: 600px; top: 519px; width: 488px; } /* ex-stuck과 ex-type 사이 가운데 (위아래 약 43px) */
+      #ex-type { left: 600px; top: 664px; width: 488px; }
+      #ex-out { left: 600px; top: 870px; width: 488px; }
+
+      /* 카드 안 공통 */
+      .tags { margin-bottom: 8px; align-items: center; }
+      .tags .ref { margin-top: 0; }
+      .card-body .status { vertical-align: 1px; }
+      .card.example .card-body { color: var(--text); }
+      .card.example > .card-body:first-child { margin-top: 0; }
+
+      /* 예시 · 입력 칩 */
+      #ex-in .card-body { margin-top: 10px; }
+
+      /* 예시 · 단계별 도달률 막대 */
+      #ex-bars .rows { display: grid; gap: 9px; }
+      .bar-row { grid-template-columns: 140px 1fr 40px 48px; }
+      .bar-row .lvk { font-size: 13px; color: var(--muted); font-weight: 600; margin-left: 5px; }
+      .bar-row .cnt { color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
+      .bar-row .pct { font-weight: 700; text-align: right; color: var(--ink); font-variant-numeric: tabular-nums; }
+      .bar-row.stuck .name, .bar-row.stuck .pct, .bar-row.stuck .lvk { color: var(--red-ink); }
+      .ex-note { margin-top: 10px; font-size: 13.5px; color: var(--muted); line-height: 1.5; }
+
+      /* 비교 패널: 태그와 본문 사이를 다른 카드의 태그 → 제목 간격(8px)과 맞춤 */
+      #cmp .card-body { margin-top: 0; }
+
+      /* 지원자 유형 표: 예시 행은 초록 강조 (키트의 빨강 tr.hit은 쓰지 않음) */
+      #type .mini-table { margin-top: 8px; }
+      #type .mini-table td { padding: 5px 8px; }
+      #type .mini-table td:first-child { color: var(--muted); width: 56%; }
+      #type .mini-table td:last-child { font-weight: 700; color: var(--ink); }
+      #type .mini-table tr.ex td { background: var(--green-soft); color: var(--green-ink); font-weight: 700; }
+
+      /* 막힌 단계 예시의 통과 ✓ / 막힘 × */
+      .ok { color: var(--green-ink); font-weight: 700; }
+      .ng { color: var(--red-ink); font-weight: 700; }
+
+      /* 결과 패널 (어두운 초록) */
+      #ex-out { background: var(--green-dark); border-color: var(--green-dark); }
+      #ex-out .card-body { color: #e6f1ea; font-size: 15px; }
+      #ex-out .card-body b { color: #9be0bc; }
+
+      /* 예시 연결: kind llm(파랑)을 점선으로 — 이 그림에는 LLM 선이 없으므로 다른 선에 영향 없음 (범례 '예시 연결') */
+      svg.edges path[stroke="#4b6fae"] { stroke-dasharray: 4 4; }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <div class="fig-head">
+        <span class="badge">그림 5 / 9</span><span class="section-tag">A 내 STAT</span>
+        <span class="status open">계산 방식: 제안 (팀 확정 전)</span>
+      </div>
+      <h1 class="title">내 STAT 계산</h1>
+      <p class="subtitle">기술별 LV를 <b>목표 직무 기준</b>으로 모아 “어느 단계에서 막히는 지원자인가”를 <b>LLM 없이 규칙으로</b> 계산</p>
+
+      <div class="canvas">
+        <div class="col-head" id="h-left">계산 단계</div>
+        <div class="col-head" id="h-right">예시 · 백엔드 지망</div>
+
+        <!-- 왼쪽 열: 계산 단계 (입력 → 규칙 3개 → 출력) -->
+        <div class="card input tight" id="in">
+          <div class="tags"><span class="tag">입력 · 01 + 02</span><span class="ref">그림 2 · 3 · 4</span></div>
+          <div class="card-title">핵심 기술별 LV</div>
+          <div class="card-body">직무 기준표의 핵심 기술 N개 × 02의 기술별 LV · 근거 없으면 ‘미확인’<br /><span class="status open">미정</span> 핵심 기술 목록 · 선정 근거 (직무 기준표 작성 전) — 예시 N = 5</div>
+        </div>
+
+        <div class="card tight" id="calc">
+          <span class="tag rule">규칙 · 제안</span>
+          <div class="card-title">단계별 도달률 계산</div>
+          <div class="card-body">도달률(k) = LV ≥ k인 핵심 기술 수 ÷ N, k = 0~4<br />미확인은 미도달로 보고 분모 N에 포함<br />LV3 ‘실제 활용 · 변경 대응’은 ‘실제 활용’으로 줄이고, LV4 · 5는 ‘개선 · 설계’로 묶음</div>
+        </div>
+
+        <div class="card tight" id="stuck">
+          <span class="tag rule">규칙 · 제안</span>
+          <div class="card-title">막힌 단계 찾기</div>
+          <div class="card-body">도달률이 기준값(예시 50%) 미만으로 <b>처음</b> 떨어지는 단계</div>
+        </div>
+
+        <div class="card tight" id="type">
+          <span class="tag rule">규칙 · 제안</span>
+          <div class="card-title">지원자 유형 진단</div>
+          <div class="card-body">막힌 단계 바로 앞 단계 이름 = 유형</div>
+          <table class="mini-table">
+            <tr><td>기본 수행에서 막힘</td><td>기본 수행 미도달</td></tr>
+            <tr><td>과제 완성에서 막힘</td><td>기본 수행형</td></tr>
+            <tr class="ex" id="row-ex"><td>신뢰성 확보에서 막힘</td><td>과제 완성형</td></tr>
+            <tr><td>실제 활용에서 막힘</td><td>신뢰성 확보형</td></tr>
+            <tr><td>개선 · 설계에서 막힘</td><td>실제 활용형</td></tr>
+            <tr><td>막힘 없음</td><td>개선 · 설계형</td></tr>
+          </table>
+        </div>
+
+        <div class="card output tight" id="out">
+          <div class="tags"><span class="tag out">출력</span><span class="ref">그림 7</span></div>
+          <div class="card-title">STAT 결과</div>
+          <div class="card-body">단계별 도달률 · 유형 · 막힌 단계 → 03 리포트 ① 나는 이런 지원자<br />수치는 규칙 계산값 그대로 · LLM은 03에서 문장만 씀</div>
+        </div>
+
+        <!-- 오른쪽 열: 같은 행의 예시 (FACTS 4장 공통 예시 값) -->
+        <div class="card example tight" id="ex-in">
+          <div class="chips">
+            <span class="chip">Java <span class="lv">LV2</span></span>
+            <span class="chip">Spring <span class="lv">LV1</span></span>
+            <span class="chip">MySQL <span class="lv">LV1</span></span>
+            <span class="chip">Docker <span class="lv">LV0</span></span>
+            <span class="chip dim">AWS 미확인</span>
+          </div>
+          <div class="card-body">핵심 기술 N = 5 (예시) · AWS는 근거 없음 → ‘미확인’</div>
+        </div>
+
+        <div class="card example tight" id="ex-bars">
+          <div class="rows">
+            <div class="bar-row"><span class="name">기본 수행<span class="lvk">LV0+</span></span><div class="bar"><i style="width: 80%"></i></div><span class="cnt">4/5</span><span class="pct">80%</span></div>
+            <div class="bar-row"><span class="name">과제 완성<span class="lvk">LV1+</span></span><div class="bar"><i style="width: 60%"></i></div><span class="cnt">3/5</span><span class="pct">60%</span></div>
+            <div class="bar-row stuck"><span class="name">신뢰성 확보<span class="lvk">LV2+</span></span><div class="bar warn"><i style="width: 20%"></i></div><span class="cnt">1/5</span><span class="pct">20%</span></div>
+            <div class="bar-row"><span class="name">실제 활용<span class="lvk">LV3+</span></span><div class="bar"><i style="width: 0%"></i></div><span class="cnt">0/5</span><span class="pct">0%</span></div>
+            <div class="bar-row"><span class="name">개선 · 설계<span class="lvk">LV4+</span></span><div class="bar"><i style="width: 0%"></i></div><span class="cnt">0/5</span><span class="pct">0%</span></div>
+          </div>
+          <div class="ex-note">LV0+ 미도달 1개 = 미확인 AWS (못함이 아니라 근거 없음)</div>
+        </div>
+
+        <div class="card example tight" id="ex-stuck">
+          <div class="card-body"><span class="ok">LV0+ 80% ✓</span> → <span class="ok">LV1+ 60% ✓</span> → <span class="ng">LV2+ 20% ×</span> (기준 50%)<br />막힌 단계 = <b>신뢰성 확보 (LV2)</b></div>
+        </div>
+
+        <div class="card example tight" id="cmp">
+          <span class="tag">비교 · 평균 LV를 쓰면</span>
+          <div class="card-body">(2 + 1 + 1 + 0 + 0) ÷ 5 = <b>0.8</b> (미확인 AWS = 0)<br />Docker LV0과 AWS 미확인이 같은 0 → 막힌 단계가 안 보임</div>
+        </div>
+
+        <div class="card example tight" id="ex-type">
+          <div class="card-body">막힌 단계 = 신뢰성 확보 (LV2)<br />→ 바로 앞 단계 ‘과제 완성’ → <b>과제 완성형</b></div>
+        </div>
+
+        <div class="card example tight" id="ex-out">
+          <div class="card-body"><b>과제 완성형</b> — 기능은 끝까지 만들지만 예외 검증 · 실제 활용 근거가 없음 · 신뢰성 확보(LV2)에서 막힘</div>
+        </div>
+      </div>
+
+      <div class="note"><span class="note-label">설계 고민</span><div><b>평균 대신 단계별 도달률</b>: 평균 LV 0.8(미확인을 0으로)은 Docker LV0과 AWS 미확인을 같은 0으로 보고 <b>어디서 막혔는지</b>를 감춤 → 도달률 80 · 60 · 20 · 0 · 0%는 ‘신뢰성 확보(LV2)에서 막힘’을 보여줌. 미확인은 분모에 넣어 미도달로 셈(빼면 LV0+가 4/4 = 100%로 부풀려짐) — 단, ‘못함’이 아니라 ‘근거 없음’으로 따로 표시. <b>수치는 모두 규칙 계산</b>이고 LLM은 03 리포트 문장만 씀. 계산 방식 · 기준값 50% · 유형 이름은 제안(팀 확정 전).</div></div>
+
+      <div class="legend">
+        <span><i class="sw rule"></i>규칙·계산</span><span><i class="sw out"></i>출력</span>
+        <span><svg class="lg" width="28" height="8"><line x1="0" y1="4" x2="28" y2="4" stroke="#8fa89a" stroke-width="2.5"/></svg>데이터 흐름</span>
+        <span><svg class="lg" width="28" height="8"><line x1="0" y1="4" x2="28" y2="4" stroke="#4b6fae" stroke-width="2.5" stroke-dasharray="4 4"/></svg>예시 연결</span>
+      </div>
+    </div>
+
+    <script src="../kit/connect.js"></script>
+    <script>
+      // 설계서 4장: f1~f4 데이터 흐름(세로), e1~e5 예시 연결(가로, kind llm + CSS 점선)
+      document.fonts.ready.then(function () {
+        // e4는 유형 표의 강조 행(신뢰성 확보에서 막힘) 높이에서 나간다
+        var card = document.getElementById("type").getBoundingClientRect();
+        var row = document.getElementById("row-ex").getBoundingClientRect();
+        var at = (row.top + row.height / 2 - card.top) / card.height; // 약 0.61
+        edges([
+          { from: "in", to: "calc", fromSide: "bottom", toSide: "top" },
+          { from: "calc", to: "stuck", fromSide: "bottom", toSide: "top" },
+          { from: "stuck", to: "type", fromSide: "bottom", toSide: "top" },
+          { from: "type", to: "out", fromSide: "bottom", toSide: "top" },
+          { from: "in", to: "ex-in", kind: "llm", fromSide: "right", toSide: "left", toAt: "align" },
+          { from: "calc", to: "ex-bars", kind: "llm", fromSide: "right", toSide: "left", toAt: "align" },
+          { from: "stuck", to: "ex-stuck", kind: "llm", fromSide: "right", toSide: "left", toAt: "align" },
+          { from: "type", to: "ex-type", kind: "llm", fromSide: "right", toSide: "left", fromAt: at, toAt: "align" },
+          { from: "out", to: "ex-out", kind: "llm", fromSide: "right", toSide: "left", toAt: "align" },
+        ]);
+      });
+    </script>
+  </body>
+</html>

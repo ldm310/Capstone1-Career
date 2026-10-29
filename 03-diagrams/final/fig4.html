@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <title>그림 4 — LV 누적 판정 규칙</title>
+    <link rel="stylesheet" href="../kit/diagram.css" />
+    <style>
+      /* 배치: 설계서 5장 (canvas 기준 px, 내용 폭 1088) */
+      .canvas { height: 874px; } /* ex 아래 끝(870) + 4 */
+      .canvas > .card { position: absolute; }
+      #in { left: 0; top: 0; width: 524px; }
+      #out5 { left: 940px; top: 0; width: 148px; }
+      #lv5 { left: 940px; top: 160px; }
+      #lv4 { left: 752px; top: 204px; }
+      #lv3 { left: 564px; top: 248px; }
+      #lv2 { left: 376px; top: 292px; }
+      #lv1 { left: 188px; top: 336px; }
+      #lv0 { left: 0; top: 380px; }
+      #stop { left: 0; top: 600px; width: 1088px; }
+      #ex { left: 0; top: 744px; width: 1088px; }
+
+      /* 입력 카드 */
+      #in .states { margin-top: 8px; }
+      .chip.st-met { color: var(--green-ink); }
+      .chip.st-not { color: var(--red-ink); }
+      .chip.st-conf { color: var(--orange-ink); border-color: var(--orange-line); background: var(--orange-soft); }
+      .conf-note {
+        margin-top: 8px;
+        background: var(--orange-soft);
+        border: 1px solid var(--orange-line);
+        border-radius: 8px;
+        padding: 7px 10px;
+        font-size: 14px;
+        line-height: 1.5; /* in 높이 ≤ 250 유지 (설계서 5장: 넘으면 계단 전체를 내려야 함) */
+        color: var(--text);
+      }
+      .rule-line { margin-top: 8px; font-size: 14px; font-weight: 700; line-height: 1.55; white-space: nowrap; color: var(--muted); }
+      .rule-line .y { color: var(--green-ink); }
+      .rule-line .n { color: var(--red-ink); }
+
+      /* LV 단계 상자: 6개 같은 크기, 세로 flex, 마지막 줄은 아래에 붙임 */
+      .lvc { width: 148px; height: 156px; display: flex; flex-direction: column; }
+      .lvc .tag { align-self: flex-start; }
+      .lvc .decide { margin-top: auto; font-size: 14px; font-weight: 700; line-height: 1.4; color: var(--green-ink); }
+
+      /* 판정 예시 */
+      .ex-row { align-items: center; }
+      .ex-row .arr,
+      .ex-row .mut { color: var(--muted); font-size: 14px; }
+      .chip.stopc { background: var(--red-soft); border-color: var(--red-line); color: var(--red-ink); }
+      #ex .card-body { margin-top: 10px; }
+
+      /* 설계 고민: 둘째 덩어리는 새 줄 */
+      .note .limit { display: block; margin-top: 4px; }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <div class="fig-head"><span class="badge">그림 4 / 9</span><span class="section-tag">02 역량 평가 · 규칙</span></div>
+      <h1 class="title">LV 누적 판정 규칙</h1>
+      <p class="subtitle">기술 1개의 조건별 상태로 최종 LV를 계산 — <b>필수 · 선행 조건이 모두 충족된 최고 LV</b>를 반환</p>
+
+      <div class="canvas">
+        <!-- 입력 · 조건별 상태 -->
+        <div class="card input" id="in">
+          <span class="tag">입력 (그림 3)</span>
+          <div class="card-title">조건별 상태 (31개 조건)</div>
+          <div class="chips states">
+            <span class="chip st-met">충족 ✓</span>
+            <span class="chip st-not">미충족 ×</span>
+            <span class="chip dim">근거 부족(미확인) ?</span>
+            <span class="chip st-conf">충돌 !</span>
+          </div>
+          <div class="card-body">적용 조건은 <b>직무 기준표에서 사전 선택</b> (평가 중 임의 면제 X)</div>
+          <div class="conf-note"><b>승급을 막는 충돌 !</b>은 <b>그림 3 선별 재검토</b> → 해결되면 규칙 다시 적용 · 미해결이면 승급 보류(추가 자료 요청·사람 검토)</div>
+          <div class="rule-line"><span class="y">→ 예: 전부 ✓면 다음 단계</span> · <span class="n">↓ 아니오: 하나라도 × · ? · !면 멈춤</span></div>
+        </div>
+
+        <!-- 출력 · 확인 LV5 -->
+        <div class="card output tight" id="out5">
+          <span class="tag out">출력</span>
+          <div class="card-title">확인 LV5</div>
+          <div class="card-body">31개 조건 전부 ✓</div>
+        </div>
+
+        <!-- 단계 판정 상자 LV0~LV5 -->
+        <div class="card tight lvc" id="lv0">
+          <span class="tag rule">LV0</span>
+          <div class="card-title sm">기본 수행</div>
+          <div class="card-body">공통 증거 확인 + L0-01~04 (4개)</div>
+          <div class="decide">전부 ✓ 여부</div>
+        </div>
+        <div class="card tight lvc" id="lv1">
+          <span class="tag rule">LV1</span>
+          <div class="card-title sm">과제 완성</div>
+          <div class="card-body">L1-01~04 (4개)</div>
+          <div class="decide">전부 ✓ 여부</div>
+        </div>
+        <div class="card tight lvc" id="lv2">
+          <span class="tag rule">LV2</span>
+          <div class="card-title sm">신뢰성 확보</div>
+          <div class="card-body">L2-01~05 (5개)</div>
+          <div class="decide">전부 ✓ 여부</div>
+        </div>
+        <div class="card tight lvc" id="lv3">
+          <span class="tag rule">LV3</span>
+          <div class="card-title sm">실제 활용 ·<br />변경 대응</div>
+          <div class="card-body">L3-01~05 (5개)</div>
+          <div class="decide">전부 ✓ 여부</div>
+        </div>
+        <div class="card tight lvc" id="lv4">
+          <span class="tag rule">LV4</span>
+          <div class="card-title sm">측정 기반 개선</div>
+          <div class="card-body">L4-01~06 (6개)</div>
+          <div class="decide">전부 ✓ 여부</div>
+        </div>
+        <div class="card tight lvc" id="lv5">
+          <span class="tag rule">LV5</span>
+          <div class="card-title sm">복합 문제 설계</div>
+          <div class="card-body">L5-01~07 (7개)</div>
+          <div class="decide">전부 ✓ 여부</div>
+        </div>
+
+        <!-- 출력 · 멈춘 경우 -->
+        <div class="card output" id="stop">
+          <span class="tag out">출력</span>
+          <div class="card-title">멈춘 단계의 바로 아래 LV를 반환</div>
+          <div class="card-body">LV0에서 멈추면 LV 미확인(LV0 아님) · 막힌 조건을 <b>미충족 × / 근거 부족(미확인) ? / 충돌 !</b>로 구분해 필요한 자료 표시 · 상위 LV에 제출된 근거는 버리지 않고 보존</div>
+        </div>
+
+        <!-- 판정 예시 -->
+        <div class="card example" id="ex">
+          <span class="tag">판정 예시</span>
+          <div class="chips ex-row">
+            <span class="chip"><span class="lv">LV0 ✓</span></span><span class="arr">→</span>
+            <span class="chip"><span class="lv">LV1 ✓</span></span><span class="arr">→</span>
+            <span class="chip"><span class="lv">LV2 ✓</span></span><span class="arr">→</span>
+            <span class="chip stopc">LV3 · L3-02 실제 활용 기록 ?</span>
+            <span class="mut">멈춤</span>
+            <span class="chip dim">LV4 개선 실험 근거 제출됨 → 보존</span>
+          </div>
+          <div class="card-body"><b>확인 LV2 · 신뢰성 확보</b> — 주요 예외 검증은 확인됨, 실제 활용 기록이 부족해 LV3는 확인하지 못함, 별도로 제출된 개선 실험 근거는 보존.</div>
+        </div>
+      </div>
+
+      <div class="note">
+        <span class="note-label">설계 고민</span>
+        <div>
+          <b>누적형</b>: '근거가 있는 가장 높은 LV'를 쓰는 대안은 실제 활용 없이 개선 실험 근거만으로 LV4를 줄 수 있음 → 누적형은 아래 단계가 비면 위 단계를 인정하지 않아 건너뛴 성장을 막고 <b>막힌 지점</b>(예: L3-02)을 알려줌. LV는 LLM이 아니라 <b>조건 상태 조합을 규칙으로 계산</b>(같은 조건 판정이면 같은 LV)하고, 미충족(못한 것) · 근거&nbsp;부족(근거 없음) · 충돌(근거끼리 어긋남)을 나눠 안내.
+          <span class="limit">한계: 실제 활용 근거가 없으면 LV2가 상한 — 팀 수용 여부 <span class="status open">미정</span> · 이 LV는 잠재력의 상한이 아님(기준표 8장)</span>
+        </div>
+      </div>
+
+      <div class="legend">
+        <span><i class="sw rule"></i>규칙·계산</span>
+        <span><i class="sw risk"></i>위험·선별 검토</span>
+        <span><i class="sw out"></i>출력</span>
+        <span><svg class="lg" width="28" height="8"><line x1="0" y1="4" x2="28" y2="4" stroke="#8fa89a" stroke-width="2.5" /></svg>데이터 흐름</span>
+        <span><svg class="lg" width="28" height="8"><line x1="0" y1="4" x2="28" y2="4" stroke="#b4502f" stroke-width="2.5" /></svg>아니오 · 멈춤</span>
+      </div>
+    </div>
+
+    <script src="../kit/connect.js"></script>
+    <script>
+      // 설계서 4장 edges() 그대로: 다음 단계(예) = 회색 데이터 흐름, 멈춤(아니오) = 빨강
+      const YES = { kind: "flow", fromSide: "right", toSide: "left", fromAt: 0.36, toAt: "align", label: "예", labelDy: -15 };
+      const NO = { kind: "no", fromSide: "bottom", toSide: "top", toAt: "align", labelAt: 0, labelDy: 22 };
+      edges([
+        { from: "in", to: "lv0", fromSide: "bottom", toSide: "top", fromAt: "align", label: "LV0부터 차례로" },
+        { ...YES, from: "lv0", to: "lv1" },
+        { ...YES, from: "lv1", to: "lv2" },
+        { ...YES, from: "lv2", to: "lv3" },
+        { ...YES, from: "lv3", to: "lv4" },
+        { ...YES, from: "lv4", to: "lv5" },
+        { from: "lv5", to: "out5", kind: "flow", fromSide: "top", toSide: "bottom", toAt: "align", label: "예", labelDx: 18 },
+        { ...NO, from: "lv0", to: "stop", label: "아니오 → LV 미확인" },
+        { ...NO, from: "lv1", to: "stop", label: "아니오 → 확인 LV0" },
+        { ...NO, from: "lv2", to: "stop", label: "아니오 → 확인 LV1" },
+        { ...NO, from: "lv3", to: "stop", label: "아니오 → 확인 LV2" },
+        { ...NO, from: "lv4", to: "stop", label: "아니오 → 확인 LV3" },
+        { ...NO, from: "lv5", to: "stop", label: "아니오 → 확인 LV4" },
+      ]);
+    </script>
+  </body>
+</html>

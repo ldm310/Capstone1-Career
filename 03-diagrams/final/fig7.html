@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <title>메타인지 리포트 생성</title>
+    <!-- 그림 7 / 9 · 03 메타인지 리포트 · r2 제작(구성자 B) — r1 fig7.html에서 「제안」 칩 3개만 노랑(plan) → 빨강(open). 문구 · 좌표 · 화살표는 같은 폴더 spec.md 기준. -->
+    <link rel="stylesheet" href="../kit/diagram.css" />
+    <style>
+      .canvas { height: 772px; }
+      .canvas > .card { position: absolute; }
+
+      /* 1줄: 입력 3칸 (폭 336, 간격 40) */
+      .inp { top: 0; width: 336px; }
+      #in-a { left: 0; }
+      #in-b { left: 376px; }
+      #in-02 { left: 752px; }
+
+      /* 2줄: 리포트 네 칸 (폭 250 · 높이 326 고정, 예시 칸은 맨 아래에 붙임) */
+      .rep { top: 180px; width: 250px; height: 326px; display: flex; flex-direction: column; }
+      #s1 { left: 0; }
+      #s2 { left: 276px; }
+      #s3 { left: 552px; }
+      #s4 { left: 838px; }
+      .rep .ex { margin-top: auto; }
+
+      /* 3줄: 리포트 문장 작성 · 수치 일치 확인 · 리포트 화면 (폭 320 · 높이 136 고정) */
+      .bot { top: 590px; width: 320px; height: 136px; }
+      #llm { left: 0; border-color: var(--blue-line); }
+      #check { left: 384px; }
+      #out { left: 768px; }
+
+      .tags { margin-bottom: 8px; align-items: center; }
+      .tags .ref { margin-top: 0; }
+      .head-row { margin-bottom: 2px; }
+      .open-line { margin-top: 8px; font-size: 13.5px; line-height: 1.5; color: var(--text); }
+      .open-line .status { margin-right: 4px; vertical-align: 1px; }
+      .ex { margin-top: 12px; background: var(--example); border: 1px solid var(--example-line); border-radius: 10px; padding: 9px 12px; font-size: 14px; line-height: 1.5; color: var(--text); }
+      .ex-label { font-size: 13px; font-weight: 700; color: var(--muted); margin-bottom: 2px; }
+      .ex b { color: var(--ink); }
+      .ex .warn { color: var(--red-ink); font-weight: 700; }
+      .ex .up { color: var(--green-ink); font-weight: 700; }
+      .nw { white-space: nowrap; }
+      .note .status { vertical-align: 1px; }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <div class="fig-head"><span class="badge">그림 7 / 9</span><span class="section-tag">03 메타인지 리포트</span></div>
+      <h1 class="title">메타인지 리포트 생성</h1>
+      <p class="subtitle">A · B · 02 결과에서 <b>규칙으로 네 칸을 계산</b>하고, LLM은 마지막에 <b>문장만</b> 작성 — 문장 속 수치는 계산값과 대조</p>
+      <div class="canvas">
+        <!-- 1줄: 입력 -->
+        <div class="card input tight inp" id="in-a">
+          <div class="tags"><span class="tag">입력</span><span class="ref">그림 5</span></div>
+          <div class="head-row"><span class="step">A</span><div class="card-title">내 STAT</div></div>
+          <div class="card-body">단계별 도달률 · 지원자 유형 · 막힌 단계</div>
+        </div>
+        <div class="card input tight inp" id="in-b">
+          <div class="tags"><span class="tag">입력</span><span class="ref">그림 6</span></div>
+          <div class="head-row"><span class="step b">B</span><div class="card-title">공고 적합도</div></div>
+          <div class="card-body">적합도 · 등급 · 필수 미충족 · 항목별 요구 LV · 점수</div>
+        </div>
+        <div class="card input tight inp" id="in-02">
+          <div class="tags"><span class="tag">입력</span><span class="ref">그림 3 · 4</span></div>
+          <div class="head-row"><span class="step">02</span><div class="card-title">기술별 LV · 조건 판정</div></div>
+          <div class="card-body">조건 상태(충족 · 미충족 · 미확인 · 충돌) · 필요한 자료</div>
+        </div>
+
+        <!-- 2줄: 리포트 네 칸 -->
+        <div class="card tight rep" id="s1">
+          <div class="tags"><span class="tag rule">규칙</span></div>
+          <div class="card-title">① 나는 이런 지원자</div>
+          <div class="card-body">지원자 유형 + 막힌 단계 +<br />단계별 도달률을 그대로 표시</div>
+          <div class="open-line"><span class="status open">제안</span>STAT 계산 방식 (그림 5)</div>
+          <div class="ex"><div class="ex-label">예시</div><b>과제 완성형</b><br />신뢰성 확보(LV2)에서 막힘<br /><span class="nw">LV0+ 80% → LV1+ 60%</span><br /><span class="nw">→ <span class="warn">LV2+ 20%</span></span><br /><span class="nw">AWS 미확인 = 근거 없음</span></div>
+        </div>
+        <div class="card hold tight rep" id="s2">
+          <div class="tags"><span class="tag rule">규칙</span><span class="tag hold">경고</span></div>
+          <div class="card-title">② 이대로 지원하면</div>
+          <div class="card-body">관심 공고의 등급별 개수 +<br />필수 미충족 공고 수<br />(합격 확률 아님)</div>
+          <div class="open-line"><span class="status open">미정</span>등급 기준 (그림 6)</div>
+          <div class="ex"><div class="ex-label">예시</div>관심 공고 6개<br /><span class="nw"><span class="warn">High 0</span> · Middle 2 · Low 4</span><br />필수 미충족 4개<br /><span class="nw">A사 0.75 · Middle(예시 기준)</span></div>
+        </div>
+        <div class="card tight rep" id="s3">
+          <div class="tags"><span class="tag rule">규칙 · 가정 재계산</span><span class="status open">제안</span></div>
+          <div class="card-title">③ 이것부터 강화</div>
+          <div class="card-body">부족 기술마다 LV +1 가정<br />→ 관심 공고 적합도 재계산<br />→ <b>상승분 합</b>이 큰 순<br />(동률이면 필수 등장 수)</div>
+          <div class="open-line"><span class="status open">미정</span>미확인 기술도 넣을지 *</div>
+          <div class="ex"><div class="ex-label">예시</div><b>1순위 Spring</b>: 공고 4개 상승<br />A사 0.75 → <span class="up">0.88</span> <span class="nw">(High, 예시 기준)</span></div>
+        </div>
+        <div class="card tight rep" id="s4">
+          <div class="tags"><span class="tag rule">규칙</span></div>
+          <div class="card-title">④ 다음 LV에 필요한 증거</div>
+          <div class="card-body">③ 1순위 기술의 다음 LV에서 막힌 <span class="nw">조건 ID</span>(미충족 · 미확인 · 충돌) + <span class="nw">기준표(LV0~5)의</span> ‘확인할 근거’</div>
+          <div class="ex"><div class="ex-label">예시</div><b>Spring → LV2</b> · L2-04<br />예외 · 실패 조건 실제 검증<br /><span class="nw">잘못된 입력 · 권한 · 중복 요청</span><br /><b>테스트 + 실행 결과</b><br /><span class="nw">(테스트 파일만 있으면 불인정)</span></div>
+        </div>
+
+        <!-- 3줄: 문장 작성 · 검사 · 출력 -->
+        <div class="card tight bot" id="llm">
+          <div class="tags"><span class="tag llm">LLM</span></div>
+          <div class="card-title">리포트 문장 작성</div>
+          <div class="card-body">숫자 · 조건 ID는 계산값을 그대로 넣고, LLM은 설명 문장만 작성</div>
+        </div>
+        <div class="card tight bot" id="check">
+          <div class="tags"><span class="tag rule">규칙 · 자동 검사</span></div>
+          <div class="card-title">수치 일치 확인</div>
+          <div class="card-body">문장에 나온 숫자 · 조건 ID가 ①~④ 계산값과 같은지 하나씩 대조</div>
+        </div>
+        <div class="card output tight bot" id="out">
+          <div class="tags"><span class="tag out">출력</span><span class="ref">그림 8</span></div>
+          <div class="card-title">리포트 화면</div>
+          <div class="card-body">① ~ ④ 카드 + 판정 근거(인용) 링크<br />보완 후 새 자료 → 04 재평가</div>
+        </div>
+      </div>
+      <div class="note"><span class="note-label">설계 고민</span><div><b>리포트를 LLM에 통째로 맡기지 않음</b>: 수치 · 순위 · 조건 ID는 규칙이 계산하고, LLM 문장 속 값은 계산값과 대조해 다르면 다시 생성. “이대로면 떨어진다”도 합격 확률 예측이 아니라 <b>“관심 공고 6개 중 High 0”</b> 같은 계산값으로 보여줌. 강화 순위는 LV가 낮은 순이 아니라 <b>올렸을 때 관심 공고 적합도가 가장 많이 오르는 순</b> — <span class="nw">확인된 LV가</span> 가장 낮은 Docker(LV0)는 A사 요구가 LV0이라 올려도 0.75 그대로, Spring은 LV2 가정 시 A사 6 ÷ 8 = 0.75 → 7 ÷ 8 ≈ 0.88.<br />수치는 모두 예시(A사는 가상 공고) · STAT 계산 · 요구 LV 매핑표 · 강화 순위 규칙은 <span class="status open">제안</span> · 등급 기준 · ③의 미확인 포함 여부는 <span class="status open">미정</span></div></div>
+      <div class="footnote">* ③에 미확인 기술을 넣으면 A사 상승분이 AWS(미확인 → LV0: 우대 1 × 점수 +1)와 Spring(LV1 → LV2: 필수 2 × 점수 +0.5) 둘 다 1 ÷ 8 = 0.125로 동률 → 필수 등장 수로 가름 (A사: Spring 필수 · AWS 우대)</div>
+      <div class="legend">
+        <span><i class="sw llm"></i>LLM</span><span><i class="sw rule"></i>규칙·계산</span><span><i class="sw hold"></i>보류·경고</span><span><i class="sw out"></i>출력</span>
+        <span><svg class="lg" width="28" height="8"><line x1="0" y1="4" x2="28" y2="4" stroke="#8fa89a" stroke-width="2.5"/></svg>데이터 흐름</span>
+        <span><svg class="lg" width="28" height="8"><line x1="0" y1="4" x2="28" y2="4" stroke="#1f6f4a" stroke-width="3"/></svg>재판정·반복</span>
+      </div>
+    </div>
+    <script src="../kit/connect.js"></script>
+    <script>
+      // 7~10번: ①~④ 계산값을 네 칸 아래 42px 버스로 모아 llm 위 변 x = 125(①의 가운데)로 넣는다.
+      const BUS = { fromSide: "bottom", toSide: "top", toAt: 125 / 320, via: [{ yOf: "s1", side: "bottom", offset: 42 }] };
+      edges([
+        { from: "in-a", to: "s1", fromSide: "bottom", toSide: "top", fromAt: "align" },
+        { from: "in-b", to: "s2", fromSide: "bottom", toSide: "top", fromAt: "align" },
+        { from: "in-b", to: "s3", fromSide: "bottom", toSide: "top", toAt: 0.3, fromAt: "align" },
+        { from: "in-02", to: "s3", fromSide: "bottom", toSide: "top", toAt: 0.88, fromAt: "align" },
+        { from: "in-02", to: "s4", fromSide: "bottom", toSide: "top", fromAt: "align" },
+        { from: "s3", to: "s4", fromSide: "right", toSide: "left", fromAt: 0.8, toAt: "align" },
+        { from: "s1", to: "llm", fromSide: "bottom", toSide: "top", toAt: "align" },
+        { ...BUS, from: "s2", to: "llm" },
+        { ...BUS, from: "s3", to: "llm" },
+        { ...BUS, from: "s4", to: "llm", label: "①~④ 계산값 (수치 · 순위 · 조건 ID)", labelAt: 0.5 },
+        { from: "llm", to: "check", fromSide: "right", toSide: "left" },
+        { from: "check", to: "out", fromSide: "right", toSide: "left", label: "일치", labelDy: -14 },
+        { from: "check", to: "llm", kind: "loop", fromSide: "bottom", toSide: "bottom", label: "불일치 → 다시 생성" },
+      ]);
+    </script>
+  </body>
+</html>

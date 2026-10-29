@@ -1,0 +1,3 @@
+pydriller==2.12
+certifi
+anthropic

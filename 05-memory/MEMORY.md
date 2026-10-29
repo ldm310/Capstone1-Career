@@ -1,0 +1,10 @@
+- [Codex conversation export](codex-conversation-export.md) — where past Codex capstone chats live; compacted-record gap; contains secrets, never commit
+- [Career LV decisions](career-lv-decisions.md) — LV0~5 rubric (RUBRIC_SOURCE.md) + C tool decision shown to professor; SNAPSHOT_36 caveats; repo still LV1~3
+- [Career v2 flow](career-v2-flow.md) — 자료·목표 → per-skill LV → STAT (5 skills × stage ratio) + 적합도 formula → 메타인지 report → re-eval
+- [claude.ai capstone status](claude-ai-capstone-status.md) — confirmed 4 evidence tools, proposed posting→LV map & grade rule, open default-LV decision, figure fixes, next steps
+- [Career diagram set](career-diagram-set.md) — 그림 1~9 final at diagram-review-2026-10-27/final/, 5-agent approved 10-27; 제안=red chip; open decisions
+- [Career evidence scope](career-evidence-scope.md) — user decision: only main+develop per repo; tool signals keyed by commit SHA (proposal); GitHub API limits; consent
+- [Professor feedback](professor-feedback-midterm.md) — depth over features, STAT + 공고 similarity with visible reasoning, study matching off-topic; midterm asks
+- [Career product context](career-product-context.md) — target users, team roles, user's midterm scope, L/M/H (old vs v2), re-eval, points, jobs sub-menus
+- [Working style](working-style-career.md) — ask before deciding, keep 미정, Korean/concise, free-tier only, no fabricated evidence
+- [User profile](user-profile.md) — capstone student owning Career FE + LV analysis; moved to Claude Code 2026-10-20

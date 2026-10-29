@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <title>그림 6 — 공고 적합도 계산</title>
+    <link rel="stylesheet" href="../kit/diagram.css" />
+    <style>
+      /* 배치: 설계서 5장 (canvas 기준 px, 내용 폭 1088) */
+      .canvas { height: 900px; } /* 예시 줄 아래 끝(892) + 8 */
+      .canvas > .card,
+      .canvas > .col-label { position: absolute; }
+      .col-label { font-size: 14px; font-weight: 700; color: var(--muted); }
+      #lbl-steps { left: 0; top: 0; }
+      #lbl-ex { left: 0; top: 606px; } /* maptable 바닥(579) + 27 */
+
+      /* 계산 단계 줄: 가로 6칸, 카드 사이 28px, 높이 같게 */
+      .step-card { height: 190px; }
+      #in { left: 0; top: 30px; width: 132px; }
+      #llm { left: 160px; top: 30px; width: 180px; }
+      #map { left: 368px; top: 30px; width: 174px; } /* 가운데 x 455 */
+      #score { left: 570px; top: 30px; width: 146px; } /* 가운데 x 643 */
+      #grade { left: 744px; top: 30px; width: 156px; } /* 가운데 x 822 */
+      #out { left: 928px; top: 30px; width: 160px; }
+
+      /* 규칙 상자 줄: 단계 줄과 42px 띄움, 두 상자 바닥 맞춤 */
+      #maptable { left: 0; top: 262px; width: 548px; }
+      #gradetable { left: 576px; top: 262px; width: 512px; height: 317px; }
+
+      /* 예시 줄 */
+      #ex-table { left: 0; top: 634px; width: 700px; height: 258px; }
+      #ex-calc { left: 728px; top: 634px; width: 360px; height: 258px; }
+
+      /* 공통 */
+      .tags { margin-bottom: 8px; align-items: center; }
+      .nw { white-space: nowrap; }
+      .card-body .stop { margin-top: 4px; font-weight: 700; color: var(--blue-ink); }
+      .ex { color: var(--muted); font-weight: 600; }
+
+      /* 요구 LV 매핑표 */
+      .card-title .sub { font-size: 14px; font-weight: 600; color: var(--muted); margin-left: 6px; }
+      .mini-table.compact { margin-top: 6px; }
+      .mini-table.compact td { padding: 3px 8px; font-size: 14px; }
+      .mini-table.compact th { padding: 3px 8px; }
+      .mini-table.compact th:first-child { width: 150px; }
+      .mini-table .lvname { color: var(--muted); font-size: 13px; margin-left: 4px; }
+      .fn-mark { color: var(--muted); font-weight: 700; margin-left: 1px; }
+      .rule-note { margin-top: 8px; font-size: 13.5px; line-height: 1.5; color: var(--text); }
+
+      /* 점수 · 적합도 · 등급 규칙 (높이 317 고정: 남는 높이를 구획 사이 간격으로 나눔) */
+      .score-chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 12px; font-size: 13.5px; color: var(--muted); }
+      .score-chips .chip { font-size: 13.5px; padding: 3px 10px; }
+      .fit-line { margin-top: 12px; }
+      .opt-head { margin-top: 16px; font-size: 14px; font-weight: 700; color: var(--ink); display: flex; gap: 8px; align-items: center; }
+      .opt-head .muted { font-weight: 500; color: var(--muted); font-size: 13.5px; }
+      .opts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+      .opt { border: 1px solid var(--line); border-radius: 10px; padding: 12px 12px; font-size: 14px; line-height: 1.5; color: var(--text); background: #fafcfb; }
+      .opt b { color: var(--ink); }
+
+      /* 예시 표: 첫 줄 = 출처 태그, 묶음마다 2px 밑줄(묶음 사이 8px 틈) */
+      .mini-table.ex td,
+      .mini-table.ex th { padding: 5px 7px; }
+      .mini-table.ex tr.src th {
+        border-bottom: none;
+        padding-bottom: 5px;
+        background-repeat: no-repeat;
+        background-position: center bottom;
+        background-size: calc(100% - 8px) 2px;
+      }
+      .mini-table.ex tr.src .tag { margin-bottom: 0; }
+      .mini-table.ex tr.src th.g-llm { background-image: linear-gradient(var(--blue-line), var(--blue-line)); }
+      .mini-table.ex tr.src th.g-rule { background-image: linear-gradient(var(--green-line), var(--green-line)); }
+      .mini-table.ex tr.src th.g-in { background-image: linear-gradient(var(--line), var(--line)); }
+      .mini-table .dim { color: var(--muted); }
+      .mini-table.ex tr.hit td.cite { font-weight: 500; } /* 원문 인용 칸만 보통 굵기 → '예외 처리'가 보임 */
+      .mini-table.ex tr.hit td.cite b { font-weight: 800; }
+      .tbl-foot { margin-top: 8px; font-size: 13px; color: var(--muted); }
+
+      /* 계산 · 결과 상자 */
+      .sec + .sec { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--example-line); }
+      .ex-label { font-size: 13px; font-weight: 700; color: var(--muted); }
+      .formula { font-size: 14.5px; line-height: 1.6; color: var(--text); margin: 4px 0 10px; font-variant-numeric: tabular-nums; }
+      .formula b { color: var(--blue-ink); }
+      .grade-row { display: flex; align-items: center; gap: 10px; margin-top: 6px; flex-wrap: wrap; }
+      .grade-row .big { font-size: 30px; font-weight: 800; color: var(--blue-ink); line-height: 1; }
+      .grade-pill { display: inline-block; padding: 3px 12px; border-radius: 999px; background: var(--yellow-soft); border: 1px solid var(--yellow-line); color: var(--yellow-ink); font-weight: 700; font-size: 14px; }
+      .grade-row .tag { margin-bottom: 0; }
+      .res { font-size: 14.5px; line-height: 1.6; color: var(--text); margin-top: 4px; }
+      .res b { color: var(--ink); }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <div class="fig-head"><span class="badge">그림 6 / 9</span><span class="section-tag">B 공고 적합도</span></div>
+      <h1 class="title">공고 적합도 계산</h1>
+      <p class="subtitle">공고 요구를 <b>기준표(LV0~5)와 같은 단계</b>로 바꿔 내 LV와 항목별로 비교 — 합격 확률이 아니라 <b>요구 충족도</b></p>
+
+      <div class="canvas">
+        <!-- 3-1. 계산 단계 줄 -->
+        <div class="col-label" id="lbl-steps">계산 단계</div>
+
+        <div class="card input step-card" id="in">
+          <span class="tag">입력</span>
+          <div class="card-title sm">공고 원문</div>
+          <div class="card-body">01에서 저장한 관심 공고</div>
+          <span class="ref">그림 2</span>
+        </div>
+        <div class="card step-card" id="llm">
+          <span class="tag llm">LLM</span>
+          <div class="card-title sm">요구 문장 추출</div>
+          <div class="card-body">기술명 · 공고 표현 · 필수/우대 · 원문 인용만<div class="stop">요구 LV는 안 정함</div></div>
+        </div>
+        <div class="card step-card" id="map">
+          <div class="tags"><span class="tag rule">규칙</span><span class="status open">제안</span></div>
+          <div class="card-title sm">요구 LV 매핑</div>
+          <div class="card-body">동의어 통일 · 인용 확인 → <b>매핑표</b>로 <span class="nw">요구 LV 결정</span></div>
+        </div>
+        <div class="card step-card" id="score">
+          <span class="tag rule">규칙</span>
+          <div class="card-title sm">항목별 점수</div>
+          <div class="card-body">내 기술별 LV(02) vs 요구 LV <span class="nw">→ 1 · 0.5 · 0</span> (예시)</div>
+        </div>
+        <div class="card step-card" id="grade">
+          <div class="tags"><span class="tag rule">규칙</span><span class="status open">미정</span></div>
+          <div class="card-title sm">가중 합 · 등급</div>
+          <div class="card-body">적합도 → 등급 · 필수 미충족 경고</div>
+        </div>
+        <div class="card output step-card" id="out">
+          <span class="tag out">출력</span>
+          <div class="card-title sm">공고별 결과</div>
+          <div class="card-body">적합도 · 등급 · <span class="nw">부족/미확인 →</span> <span class="nw">03 리포트 ②·③</span></div>
+          <span class="ref">그림 7</span>
+        </div>
+
+        <!-- 3-2. 규칙 상자 줄 -->
+        <div class="card" id="maptable">
+          <div class="tags"><span class="tag rule">규칙</span><span class="status open">제안</span></div>
+          <div class="card-title">요구 LV 매핑표<span class="sub">기준표(LV0~5) 기반</span></div>
+          <table class="mini-table compact">
+            <tr><th>요구 LV</th><th>공고 표현</th></tr>
+            <tr><td><b>LV0</b><span class="lvname">기본 수행</span></td><td>사용·활용 경험, 환경 구성, 배포 경험<span class="fn-mark">*</span></td></tr>
+            <tr><td><b>LV1</b><span class="lvname">과제 완성</span></td><td>웹 서비스·기능 개발, CRUD 구현</td></tr>
+            <tr><td><b>LV2</b><span class="lvname">신뢰성 확보</span></td><td>예외 처리, 예외·실패 케이스 테스트, 권한·트랜잭션</td></tr>
+            <tr><td><b>LV3</b><span class="lvname">실제 활용·변경 대응</span></td><td>서비스 운영, 유지보수, 장애 대응</td></tr>
+            <tr><td><b>LV4</b><span class="lvname">측정 기반 개선</span></td><td>성능 개선, 쿼리 최적화, 병목 분석</td></tr>
+            <tr><td><b>LV5</b><span class="lvname">복합 문제 설계</span></td><td>아키텍처·고가용성 설계</td></tr>
+          </table>
+          <div class="rule-note">'테스트 작성 경험'만 → LV1 ('예외·실패'가 명시돼야 LV2) · 'MSA 경험'처럼 이름만 → LV5 아님</div>
+          <div class="rule-note"><span class="status open">미정</span> 기술 이름만 나열된 공고의 기본 요구 LV: LV0(기준표 그대로) / LV1(실무 기대)</div>
+        </div>
+
+        <div class="card" id="gradetable">
+          <span class="tag rule">규칙</span>
+          <div class="card-title">점수 · 적합도 · 등급 규칙</div>
+          <div class="card-body">
+            <div class="score-chips">항목 점수 (예시)<span class="chip">충족 1</span><span class="chip">1단계 부족 0.5</span><span class="chip">2단계 이상 부족 0</span><span class="chip dim">미확인 0</span></div>
+            <div class="fit-line">적합도 = Σ(가중치 × 점수) ÷ Σ가중치 · 가중치 <span class="ex">(예시)</span> 필수 2 · 우대 1</div>
+          </div>
+          <div class="opt-head">등급 규칙 <span class="status open">미정</span><span class="muted">두 안 중 팀 결정 전</span></div>
+          <div class="opts">
+            <div class="opt"><b>(a) 예시</b> <span class="nw">Low &lt; 0.5 ≤ Middle</span> <span class="nw">&lt; 0.8 ≤ High</span> + 필수 항목 점수가 <span class="nw">1 미만이면</span> <span class="nw">'필수 미충족'</span> 경고</div>
+            <div class="opt"><b>(b) 제안</b> 필수 항목 기준으로 등급, 우대는 옆에 따로 표시 · Low를 <span class="nw">'근거 부족'</span> / <span class="nw">'역량 부족'으로</span> 나눔</div>
+          </div>
+        </div>
+
+        <!-- 3-3. 예시 줄 -->
+        <div class="col-label" id="lbl-ex">예시 · A사 백엔드 신입 (가상 공고)</div>
+        <div class="card example" id="ex-table">
+          <table class="mini-table ex">
+            <tr class="src">
+              <th colspan="3" class="g-llm"><span class="tag llm">LLM 추출</span></th>
+              <th class="g-rule"><span class="tag rule">매핑표</span></th>
+              <th class="g-in"><span class="tag">02 결과</span></th>
+              <th class="num g-rule"><span class="tag rule">규칙</span></th>
+            </tr>
+            <tr><th>원문 인용 (굵게 = 공고 표현)</th><th>기술</th><th>구분</th><th>요구 LV</th><th>내 LV</th><th class="num">점수</th></tr>
+            <tr><td>Java 기반 <b>기능 구현</b></td><td>Java</td><td>필수</td><td>LV1</td><td>LV2</td><td class="num">1</td></tr>
+            <tr class="hit"><td class="cite">Spring Boot <b>예외 처리</b> · 테스트 작성 경험</td><td>Spring Boot → Spring</td><td>필수</td><td>LV2</td><td>LV1</td><td class="num">0.5</td></tr>
+            <tr><td>MySQL 활용 <b>CRUD 구현</b></td><td>MySQL</td><td>필수</td><td>LV1</td><td>LV1</td><td class="num">1</td></tr>
+            <tr><td>Docker 기반 개발 <b>환경 구성</b></td><td>Docker</td><td>우대</td><td>LV0</td><td>LV0</td><td class="num">1</td></tr>
+            <tr><td>AWS 환경 <b>배포 구성 경험</b></td><td>AWS</td><td>우대</td><td>LV0</td><td class="dim">미확인</td><td class="num">0</td></tr>
+          </table>
+          <div class="tbl-foot">인용 5/5 원문에서 확인 · Spring Boot → Spring (동의어 통일)</div>
+        </div>
+
+        <div class="card example" id="ex-calc">
+          <div class="sec">
+            <div class="ex-label">가중 합 · 필수 2 · 우대 1 (예시)</div>
+            <div class="formula">(2×1 + 2×0.5 + 2×1 + 1×1 + 1×0)<br />÷ (2+2+2+1+1) = 6 ÷ 8 = <b>0.75</b></div>
+          </div>
+          <div class="sec">
+            <div class="ex-label">등급 · (a) 예시 기준</div>
+            <div class="grade-row"><span class="big">0.75</span><span class="grade-pill">Middle</span><span class="tag hold">필수 미충족: Spring</span></div>
+          </div>
+          <div class="sec">
+            <div class="ex-label">공고별 결과 → 03 리포트</div>
+            <div class="res"><b>A사 0.75 · Middle</b>(예시 기준)<br />부족: Spring(1단계) · 미확인: AWS</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="note">
+        <span class="note-label">설계 고민</span>
+        <div>공고와의 유사도를 <b>임베딩 유사도 대신 요구 충족도</b>로 계산 — 유사도는 'Spring' 단어만 맞아도 높게 나올 수 있어 왜 부족한지 못 보여줌 → 요구 LV로 비교하면 'Spring LV2 요구 · 내 LV1 → 1단계 부족'이 보임. <b>LLM은 문장 추출만</b> 하고, 요구 LV는 지원자 LV와 <b>같은 기준표 기반 매핑표(제안)</b>가, 점수·등급은 <b>규칙</b>이 정함. 미확인은 LV0이 아니라 <b>0점</b> (LV0으로 치면 근거 없는 AWS도 '충족'이 됨). 가중치·점수값은 예시, 매핑표는 제안, 등급 규칙은 미정.</div>
+      </div>
+      <div class="footnote">* 매핑 근거 예: 기준표 LV0 직무 예시 '배포: 특정 버전을 서버에서 실행하고 의도한 접근·동작 확인' → 공고의 '배포 경험'은 LV0</div>
+
+      <div class="legend">
+        <span><i class="sw llm"></i>LLM</span>
+        <span><i class="sw rule"></i>규칙·계산</span>
+        <span><i class="sw hold"></i>보류·경고</span>
+        <span><i class="sw out"></i>출력</span>
+        <span><svg class="lg" width="28" height="8"><line x1="0" y1="4" x2="28" y2="4" stroke="#8fa89a" stroke-width="2.5" /></svg>데이터 흐름</span>
+        <span><svg class="lg" width="28" height="8"><line x1="0" y1="4" x2="28" y2="4" stroke="#8fa89a" stroke-width="2.5" stroke-dasharray="6 4" /></svg>참고·피드백</span>
+        <span><span class="status open">제안 · 미정</span> 팀 확정 전</span>
+      </div>
+    </div>
+
+    <script src="../kit/connect.js"></script>
+    <script>
+      // 설계서 4장 edges() 그대로: 단계 1~5 = 데이터 흐름, 규칙 상자 → 단계 = 참고(점선, 위쪽)
+      edges([
+        { from: "in", to: "llm" },
+        { from: "llm", to: "map" },
+        { from: "map", to: "score" },
+        { from: "score", to: "grade" },
+        { from: "grade", to: "out" },
+        { from: "maptable", to: "map", kind: "ref", fromSide: "top", toSide: "bottom", fromAt: "align" },
+        { from: "gradetable", to: "score", kind: "ref", fromSide: "top", toSide: "bottom", fromAt: "align" },
+        { from: "gradetable", to: "grade", kind: "ref", fromSide: "top", toSide: "bottom", fromAt: "align" },
+      ]);
+    </script>
+  </body>
+</html>

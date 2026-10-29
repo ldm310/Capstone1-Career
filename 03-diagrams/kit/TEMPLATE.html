@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <title>템플릿</title>
+    <link rel="stylesheet" href="file:///Users/idongmin/Desktop/capstone1-career/diagram-review-2026-10-27/kit/diagram.css" />
+    <style>
+      /* 그림마다 .canvas 높이와 카드 위치(px)를 직접 정한다 */
+      .canvas { height: 520px; }
+      .canvas > .card { position: absolute; }
+      #in-gh { left: 0; top: 40px; width: 180px; }
+      #in-pdf { left: 0; top: 190px; width: 180px; }
+      #s01 { left: 240px; top: 100px; width: 200px; }
+      #s02 { left: 500px; top: 100px; width: 220px; }
+      #role { left: 500px; top: -10px; width: 220px; }
+      #sA { left: 790px; top: 20px; width: 190px; }
+      #sB { left: 790px; top: 210px; width: 190px; }
+      #s03 { left: 1010px; top: 110px; width: 78px; }
+      #s04 { left: 0; top: 400px; width: 1088px; }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <div class="fig-head"><span class="badge">그림 0 / 9</span><span class="section-tag">템플릿</span></div>
+      <h1 class="title">템플릿 제목</h1>
+      <p class="subtitle">한 줄 설명 — <b>강조</b>는 굵은 초록</p>
+      <div class="canvas">
+        <div class="card input" id="in-gh"><span class="tag">입력</span><div class="card-title">GitHub</div><div class="card-body">본인 commit · 변경 내용</div></div>
+        <div class="card input" id="in-pdf"><span class="tag">입력</span><div class="card-title">PDF · MD</div><div class="card-body">이력서 · 프로젝트</div></div>
+        <div class="card" id="s01"><div class="head-row"><span class="step">01</span><div class="card-title">자료 수집</div></div><div class="card-body">출처 · 버전 · 위치</div><span class="ref">그림 2</span></div>
+        <div class="card input" id="role"><span class="tag">입력</span><div class="card-title sm">목표 직무</div></div>
+        <div class="card" id="s02"><div class="head-row"><span class="step">02</span><div class="card-title">역량 평가</div></div><div class="card-body">LLM 해석 + 규칙 판정 <span class="status done">구현됨</span> <span class="status plan">계획</span></div></div>
+        <div class="card" id="sA"><div class="head-row"><span class="step">A</span><div class="card-title">내 STAT</div></div></div>
+        <div class="card" id="sB"><div class="head-row"><span class="step b">B</span><div class="card-title">공고 적합도</div></div></div>
+        <div class="card output" id="s03"><span class="tag out">출력</span><div class="card-title sm">03</div></div>
+        <div class="card soft" id="s04"><div class="head-row"><span class="step">04</span><div class="card-title">재평가</div></div></div>
+      </div>
+      <div class="note"><span class="note-label">설계 고민</span><div>설계 고민 문장 — <b>핵심</b>은 굵은 초록.</div></div>
+      <div class="legend">
+        <span><i class="sw llm"></i>LLM</span><span><i class="sw rule"></i>규칙·계산</span><span><i class="sw risk"></i>위험·선별 검토</span><span><i class="sw hold"></i>보류·경고</span><span><i class="sw out"></i>출력</span>
+        <span><svg class="lg" width="28" height="8"><line x1="0" y1="4" x2="28" y2="4" stroke="#8fa89a" stroke-width="2.5"/></svg>데이터 흐름</span>
+        <span><svg class="lg" width="28" height="8"><line x1="0" y1="4" x2="28" y2="4" stroke="#1f6f4a" stroke-width="3"/></svg>재판정·반복</span>
+        <span><svg class="lg" width="28" height="8"><line x1="0" y1="4" x2="28" y2="4" stroke="#8fa89a" stroke-width="2.5" stroke-dasharray="6 4"/></svg>참고·피드백</span>
+      </div>
+    </div>
+    <script src="file:///Users/idongmin/Desktop/capstone1-career/diagram-review-2026-10-27/kit/connect.js"></script>
+    <script>
+      edges([
+        { from: "in-gh", to: "s01", toAt: 0.35 },
+        { from: "in-pdf", to: "s01", toAt: 0.7 },
+        { from: "s01", to: "s02" },
+        { from: "role", to: "s02", fromSide: "bottom", toSide: "top", label: "직무 기준표" },
+        { from: "s02", to: "sA", fromAt: 0.3 },
+        { from: "s02", to: "sB", fromAt: 0.7 },
+        { from: "sA", to: "s03", toAt: 0.3 },
+        { from: "sB", to: "s03", toAt: 0.7 },
+        { from: "s03", to: "s04", fromSide: "bottom", toSide: "right", kind: "ref", label: "새 자료" },
+        { from: "s04", to: "s01", fromSide: "top", toSide: "bottom", fromAt: "align", kind: "loop", label: "01부터 다시" },
+      ]);
+    </script>
+  </body>
+</html>

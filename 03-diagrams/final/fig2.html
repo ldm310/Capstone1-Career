@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <title>그림 2 — 자료 수집 · 증거 정리</title>
+    <link rel="stylesheet" href="../kit/diagram.css" />
+    <style>
+      /* 배치: 설계서 5장 (canvas 기준 px, 내용 폭 1088)
+         열: c1 입력 0–176 · 처리 212–620 (반으로 212–398 / 434–620) · c4 증거 단위 656–896 · c5 출력 932–1088 */
+      .canvas { height: 840px; }
+      .canvas > .card { position: absolute; }
+
+      /* 카드 첫 줄: 왼쪽 태그 · 오른쪽 상태 칩 (설계서 3장 공통 규칙) */
+      .tag-row { display: flex; justify-content: space-between; align-items: center; gap: 6px; margin-bottom: 8px; }
+      .tag-row .tag { margin-bottom: 0; }
+
+      /* 레포에 없는 상자 = 점선. kit 기본 점선 색이 옅어서 진하게, 출력 점선은 초록 유지 */
+      .card.planned { border-color: #b5c3bb; }
+      .card.output.planned { border-color: var(--green); }
+
+      .vcenter { display: flex; flex-direction: column; justify-content: center; }
+      .card-body .status { vertical-align: 1px; margin-left: 4px; }
+
+      /* 증거 단위 카드 (설계서 3-1) */
+      .fields { display: grid; grid-template-columns: 34px 1fr; gap: 3px 8px; margin-top: 4px; font-size: 14px; line-height: 1.5; color: var(--muted); }
+      .fields b { color: var(--ink); font-weight: 700; }
+      .signal { margin-top: 10px; padding-top: 8px; border-top: 1px solid #e3e9e5; font-size: 14px; line-height: 1.5; color: var(--muted); }
+      .signal b { color: var(--ink); }
+      .sub { margin-top: 8px; font-size: 13.5px; line-height: 1.45; color: var(--muted); }
+      .nw { white-space: nowrap; }
+
+      /* 머리말 아래 '지금 레포' 줄 (설계서 2장) */
+      .now-line { margin-top: 14px; display: flex; gap: 8px; align-items: flex-start; background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 9px 14px; font-size: 14.5px; line-height: 1.55; color: var(--text); }
+      .now-line .tag { margin: 1px 0 0; flex: none; }
+      .now-line .status { flex: none; margin-top: 2px; }
+      .now-line b { color: var(--ink); }
+
+      /* 범례용 색 상자 (설계서 7장) */
+      .sw.gray { background: #e9eeeb; border-color: #d3dbd6; }
+      .sw.dash { background: #fff; border: 1.5px dashed #9fb0a6; }
+
+      /* 상자 위치 (설계서 5장 표) */
+      #in-gh { left: 0; top: 0; width: 176px; height: 280px; }
+      #gh-diff { left: 212px; top: 0; width: 186px; height: 132px; }
+      #gh-blame { left: 434px; top: 0; width: 186px; height: 132px; }
+      #gh-run { left: 212px; top: 148px; width: 408px; height: 132px; }
+      #in-doc { left: 0; top: 304px; width: 176px; height: 156px; }
+      #doc-text { left: 212px; top: 304px; width: 186px; height: 156px; }
+      #doc-ver { left: 434px; top: 304px; width: 186px; height: 156px; }
+      #ev { left: 656px; top: 24px; width: 240px; height: 400px; }
+      #ev-out { left: 932px; top: 153px; width: 156px; height: 142px; }
+      #in-role { left: 0; top: 492px; width: 176px; height: 186px; }
+      #role-load { left: 212px; top: 492px; width: 408px; height: 186px; }
+      #role-out { left: 932px; top: 492px; width: 156px; height: 186px; }
+      #in-job { left: 0; top: 698px; width: 176px; height: 142px; }
+      #job-store { left: 212px; top: 698px; width: 408px; height: 142px; }
+      #job-out { left: 932px; top: 698px; width: 156px; height: 142px; }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <div class="fig-head"><span class="badge">그림 2 / 9</span><span class="section-tag">01 자료 등록</span></div>
+      <h1 class="title">자료 수집 · 증거 정리</h1>
+      <p class="subtitle">사용자 자료를 <b>출처 · 버전 · 위치가 붙은 증거 단위</b>로 정리하고, 비교 기준(직무 기준표 · 공고 원문)을 준비</p>
+      <div class="now-line"><span class="tag">지금 레포</span><span class="status done">구현됨</span><span>공개 GitHub 저장소(기본 브랜치 파일 최대 20개)와 PDF · MD 텍스트에서 정규식(기술 20개)으로 기술 이름이 나온 줄만 찾음 — <b>본인 commit · diff 수집도, <span class="nw">LV 판정도 아님</span></b>. 아래는 목표 설계, 상자마다 현재 상태 표시 (구성요소별 상태는 그림 9)</span></div>
+
+      <div class="canvas">
+        <!-- GitHub: 두 행에 걸친 입력 하나 → 변경 내용 · 본인 기여 / 실행 · 활용 기록 -->
+        <div class="card input tight vcenter" id="in-gh">
+          <div class="tag-row"><span class="tag">입력</span><span class="status done">구현됨</span></div>
+          <div class="card-title">GitHub 연동</div>
+          <div class="card-body">공개 저장소 URL<br>본인 계정 인증<span class="status plan">계획</span></div>
+        </div>
+
+        <div class="card planned tight" id="gh-diff">
+          <div class="tag-row"><span class="tag">수집</span><span class="status plan">계획</span></div>
+          <div class="card-title">변경 내용 수집</div>
+          <div class="card-body">commit hash(버전)<br>diff · 파일 경로</div>
+        </div>
+
+        <div class="card planned tight" id="gh-blame">
+          <div class="tag-row"><span class="tag tool">확정 도구</span><span class="status plan">계획</span></div>
+          <div class="card-title">본인 기여 표시</div>
+          <div class="card-body"><b class="nw">PyDriller + git blame</b><br>본인 commit · 변경 줄</div>
+        </div>
+
+        <div class="card planned tight" id="gh-run">
+          <div class="tag-row"><span class="tag tool">확정 도구</span><span class="status plan">계획</span></div>
+          <div class="card-title">실행 · 활용 기록 수집</div>
+          <div class="card-body"><b>GitHub API</b> — Actions 실행 기록 · 이슈 · PR · 배포<br>실행 · 배포 기록은 commit hash로 코드 버전에 연결</div>
+        </div>
+
+        <!-- PDF · MD -->
+        <div class="card input tight" id="in-doc">
+          <div class="tag-row"><span class="tag">입력</span><span class="status done">구현됨</span></div>
+          <div class="card-title">PDF · MD 업로드</div>
+          <div class="card-body">이력서 · 프로젝트 · <span class="nw">학습 정리</span> · 실습 결과</div>
+        </div>
+
+        <div class="card tight" id="doc-text">
+          <div class="tag-row"><span class="tag">수집</span><span class="status done">구현됨</span></div>
+          <div class="card-title">텍스트 추출</div>
+          <div class="card-body">PDF(pdf-parse) · MD<br>원본 + 추출 텍스트 저장</div>
+        </div>
+
+        <div class="card planned tight" id="doc-ver">
+          <div class="tag-row"><span class="tag rule">규칙</span><span class="status plan">계획</span></div>
+          <div class="card-title">위치 · 버전 기록</div>
+          <div class="card-body">페이지 · 섹션 분리<br>파일 해시 · 업로드 시각<br>(수정본 = 새 버전)</div>
+        </div>
+
+        <!-- 핵심 카드: 증거 단위 (설계서 3-1) -->
+        <div class="card planned tight vcenter" id="ev">
+          <div class="tag-row"><span class="tag rule">규칙</span><span class="status plan">계획</span></div>
+          <div class="card-title">증거 단위 정리</div>
+          <div class="card-body">증거 1건 =</div>
+          <div class="fields">
+            <b>출처</b><span>commit · 실행 · 이슈 · PR · 배포 · 문서</span>
+            <b>버전</b><span>commit hash · 파일 해시</span>
+            <b>위치</b><span>파일 · 줄 / 페이지 · 섹션<br>GitHub 기록 번호</span>
+            <b>원문</b><span>그대로 인용할 줄 · 문장</span>
+          </div>
+          <div class="signal"><b>+ 본인 기여 신호</b> (blame 결과)<br>최종 판단은 02 (그림 3)</div>
+          <div class="sub">Opengrep / tree-sitter 도구 신호는 02에서 생성</div>
+        </div>
+
+        <div class="card output planned tight" id="ev-out">
+          <div class="tag-row"><span class="tag out">출력</span><span class="status plan">계획</span></div>
+          <div class="card-title">증거 목록</div>
+          <div class="card-body">→ 02 역량 평가</div>
+          <span class="ref">그림 3</span>
+        </div>
+
+        <!-- 비교 기준: 직무 기준표 (증거 단위를 거치지 않음) -->
+        <div class="card input tight" id="in-role">
+          <div class="tag-row"><span class="tag">입력</span><span class="status done">구현됨</span></div>
+          <div class="card-title">목표 직무 선택</div>
+          <div class="card-body">백엔드 · 데이터<br>(AI 등은 추후 확장)</div>
+        </div>
+
+        <div class="card planned tight" id="role-load">
+          <div class="tag-row"><span class="tag rule">규칙</span><span class="status open">미정</span></div>
+          <div class="card-title">직무 기준표 불러오기</div>
+          <div class="card-body">핵심 기술 목록 + 기술별 적용 조건 · 필수 검증 항목<br>사전 정의 · 평가 중 임의 면제 X<br><span class="warn">직무 기준표 v1 작성 전 — 핵심 기술 목록 · 선정 근거 미정</span></div>
+        </div>
+
+        <div class="card output planned tight" id="role-out">
+          <div class="tag-row"><span class="tag out">출력</span><span class="status open">미정</span></div>
+          <div class="card-title">직무 기준표</div>
+          <div class="card-body">→ 02 적용 조건<br>→ A 핵심 기술<br><span class="warn">v1 작성 전</span></div>
+          <span class="ref">그림 3 · 4 · 5</span>
+        </div>
+
+        <!-- 비교 기준: 공고 원문 (증거 단위를 거치지 않음) -->
+        <div class="card input tight" id="in-job">
+          <div class="tag-row"><span class="tag">입력</span><span class="status done">구현됨</span></div>
+          <div class="card-title">관심 채용공고</div>
+          <div class="card-body">Lever 공고 URL 또는 붙여 넣은 텍스트</div>
+        </div>
+
+        <div class="card tight" id="job-store">
+          <div class="tag-row"><span class="tag">수집</span><span class="status done">구현됨</span></div>
+          <div class="card-title">공고 원문 저장</div>
+          <div class="card-body">Lever 공개 공고 수집(5분 캐시) · 붙여 넣은 텍스트<br>원문 그대로 보관 (요구 추출은 B에서)</div>
+        </div>
+
+        <div class="card output tight" id="job-out">
+          <div class="tag-row"><span class="tag out">출력</span><span class="status done">구현됨</span></div>
+          <div class="card-title">공고 원문</div>
+          <div class="card-body">→ B 공고 적합도</div>
+          <span class="ref">그림 6</span>
+        </div>
+      </div>
+
+      <div class="note"><span class="note-label">설계 고민</span><div>자료를 통째로 LLM에 넘기지 않고 <b>출처 · 버전 · 위치 · 원문 단위</b>로 쪼갬 → 02가 인용이 원문에 실제로 있는지, 다른 버전 결과를 섞지 않았는지<span class="nw">(LV0 ‘다른 버전 결과 불인정’)</span>를 <b>규칙으로 검사</b>할 수 있음. 문서는 자기 서술이라 <b>버전이 연결된 실행 결과(L0-03 · L2-04)와 활용 · 변경 기록(L3-02 ~ 05)</b>은 GitHub 기록에서 직접 받고, 본인 기여는 신호만 붙임(commit 작성자만으로 확정 X).</div></div>
+      <p class="footnote">목표 직무가 바뀌면 증거는 그대로 두고 직무 기준표만 다시 불러와 02부터 재평가 (그림 8)</p>
+      <div class="legend">
+        <span><i class="sw gray"></i>입력 · 수집</span>
+        <span><i class="sw tool"></i>확정 도구</span>
+        <span><i class="sw rule"></i>규칙·계산</span>
+        <span><i class="sw out"></i>출력</span>
+        <span><svg class="lg" width="28" height="8"><line x1="0" y1="4" x2="28" y2="4" stroke="#8fa89a" stroke-width="2.5"/></svg>데이터 흐름</span>
+        <span><span class="status done">구현됨</span> 레포에 있음</span>
+        <span><span class="status plan">계획</span> 아직 미구현</span>
+        <span><span class="status open">미정</span> 팀 결정 전</span>
+        <span><i class="sw dash"></i>점선 상자 = 레포에 없음</span>
+      </div>
+    </div>
+    <script src="../kit/connect.js"></script>
+    <script>
+      // 설계서 4장: 모두 flow · 라벨 없음 · 직선
+      edges([
+        { from: "in-gh", to: "gh-diff", fromAt: "align" },
+        { from: "gh-diff", to: "gh-blame" },
+        { from: "gh-blame", to: "ev", toAt: "align" },
+        { from: "in-gh", to: "gh-run", fromAt: "align" },
+        { from: "gh-run", to: "ev", toAt: "align" },
+        { from: "in-doc", to: "doc-text" },
+        { from: "doc-text", to: "doc-ver" },
+        { from: "doc-ver", to: "ev", toAt: "align" },
+        { from: "ev", to: "ev-out", fromAt: "align" },
+        { from: "in-role", to: "role-load" },
+        { from: "role-load", to: "role-out", toAt: "align" },
+        { from: "in-job", to: "job-store" },
+        { from: "job-store", to: "job-out", toAt: "align" },
+      ]);
+    </script>
+  </body>
+</html>

@@ -1,0 +1,6 @@
+pydantic==2.13.5
+openai==3.22.1
+pypdf==6.10.0
+pytest==9.1.1
+PyYAML==6.0.3
+google-genai==2.26.0

@@ -1,0 +1,18 @@
+# 로컬 기록용 저장소(원격 없음, push 안 함). 비밀값·지인 데이터·대용량은 기록하지 않는다.
+.DS_Store
+**/.DS_Store
+.env
+.env.*
+*.sqlite
+*.sqlite-*
+*.sqlite3
+
+# 수집기: 가상환경, 지인 레포 캐시(안에 실제 .env 파일도 있음), 수집·판정 결과(지인 데이터, LLM 답)
+collector/.venv/
+collector/.cache/
+collector/out/
+**/__pycache__/
+
+# 팀 FE의 별도 git 저장소(origin이 팀 레포)
+fe-preview/
+node_modules/

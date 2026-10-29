@@ -1,0 +1,12 @@
+{
+  "status": "draft-not-human-validated",
+  "model": "gpt-6-luna",
+  "repeats": 3,
+  "limits": {"calls_per_user_repeat": 4, "session_calls": 240, "estimated_token_budget_per_user_repeat": 180000, "seconds_per_user_repeat": 600, "request_timeout": 90, "max_output_tokens": 9000, "input_characters": 200000, "interval_seconds": 15},
+  "sampling": "provider_default; common model; no fallback",
+  "selective_review": ["invalid_citation", "met_without_citation", "conflict", "unknown", "met_at_L3_or_above", "unresolved_contribution", "unresolved_risk"],
+  "gates": {"min_accuracy": null, "max_overcredit": null, "max_seconds": null, "max_cost": null},
+  "pricing": null,
+  "auto_winner": false,
+  "live_authorized": false
+}
