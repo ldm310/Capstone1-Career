@@ -20,11 +20,13 @@ from __future__ import annotations
 
 import argparse
 import csv
+import html
 import json
 import os
 import re
 import sys
 import time
+import urllib.parse
 from datetime import datetime, timezone
 
 import psycopg
@@ -33,7 +35,7 @@ from psycopg.types.json import Jsonb
 from common import IMG_DIR, OUT_DIR, PAGE_DIR, load_targets
 from extract_skills import CATS, PRICES, llm_input, review_reasons, sha256
 from fetch_images import RELAY, image_urls
-from html_text import html_text
+from html_text import BODY, html_text
 from sample_random import min_years
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -69,11 +71,6 @@ def connect(autocommit: bool = False) -> psycopg.Connection:
         sys.exit("DATABASE_URL 이 없습니다. .env.example 을 .env 로 복사해 채우거나 환경변수로 설정하세요.")
     # 스키마 이름을 붙이지 않은 표 이름은 job 에서 찾는다
     return psycopg.connect(url, autocommit=autocommit, options=f"-c search_path={SCHEMA}")
-
-
-def rel(path: str) -> str:
-    """DB 에 넣는 파일 위치: 이 폴더 기준 상대 경로, '/' 로."""
-    return os.path.relpath(path, HERE).replace(os.sep, "/")
 
 
 # ---------------------------------------------------------------- 값 다듬기
@@ -198,8 +195,42 @@ def kept_by_image() -> dict[str, bool]:
     return out
 
 
+_DROP_TAGS = re.compile(r"<(script|style|iframe|noscript|object|embed)\b.*?(?:</\1\s*>|$)", re.S | re.I)
+_ON_ATTR = re.compile(r"""\s+on[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)""", re.I)
+_JS_URL = re.compile(r"""\b(href|src)\s*=\s*(["'])\s*javascript:[^"']*\2""", re.I)
+_IMG_TAG = re.compile(r"<img\b[^>]*>", re.I)
+_SRC_ATTR = re.compile(r"""\s(?:data-src|src)\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)""", re.I)
+_ATTR_VAL = re.compile(r"""\b(data-src|src)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))""", re.I)
+
+
+def body_html(page: str, rid: str) -> str | None:
+    """웹 상세 화면용 본문 HTML: 사람인 본문 칸(user_content)만, 표·문단·글과 이미지의 배치는 그대로 둔다.
+    스크립트·스타일·iframe·on* 속성·javascript: 주소는 빼고, 이미지는 진짜 주소(늦게 불러오는 data-src 우선)를
+    전체 주소로 바꿔 src 하나로 둔다. 본문 칸이 없으면 None. (팀 3명만 쓰는 화면이라 원문을 담기로 함 — 2026-10-29 사용자 결정)"""
+    m = BODY.search(page)
+    if not m:
+        return None
+    b = _DROP_TAGS.sub("", m.group(1))
+    b = _ON_ATTR.sub("", b)
+    b = _JS_URL.sub(r"\1=\2#\2", b)
+    base = RELAY.format(id=rid)
+
+    def fix(tag_m: re.Match) -> str:
+        tag = tag_m.group(0)
+        vals = {a.group(1).lower(): a.group(2) or a.group(3) or a.group(4) or "" for a in _ATTR_VAL.finditer(tag)}
+        src = html.unescape(vals.get("data-src") or vals.get("src") or "").strip()
+        if src and not src.startswith("data:"):
+            src = urllib.parse.urljoin(base, src)
+        tag = _SRC_ATTR.sub("", tag)
+        return tag[:4] + f' src="{html.escape(src, quote=True)}"' + tag[4:]
+
+    b = _IMG_TAG.sub(fix, b)
+    b = re.sub(r"\s*</div>\s*$", "", b.strip())
+    return b.strip() or None
+
+
 def upsert_posting(conn, t: dict, update_raw: bool = True) -> int:
-    """공고를 넣거나 고친다. 이미 있는 공고의 원본(raw_path·raw_hash)은 update_raw 가 참일 때만 바꾼다
+    """공고를 넣거나 고친다. 이미 있는 공고의 원본(body_html·raw_hash)은 update_raw 가 참일 때만 바꾼다
     (그 공고를 다시 추출하는 데 성공했을 때만 원본을 새것으로 — 실패하면 옛 원본을 두고 ②가 다시 잡는다).
     마지막 확인 시각도 같은 규칙: 실패한 공고는 옛 시각이 남는다.
     마지막 확인 시각에는 저장한 시각이 아니라 본문을 받은 시각(받아 둔 페이지 파일의 시각)을 넣는다 —
@@ -213,36 +244,67 @@ def upsert_posting(conn, t: dict, update_raw: bool = True) -> int:
                               (t["company"],)).fetchone()[0]
     return conn.execute(
         """INSERT INTO posting (company_id, site, site_posting_no, title, site_job_category, career_condition,
-                                min_years, employment_type, kind, deadline, raw_path, raw_hash, last_checked_at)
+                                min_years, employment_type, kind, deadline, body_html, raw_hash, last_checked_at)
            VALUES (%(cid)s, '사람인', %(no)s, %(title)s, %(role)s, %(career)s, %(miny)s, %(emp)s, %(kind)s, %(deadline)s,
-                   %(path)s, %(hash)s, %(fetched)s)
+                   %(body)s, %(hash)s, %(fetched)s)
            ON CONFLICT (site, site_posting_no) DO UPDATE
            SET company_id = EXCLUDED.company_id, title = EXCLUDED.title, site_job_category = EXCLUDED.site_job_category,
                career_condition = EXCLUDED.career_condition, min_years = EXCLUDED.min_years,
                employment_type = EXCLUDED.employment_type, kind = EXCLUDED.kind,
                deadline = coalesce(EXCLUDED.deadline, posting.deadline),
-               raw_path = CASE WHEN %(update_raw)s THEN EXCLUDED.raw_path ELSE posting.raw_path END,
+               body_html = CASE WHEN %(update_raw)s THEN EXCLUDED.body_html ELSE posting.body_html END,
                raw_hash = CASE WHEN %(update_raw)s THEN EXCLUDED.raw_hash ELSE posting.raw_hash END,
                last_checked_at = CASE WHEN %(update_raw)s THEN EXCLUDED.last_checked_at ELSE posting.last_checked_at END
            RETURNING id""",
         {"cid": company_id, "no": rid, "title": t["title"], "role": t.get("role") or None,
          "career": t.get("career") or None, "miny": min_years(t.get("career", "")),
          "emp": employment_type(t.get("career", "")), "kind": t["kind"], "deadline": t.get("deadline") or None,
-         "path": rel(page_path), "hash": content_hash(page, rid), "fetched": fetched_at,
+         "body": body_html(page, rid), "hash": content_hash(page, rid), "fetched": fetched_at,
          "update_raw": update_raw}).fetchone()[0]
 
 
 def upsert_images(conn, posting_id: int, rows: list[dict], kept: dict[str, bool]) -> int:
+    """받은 이미지의 순서·원본 주소·남김 여부. 노트북 파일 경로는 넣지 않는다(팀원·웹은 못 쓰는 값)."""
     for r in rows:
-        stem = os.path.splitext(r["file"])[0]
-        ocr = os.path.join(OUT_DIR, "page_filter", "paddle_boxes", stem + ".json")
-        conn.execute("""INSERT INTO posting_image (posting_id, seq, url, file_path, kept, ocr_path)
-                        VALUES (%s, %s, %s, %s, %s, %s)
-                        ON CONFLICT (posting_id, seq) DO UPDATE
-                        SET url = EXCLUDED.url, file_path = EXCLUDED.file_path, kept = EXCLUDED.kept, ocr_path = EXCLUDED.ocr_path""",
-                     (posting_id, int(r["seq"]), r["url"], rel(os.path.join(IMG_DIR, r["file"])),
-                      kept.get(r["file"]), rel(ocr) if os.path.exists(ocr) else None))
+        conn.execute("""INSERT INTO posting_image (posting_id, seq, url, kept)
+                        VALUES (%s, %s, %s, %s)
+                        ON CONFLICT (posting_id, seq) DO UPDATE SET url = EXCLUDED.url, kept = EXCLUDED.kept""",
+                     (posting_id, int(r["seq"]), r["url"], kept.get(r["file"])))
     return len(rows)
+
+
+def migrate_body_html(conn, base: str | None = None) -> dict[str, int]:
+    """한 번만(여러 번 돌려도 안전): 본문 HTML 칸을 만들고, 이미 저장된 공고는 노트북 원본 파일(raw_path)로 채운 뒤
+    노트북에서만 쓸 수 있는 경로 칸(posting.raw_path, posting_image.file_path·ocr_path)을 뺀다.
+    base 는 raw_path 의 기준 폴더(기본: 이 폴더). 파일이 없는 공고는 본문을 비워 둔다."""
+    base = base or HERE
+
+    def cols(table: str) -> set[str]:
+        return {r[0] for r in conn.execute("""SELECT column_name FROM information_schema.columns
+                                              WHERE table_schema = %s AND table_name = %s""", (SCHEMA, table))}
+
+    res = {"채움": 0, "파일 없음": 0}
+    with conn.transaction():
+        conn.execute("ALTER TABLE posting ADD COLUMN IF NOT EXISTS body_html text")
+        if "raw_path" in cols("posting"):
+            for pid, no, path in conn.execute("SELECT id, site_posting_no, raw_path FROM posting WHERE body_html IS NULL").fetchall():
+                full = os.path.join(base, path or "")
+                if not path or not os.path.isfile(full):
+                    res["파일 없음"] += 1
+                    continue
+                conn.execute("UPDATE posting SET body_html = %s WHERE id = %s",
+                             (body_html(open(full, encoding="utf-8").read(), no), pid))
+                res["채움"] += 1
+            conn.execute("ALTER TABLE posting DROP COLUMN raw_path")
+        conn.execute("ALTER TABLE posting_image DROP COLUMN IF EXISTS file_path, DROP COLUMN IF EXISTS ocr_path")
+        conn.execute("""COMMENT ON COLUMN posting.body_html IS
+                        '본문 HTML (사람인 본문 칸, 스크립트 등은 뺌, 이미지 주소는 전체 주소 — 웹 상세 화면용. 본문이 없으면 비움)'""")
+    return res
+
+
+def cmd_migrate_body_html() -> None:
+    with connect() as conn:
+        print(" · ".join(f"{k} {v}" for k, v in migrate_body_html(conn).items()))
 
 
 def insert_run(conn, posting_id: int, r: dict, inp: dict | None, path: str, cap_id: dict, tech_id: dict) -> dict | None:
@@ -395,6 +457,7 @@ def main() -> None:
     ap = argparse.ArgumentParser(description="DB 저장(Load)")
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("init", help="표 만들기(db/schema.sql)")
+    sub.add_parser("migrate-body-html", help="한 번만: 본문 HTML 칸 채우기 + 노트북 경로 칸 빼기")
     sub.add_parser("sync-dict", help="capabilities.json -> 사전 표")
     p = sub.add_parser("load", help="공고·이미지·추출 결과 넣기 (데이터 폴더는 OCR_DATA_DIR)")
     p.add_argument("--run", required=True, help="out/extract/ 아래 결과 폴더 이름 (예: gpt-5.6-luna-ex-chk)")
@@ -403,6 +466,8 @@ def main() -> None:
         cmd_init()
     elif args.cmd == "sync-dict":
         cmd_sync_dict()
+    elif args.cmd == "migrate-body-html":
+        cmd_migrate_body_html()
     else:
         cmd_load(args.run)
 

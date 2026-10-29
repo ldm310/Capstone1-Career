@@ -20,8 +20,8 @@ def add_posting(conn, no, status="진행", deadline=None, raw_hash="a" * 64, tit
                           ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name RETURNING id""").fetchone()[0]
     return conn.execute(
         """INSERT INTO posting (company_id, site_posting_no, title, site_job_category, career_condition, kind,
-                                status, deadline, raw_path, raw_hash)
-           VALUES (%s, %s, %s, '백엔드', '신입 · 경력', '글', %s, %s, 'x.html', %s) RETURNING id""",
+                                status, deadline, body_html, raw_hash)
+           VALUES (%s, %s, %s, '백엔드', '신입 · 경력', '글', %s, %s, '<p>지어낸 본문</p>', %s) RETURNING id""",
         (cid, no, title, status, deadline, raw_hash)).fetchone()[0]
 
 
@@ -182,3 +182,33 @@ def test_touch_checked_at_given_time(db):
     at = dt.datetime(2026, 10, 28, 0, 5, tzinfo=KST)
     assert q.touch_checked(db, ["B"], at=at) == 1
     assert db.execute("SELECT last_checked_at FROM posting WHERE site_posting_no='B'").fetchone()[0] == at
+
+
+
+def test_load_writes_body_html(db, db_url, tmp_path):
+    """웹 상세 화면용: 공고를 저장할 때 본문 HTML 도 같이(경로가 아니라 내용 자체)."""
+    _write_run(tmp_path, "지어낸 공고 본문 내용입니다")
+    _load(tmp_path, db_url)
+    body = db.execute("SELECT body_html FROM posting WHERE site_posting_no='D'").fetchone()[0]
+    assert body == "<p>지어낸 공고 본문 내용입니다</p>"
+
+
+def test_migrate_body_html_fills_from_files_and_drops_paths(db, tmp_path):
+    """이미 저장된 공고: 노트북 원본 파일(raw_path)로 본문 HTML 을 채운 뒤 노트북 경로 칸을 뺀다(팀원은 못 쓰는 칸)."""
+    import db_load
+    db.execute("ALTER TABLE posting DROP COLUMN body_html")                       # 예전 표 구조 흉내
+    db.execute("ALTER TABLE posting ADD COLUMN raw_path text")
+    db.execute("ALTER TABLE posting_image ADD COLUMN file_path text, ADD COLUMN ocr_path text")
+    cid = db.execute("INSERT INTO company (name) VALUES ('(주)지어낸회사') RETURNING id").fetchone()[0]
+    for no, path in (("A", "pages/A.html"), ("B", "pages/없는파일.html")):
+        db.execute("""INSERT INTO posting (company_id, site_posting_no, title, kind, raw_path, raw_hash)
+                      VALUES (%s, %s, '지어낸 공고', '글', %s, %s)""", (cid, no, path, "a" * 64))
+    (tmp_path / "pages").mkdir()
+    (tmp_path / "pages" / "A.html").write_text('<div class="user_content"><p>지어낸 본문 A</p></div><script>', encoding="utf-8")
+    assert db_load.migrate_body_html(db, base=str(tmp_path)) == {"채움": 1, "파일 없음": 1}
+    assert dict(db.execute("SELECT site_posting_no, body_html FROM posting").fetchall()) == {"A": "<p>지어낸 본문 A</p>", "B": None}
+    cols = {(t, c) for t, c in db.execute("""SELECT table_name, column_name FROM information_schema.columns
+                                              WHERE table_schema = 'job' AND table_name IN ('posting', 'posting_image')""")}
+    assert ("posting", "body_html") in cols
+    assert not cols & {("posting", "raw_path"), ("posting_image", "file_path"), ("posting_image", "ocr_path")}
+    assert db_load.migrate_body_html(db, base=str(tmp_path)) == {"채움": 0, "파일 없음": 0}   # 다시 돌려도 안전
