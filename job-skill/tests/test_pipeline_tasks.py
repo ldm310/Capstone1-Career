@@ -205,21 +205,20 @@ def test_extract_budget(monkeypatch, tmp_path):
     assert pipeline_tasks.extract_budget(str(tmp_path), 5.0, daily=True) == 0.0
 
 
-def test_load_records_excluded_after_saving(monkeypatch, tmp_path):
+def test_load_does_not_record_excluded(monkeypatch, tmp_path):
+    """버린 공고는 DB 에 기록하지 않는다(실행 폴더의 excluded.json 에만 남음). 새 공고가 없으면 DB 를 열지 않는다."""
     import pipeline_tasks
     order = []
     monkeypatch.setattr(pipeline_tasks, "run_script", lambda script, args, run_dir, **k: order.append(script))
-    monkeypatch.setattr(pipeline_tasks, "connect", lambda: contextlib.nullcontext(object()))
-    monkeypatch.setattr(pipeline_tasks.db_queries, "record_excluded",
-                        lambda conn, rows: order.append(("버린 공고", [tuple(r) for r in rows])) or len(rows))
+    monkeypatch.setattr(pipeline_tasks, "connect", lambda: pytest.fail("DB 를 열면 안 됨"))
     write_rows(tmp_path, ["A"])
-    (tmp_path / "excluded.json").write_text('[["X9", "4년 이상"]]', encoding="utf-8")
+    (tmp_path / "excluded.json").write_text('[["X9", "교육생"]]', encoding="utf-8")
     pipeline_tasks.step_load(str(tmp_path))
-    assert order == ["db_load.py", ("버린 공고", [("X9", "4년 이상")])]
+    assert order == ["db_load.py"]
     order.clear()
-    write_rows(tmp_path, [])                         # 새 공고 0건이어도 버린 공고는 기록
+    write_rows(tmp_path, [])
     pipeline_tasks.step_load(str(tmp_path))
-    assert order == [("버린 공고", [("X9", "4년 이상")])]
+    assert order == []
 
 
 def test_load_failure_is_reported_in_plain_words(monkeypatch, tmp_path):
@@ -237,7 +236,6 @@ def test_load_failure_is_reported_in_plain_words(monkeypatch, tmp_path):
         raise subprocess.CalledProcessError(1, script)
 
     monkeypatch.setattr(pipeline_tasks, "run_script", fake_run)
-    monkeypatch.setattr(pipeline_tasks.db_queries, "record_excluded", lambda conn, rows: pytest.fail("실패했는데 기록함"))
     with pytest.raises(pipeline_tasks.notify.PostingsFailed, match="DB 저장 실패 2건") as e:
         pipeline_tasks.step_load(str(tmp_path))
     assert e.value.items == [("D", "ValueError"), ("E", "저장 실패")]
@@ -278,7 +276,6 @@ def daily(monkeypatch):
     monkeypatch.setattr(pipeline_tasks.db_queries, "open_postings", lambda conn: [
         {"rec_idx": n, **ROW, "raw_hash": "h", "last_checked_at": checked} for n in ("O1", "O2")])
     monkeypatch.setattr(pipeline_tasks.db_queries, "update_deadlines", lambda conn, m: calls.setdefault("deadlines", m) and len(m))
-    monkeypatch.setattr(pipeline_tasks.db_queries, "record_excluded", lambda conn, rows: pytest.fail("수집 때 기록함"))
     monkeypatch.setattr(pipeline_tasks.collect, "scan_lists", lambda **k: {
         "N1": item("N1"), "K1": item("K1"), "P1": item("P1"), "N2": item("N2", deadline_text="~11.30(월)"),
         "X9": item("X9", career="교육생"),

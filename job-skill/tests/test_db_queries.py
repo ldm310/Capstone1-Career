@@ -33,12 +33,12 @@ def add_run(conn, posting_id, run_at=None, cost=0.0, current=True):
         (posting_id, "b" * 64, cost, current, run_at)).fetchone()[0]
 
 
-def test_known_includes_postings_and_excluded(db):
+def test_known_is_postings_only(db):
+    """아는 번호 = DB 에 있는 공고만. 버린 공고(교육생 등)는 기억하지 않고 매일 목록에서 다시 거른다(2026-10-29 사용자 결정)."""
     import db_queries as q
     add_posting(db, "100")
-    assert q.record_excluded(db, [("200", "4년 이상")]) == 1
-    assert q.known_posting_nos(db) == {"100", "200"}
-    assert q.record_excluded(db, [("200", "4년 이상")]) == 0
+    assert q.known_posting_nos(db) == {"100"}
+    assert db.execute("SELECT to_regclass('job.listing_seen')").fetchone()[0] is None   # 버린 공고 표는 없음
 
 
 def test_open_postings_hides_past_deadline(db):

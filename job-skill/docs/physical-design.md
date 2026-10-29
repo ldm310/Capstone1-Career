@@ -6,7 +6,7 @@
 
 - DDL: [`db/schema.sql`](../db/schema.sql)
 - 시험: 2026-10-27, 시험용 PostgreSQL 17에서 표 12개가 오류 없이 만들어지고 제약이 동작하는 것을 확인했다.
-- 2026-10-28 버린 공고 표(`listing_seen`)를 더해 13개. 2026-10-29 AWS RDS(PostgreSQL 18)에도 같은 DDL로 만들었다.
+- 2026-10-28 버린 공고 표(`listing_seen`)를 더했다가 2026-10-29 뺐다(사용자 결정 — '연속 5개 멈춤'을 없애 쓸 곳이 없음). 지금 표는 12개. 2026-10-29 AWS RDS(PostgreSQL 18)에도 같은 DDL로 만들었다.
 - 2026-10-29 바꿈(사용자 결정): 웹 상세 화면에 원문을 보여 주려고 **본문 HTML(`body_html`)**을 담고, 노트북에서만 열 수 있는 경로 칸(`raw_path`, `file_path`, `ocr_path`)은 뺐다(팀원·웹은 못 쓰는 값). 이미 만든 DB는 `py -3.12 db_load.py migrate-body-html` 로 바꾼다(원본 파일로 본문을 채운 뒤 경로 칸을 뺌).
 
 표와 칸의 한글 이름은 DDL의 `COMMENT`로 DB 안에도 남겨 두었다.
@@ -67,15 +67,6 @@
 | 순서 | `seq` | smallint | NOT NULL, 1 이상, UNIQUE(posting_id, seq) |
 | 이미지 주소 | `url` | text | NOT NULL, 원본 서버 주소 — 웹은 이 주소로 띄운다 |
 | 남김 여부 | `kept` | boolean | 판정 전이면 비움 |
-
-**버린 공고 `listing_seen`** (2026-10-28 추가)
-교육생·경력 조건을 알 수 없어 버린 공고의 번호를 기억한다. 본문은 받지 않는다. 공고 표와는 이어지지 않고, 목록 수집 때 "아는 번호"로만 쓴다.
-| 한글 | 영어 | 자료형 | 제약 |
-|---|---|---|---|
-| 사이트 | `site` | text | NOT NULL, 기본값 '사람인', PK(site, site_posting_no) |
-| 사이트 공고번호 | `site_posting_no` | text | NOT NULL |
-| 버린 이유 | `reason` | text | NOT NULL (교육생 / 경력 조건 모름 / 4년 이상) |
-| 처음 본 시각 | `first_seen_at` | timestamptz | NOT NULL, 기본값 지금 |
 
 ### ② 추출 결과
 

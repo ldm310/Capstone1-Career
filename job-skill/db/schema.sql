@@ -129,19 +129,6 @@ COMMENT ON COLUMN posting_image.seq        IS '순서 (1, 2, 3…)';
 COMMENT ON COLUMN posting_image.url        IS '이미지 주소 (원본 서버 — 웹은 이 주소로 띄운다)';
 COMMENT ON COLUMN posting_image.kept       IS '남김 여부 (rule base 결과, 판정 전이면 비움)';
 
-CREATE TABLE listing_seen (
-    site             text        NOT NULL DEFAULT '사람인',
-    site_posting_no  text        NOT NULL,
-    reason           text        NOT NULL,
-    first_seen_at    timestamptz NOT NULL DEFAULT now(),
-    PRIMARY KEY (site, site_posting_no)
-);
-COMMENT ON TABLE  listing_seen                 IS '버린 공고번호 (4년 이상·교육생 등, 본문은 받지 않음) — 연속 5개 멈춤 규칙에서 아는 번호로 셈';
-COMMENT ON COLUMN listing_seen.site            IS '사이트 (사람인)';
-COMMENT ON COLUMN listing_seen.site_posting_no IS '사이트 공고번호 (사람인 rec_idx)';
-COMMENT ON COLUMN listing_seen.reason          IS '버린 이유 (4년 이상 / 교육생 / 경력 조건 모름)';
-COMMENT ON COLUMN listing_seen.first_seen_at   IS '처음 본 시각';
-
 -- ============================================================ ② 추출 결과
 -- 추출 실행을 지우면 그 아래(모집 단위·항목·요건·요건 기술)도 함께 지워진다.
 

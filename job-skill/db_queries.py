@@ -30,20 +30,9 @@ def _rows(cur) -> list[dict]:
 
 
 def known_posting_nos(conn) -> set[str]:
-    """DB 에 있는 공고 + 버린 공고의 공고번호 (연속 5개 멈춤 규칙의 '아는 번호')."""
-    cur = conn.execute("""SELECT site_posting_no FROM posting WHERE site = %(s)s
-                          UNION SELECT site_posting_no FROM listing_seen WHERE site = %(s)s""", {"s": SITE})
+    """DB 에 있는 공고의 공고번호('아는 번호'). 버린 공고(교육생 등)는 기억하지 않고 매일 목록에서 다시 거른다."""
+    cur = conn.execute("SELECT site_posting_no FROM posting WHERE site = %(s)s", {"s": SITE})
     return {r[0] for r in cur.fetchall()}
-
-
-def record_excluded(conn, rows: list[tuple[str, str]]) -> int:
-    """버린 공고 (공고번호, 이유) 를 넣는다. 이미 있으면 무시. 새로 넣은 수를 돌려준다."""
-    n = 0
-    with conn.transaction():
-        for no, reason in rows:
-            n += conn.execute("""INSERT INTO listing_seen (site, site_posting_no, reason) VALUES (%s, %s, %s)
-                                 ON CONFLICT DO NOTHING""", (SITE, no, reason)).rowcount
-    return n
 
 
 def pending_postings(conn) -> list[dict]:
