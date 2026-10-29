@@ -38,6 +38,8 @@ from table_layout import table_text
 
 PF = os.path.join(OUT_DIR, "page_filter")
 EX = os.path.join(OUT_DIR, "extract")
+# 답 길이 상한(생각하는 몫 포함). 8,000 이면 모집 부문이 많은 긴 공고의 답이 중간에 잘렸다(③ 1,494건 중 7건)
+MAX_OUTPUT_TOKENS = 16000
 PRICES = {"gpt-5.6-terra": (2.00, 12.00), "gpt-5.6-luna": (0.20, 1.20), "gpt-5.6-sol": (4.00, 20.00)}  # USD/1M, 2026-10-02 확인
 
 INSTRUCTIONS = """너는 채용공고를 읽고, 지원자에게 요구하는 것과 하게 될 업무를 필수·우대·업무·기타로 나눠 개조식으로 정리한다.
@@ -503,7 +505,7 @@ def call_llm(client, model: str, effort: str, inp: dict, examples: bool, extra: 
     resp = client.responses.create(
         model=model, instructions=instructions(examples),
         input=llm_input(inp, extra),
-        max_output_tokens=8000,
+        max_output_tokens=MAX_OUTPUT_TOKENS,
         reasoning={"effort": effort},
         text={"format": {"type": "json_schema", "name": "skills", "schema": SCHEMA, "strict": True}})
     sec = time.perf_counter() - t
