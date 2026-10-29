@@ -27,7 +27,7 @@
 <rect x="640" y="90" width="1190" height="480" fill="none" stroke="#888" stroke-width="1.1" stroke-dasharray="6 4"/><text class="zt" x="652" y="110">② 추출 결과</text>
 <rect x="940" y="590" width="890" height="250" fill="none" stroke="#888" stroke-width="1.1" stroke-dasharray="6 4"/><text class="zt" x="952" y="610">③ 표준화 사전</text>
 <path class="rel" d="M310,186.0 H335 V210.0 H360" marker-start="url(#oneS)" marker-end="url(#omany)"/>
-<path class="rel" d="M360,330.0 H340 V370.0 H310" marker-start="url(#oneS)" marker-end="url(#zmany)"/>
+<path class="rel" d="M360,330.0 H340 V320.0 H310" marker-start="url(#oneS)" marker-end="url(#zmany)"/>
 <path class="rel" d="M610,186.0 H622 V210.0 H660" marker-start="url(#oneS)" marker-end="url(#zmany)"/>
 <path class="rel" d="M910,186.0 H935 V210.0 H960" marker-start="url(#oneS)" marker-end="url(#zmany)"/>
 <path class="rel" d="M1210,186.0 H1235 V210.0 H1260" marker-start="url(#oneS)" marker-end="url(#zmany)"/>
@@ -89,8 +89,8 @@
 <line x1="360" y1="438.0" x2="610" y2="438.0" stroke="#e3e3e3" stroke-width="1"/>
 <text class="col" x="398" y="450.0" style="">마감일</text>
 <line x1="360" y1="462.0" x2="610" y2="462.0" stroke="#e3e3e3" stroke-width="1"/>
-<text class="col" x="398" y="474.0" style="">원본 위치</text>
-<text class="hint" x="600" y="474.0">파일 경로</text>
+<text class="col" x="398" y="474.0" style="">본문 HTML</text>
+<text class="hint" x="600" y="474.0">웹 상세 화면용</text>
 <line x1="360" y1="486.0" x2="610" y2="486.0" stroke="#e3e3e3" stroke-width="1"/>
 <text class="col" x="398" y="498.0" style="">원본 해시</text>
 <text class="hint" x="600" y="498.0">바뀜 확인용</text>
@@ -98,32 +98,43 @@
 <text class="col" x="398" y="522.0" style="">수집 시각</text>
 <line x1="360" y1="534.0" x2="610" y2="534.0" stroke="#e3e3e3" stroke-width="1"/>
 <text class="col" x="398" y="546.0" style="">마지막 확인 시각</text>
-<text class="hint" x="600" y="546.0">3일마다 수정 확인</text>
-<rect x="60" y="300" width="250" height="202" fill="#fff" stroke="#1a1a1a" stroke-width="1.3"/>
-<rect x="60" y="300" width="250" height="34" fill="#efefef" stroke="#1a1a1a" stroke-width="1.3"/>
-<text class="tn" x="72" y="317.0">공고 이미지</text>
-<rect x="68" y="338.0" width="22" height="16" rx="3" fill="#1a1a1a" stroke="#1a1a1a" stroke-width="1"/>
-<text class="key" x="79.0" y="346.5" style="fill:#fff">PK</text>
-<text class="col" x="98" y="346.0" style="font-weight:700;">이미지ID</text>
-<line x1="60" y1="358.0" x2="310" y2="358.0" stroke="#e3e3e3" stroke-width="1"/>
-<rect x="68" y="362.0" width="22" height="16" rx="3" fill="#fff" stroke="#1a1a1a" stroke-width="1"/>
-<text class="key" x="79.0" y="370.5" style="fill:#1a1a1a">FK</text>
-<text class="col" x="98" y="370.0" style="">공고ID</text>
-<line x1="60" y1="382.0" x2="310" y2="382.0" stroke="#e3e3e3" stroke-width="1"/>
-<text class="col" x="98" y="394.0" style="">순서</text>
-<text class="hint" x="300" y="394.0">1, 2, 3…</text>
-<line x1="60" y1="406.0" x2="310" y2="406.0" stroke="#e3e3e3" stroke-width="1"/>
-<text class="col" x="98" y="418.0" style="">이미지 주소</text>
-<text class="hint" x="300" y="418.0">인터넷 주소</text>
-<line x1="60" y1="430.0" x2="310" y2="430.0" stroke="#e3e3e3" stroke-width="1"/>
-<text class="col" x="98" y="442.0" style="">파일 위치</text>
-<text class="hint" x="300" y="442.0">파일 경로</text>
-<line x1="60" y1="454.0" x2="310" y2="454.0" stroke="#e3e3e3" stroke-width="1"/>
-<text class="col" x="98" y="466.0" style="">남김 여부</text>
-<text class="hint" x="300" y="466.0">rule base 결과</text>
-<line x1="60" y1="478.0" x2="310" y2="478.0" stroke="#e3e3e3" stroke-width="1"/>
-<text class="col" x="98" y="490.0" style="">OCR 결과 위치</text>
-<text class="hint" x="300" y="490.0">글자 + 좌표</text>
+<text class="hint" x="600" y="546.0">본문 받은 시각</text>
+<rect x="60" y="250" width="250" height="154" fill="#fff" stroke="#1a1a1a" stroke-width="1.3"/>
+<rect x="60" y="250" width="250" height="34" fill="#efefef" stroke="#1a1a1a" stroke-width="1.3"/>
+<text class="tn" x="72" y="267.0">공고 이미지</text>
+<rect x="68" y="288.0" width="22" height="16" rx="3" fill="#1a1a1a" stroke="#1a1a1a" stroke-width="1"/>
+<text class="key" x="79.0" y="296.5" style="fill:#fff">PK</text>
+<text class="col" x="98" y="296.0" style="font-weight:700;">이미지ID</text>
+<line x1="60" y1="308.0" x2="310" y2="308.0" stroke="#e3e3e3" stroke-width="1"/>
+<rect x="68" y="312.0" width="22" height="16" rx="3" fill="#fff" stroke="#1a1a1a" stroke-width="1"/>
+<text class="key" x="79.0" y="320.5" style="fill:#1a1a1a">FK</text>
+<text class="col" x="98" y="320.0" style="">공고ID</text>
+<line x1="60" y1="332.0" x2="310" y2="332.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="98" y="344.0" style="">순서</text>
+<text class="hint" x="300" y="344.0">1, 2, 3…</text>
+<line x1="60" y1="356.0" x2="310" y2="356.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="98" y="368.0" style="">이미지 주소</text>
+<text class="hint" x="300" y="368.0">원본 서버, 웹이 씀</text>
+<line x1="60" y1="380.0" x2="310" y2="380.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="98" y="392.0" style="">남김 여부</text>
+<text class="hint" x="300" y="392.0">rule base 결과</text>
+<rect x="60" y="430" width="250" height="130" fill="#fff" stroke="#1a1a1a" stroke-width="1.3"/>
+<rect x="60" y="430" width="250" height="34" fill="#efefef" stroke="#1a1a1a" stroke-width="1.3"/>
+<text class="tn" x="72" y="447.0">버린 공고</text>
+<rect x="68" y="468.0" width="22" height="16" rx="3" fill="#1a1a1a" stroke="#1a1a1a" stroke-width="1"/>
+<text class="key" x="79.0" y="476.5" style="fill:#fff">PK</text>
+<text class="col" x="98" y="476.0" style="font-weight:700;">사이트</text>
+<text class="hint" x="300" y="476.0">사람인</text>
+<line x1="60" y1="488.0" x2="310" y2="488.0" stroke="#e3e3e3" stroke-width="1"/>
+<rect x="68" y="492.0" width="22" height="16" rx="3" fill="#1a1a1a" stroke="#1a1a1a" stroke-width="1"/>
+<text class="key" x="79.0" y="500.5" style="fill:#fff">PK</text>
+<text class="col" x="98" y="500.0" style="font-weight:700;">사이트 공고번호</text>
+<text class="hint" x="300" y="500.0">예: 55249798</text>
+<line x1="60" y1="512.0" x2="310" y2="512.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="98" y="524.0" style="">버린 이유</text>
+<text class="hint" x="300" y="524.0">교육생/경력 조건 모름</text>
+<line x1="60" y1="536.0" x2="310" y2="536.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="98" y="548.0" style="">처음 본 시각</text>
 <rect x="660" y="140" width="250" height="418" fill="#fff" stroke="#1a1a1a" stroke-width="1.3"/>
 <rect x="660" y="140" width="250" height="34" fill="#efefef" stroke="#1a1a1a" stroke-width="1.3"/>
 <text class="tn" x="672" y="157.0">추출 실행</text>
