@@ -132,6 +132,21 @@ def test_failure_reasons_are_counted(ex):
     assert stats["fail_reasons"] == {"RuntimeError": 1}
 
 
+class RecordingClient(FakeClient):
+    """호출 인자를 남긴다."""
+
+    def _create(self, **kw):
+        self.kw = kw
+        return super()._create(**kw)
+
+
+def test_output_cap_fits_long_postings(ex):
+    """답 길이 상한 16,000 토큰 — 8,000 이면 모집 부문이 많은 긴 공고(③에서 7건)의 답이 중간에 잘렸다."""
+    client = RecordingClient()
+    ex.call_llm(client, MODEL, "low", inputs(1)["T1"], examples=True)
+    assert client.kw["max_output_tokens"] == 16000
+
+
 # ── 동시에 여러 공고(workers) ──────────────────────────────────────────────
 import threading
 
