@@ -27,6 +27,7 @@ TLS = ssl.create_default_context(cafile=certifi.where())
 CACHE_DIR = Path(__file__).resolve().parent / '.cache' / 'repos-v2'  # checkout 없는 부분 clone. 옛 캐시(.cache/repos, checkout 있음)는 쓰지 않는다
 CLONE_FILTER = 'blob:limit=512k'  # 이 크기 이상인 blob은 받지 않는다. paths.MAX_BLOB과 같아서 그런 파일은 어차피 세지 않는다
 BRANCHES = ('main', 'master', 'develop', 'dev', 'develope')  # 기본 브랜치와 함께 보는 브랜치(결정 9번, dev·develope는 2026-10-29 결정)
+SEARCH_PAGES = 10  # 검색 API가 주는 최대: 100개씩 10쪽 = 1,000개(그 뒤 쪽은 422)
 ENV = gitenv.env()  # 읽기용 git 환경(토큰 없음)
 LIST_ENV = {**ENV, 'GIT_NO_LAZY_FETCH': '1'}  # ls-tree -l용: 부분 clone이 받지 않은 blob을 크기 보느라 내려받지 않는다(크기 칸이 BAD)
 # github.com/<이 이름>은 계정이 아니라 GitHub 화면 주소다. 같은 이름의 다른 계정을 분석하지 않도록 막는다.
@@ -100,13 +101,14 @@ class Api:
     def get(self, path, params=None, ok=(200,)):
         return self._open(API + path + ('?' + urllib.parse.urlencode(params) if params else ''), ok)
 
-    def pages(self, path, params, max_pages=10):
-        """목록 API를 Link 머리말의 다음 쪽을 따라 읽는다. max_pages=None이면 끝까지 읽는다."""
+    def pages(self, path, params, max_pages=10, key=None):
+        """목록 API를 Link 머리말의 다음 쪽을 따라 읽는다. max_pages=None이면 끝까지 읽는다.
+        key는 본문에서 목록이 든 칸이다(검색 API는 {"items": [...]}를 준다)."""
         url, n = API + path + '?' + urllib.parse.urlencode(params), 0
         while url and (max_pages is None or n < max_pages):
             data, h, status = self._open(url, (200, 409))  # 409 = 빈 레포
             if status == 409: return
-            yield from data or []
+            yield from ((data or {}).get(key) if key else data) or []
             nxt = re.search(r'<([^>]+)>;\s*rel="next"', h.get('Link') or '')
             url, n = nxt and nxt.group(1), n + 1
 
@@ -361,10 +363,11 @@ def extract(login, token, cache, max_size_mb=None, *, api=None, remote_url=lambd
         for kind in ('owner', 'member'):
             for r in api.pages(f'/users/{login}/repos', {'type': kind, 'per_page': 100}, max_pages=None):
                 if not r['private']: found.setdefault(r['full_name'], (r, kind))
-        commits, _, _ = api.get('/search/commits', {'q': f'author:{login} is:public', 'per_page': 100})
-        prs, _, _ = api.get('/search/issues', {'q': f'author:{login} type:pr is:public', 'per_page': 100})
-        mine = {i['repository']['full_name'] for i in commits['items']}  # 본인 commit이 검색된 레포(검색은 기본 브랜치만 본다: 순서에만 쓴다)
-        searched = mine | {i['repository_url'].split('/repos/')[1] for i in prs['items']}
+        search = lambda path, q: api.pages(path, {'q': q, 'per_page': 100}, max_pages=SEARCH_PAGES, key='items')
+        commits = list(search('/search/commits', f'author:{login} is:public'))
+        prs = list(search('/search/issues', f'author:{login} type:pr is:public'))
+        mine = {i['repository']['full_name'] for i in commits}  # 본인 commit이 검색된 레포(검색은 기본 브랜치만 본다: 순서에만 쓴다)
+        searched = mine | {i['repository_url'].split('/repos/')[1] for i in prs}
         for full in sorted(searched - set(found)):
             r, _, _ = api.get(f'/repos/{full}', ok=(200, 404))
             if r and not r['private']: found[full] = (r, 'search')

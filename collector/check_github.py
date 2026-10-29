@@ -1,14 +1,15 @@
 """GitHub 데이터 추출 실행 입구: 동의 확인 → 추출(extract.py) → DB 저장(store.py) → 요약 출력.
 
 분석은 본인 계정이나 동의를 받은 계정만 한다. 처음 보는 계정은 --consent로 동의 기록을 남겨야 수집한다(동의 철회된 계정은 수집하지 않음).
-토큰은 GITHUB_TOKEN 환경 변수에서만 읽는다. 없으면 시간당 60회 한도로 돈다.
+토큰은 ~/.config/career-stat/github.env의 GITHUB_TOKEN(서비스 전용 계정 career-stat-bot)에서만 읽는다. 환경 변수(GITHUB_TOKEN·GH_TOKEN)는 보지 않는다.
+파일이나 값이 없으면 토큰 없이 돌지 않고 바로 멈춘다(종료 코드 2).
 """
 import argparse
 import datetime
-import os
 from pathlib import Path
 
 import extract
+import gitenv
 import store
 
 HERE = Path(__file__).resolve().parent
@@ -58,6 +59,8 @@ def main():
     a = p.parse_args()
     try: login = extract.parse_login(a.url)
     except ValueError as e: p.error(str(e))
+    try: token = gitenv.github_token()  # 동의 기록·DB보다 먼저 확인한다. 환경 변수로 대신 돌거나 토큰 없이 돌지 않는다
+    except gitenv.TokenError as e: p.error(f'{e} — career-stat-bot 토큰을 GITHUB_TOKEN=값 한 줄로 넣어 주세요(환경 변수 GITHUB_TOKEN·GH_TOKEN은 보지 않습니다)')
     account = store.get_account(a.db, login)
     if account and account['revoked_at']: p.error(f"{login}은 {account['revoked_at']}에 동의를 철회했습니다. 수집하지 않습니다")
     if not account:
@@ -66,15 +69,15 @@ def main():
         account = store.get_account(a.db, login)
         print(f"동의 기록 저장: {login} · {a.relation} · {a.consent_date} · {a.consent}")
     if account['github_id']:  # 같은 이름이 다른 사람에게 넘어갔으면 이전 동의로 수집하지 않는다(clone 전에 확인)
-        user, _, _ = extract.Api(os.environ.get('GITHUB_TOKEN')).get(f'/users/{login}')
+        user, _, _ = extract.Api(token).get(f'/users/{login}')
         if user['id'] != account['github_id']:
             p.error(f"{login}의 GitHub 사용자 번호가 동의할 때({account['github_id']})와 다릅니다({user['id']}). 다른 사람일 수 있어 수집하지 않습니다")
     if a.refresh_runs:
-        api = extract.Api(os.environ.get('GITHUB_TOKEN'))
+        api = extract.Api(token)
         n = store.refresh_runs(a.db, login, lambda full, sha: extract.run_records(api, full, sha))
         print(f'실행 기록이 있는 평가 commit {n}개를 새로 받음 · API {api.calls}회 · 남은 한도 {api.remaining}')
         return
-    res = extract.extract(login, os.environ.get('GITHUB_TOKEN'), a.cache, max_size_mb=a.max_size_mb)
+    res = extract.extract(login, token, a.cache, max_size_mb=a.max_size_mb)
     run_id = store.save(a.db, res, account['id'])
     report(res)
     print(f"저장: {a.db} (collect_run id {run_id}) · 본인 줄 증거 단위 {len(res['evidence'])}개")

@@ -15,6 +15,7 @@ from pathlib import Path
 
 import engine as E
 import extract
+import gitenv
 import skills as S
 import store
 
@@ -86,7 +87,7 @@ def targets(repos, cache, index, min_own, only):
         path = Path(cache) / repo['full_name'].replace('/', '__')
         for ev in repo['evals']:
             if not (path / '.git').exists() or subprocess.run(['git', '-C', str(path), 'cat-file', '-e', f"{ev['sha']}^{{commit}}"],
-                                                              capture_output=True).returncode:
+                                                              capture_output=True, env=gitenv.env()).returncode:
                 missing.append((repo['full_name'], ev['sha'])); continue  # clone이 없거나 그 commit이 없으면 빈 자료로 돈을 쓰지 않는다
             found = S.detect(path, ev['sha'], [dict(path=p, lines=r) for p, r in ev['units'].items()], index)
             for tech, s in found['skills'].items():
@@ -109,7 +110,7 @@ def materials(tech, repo, ev, s, path):
     docs = sorted(((p, r) for p, r in ev['units'].items() if p.lower().endswith(DOC_EXT)), key=lambda kv: -sum(e - b + 1 for b, e in kv[1]))
     if not any(p.lower() == 'readme.md' for p, _ in docs) and S.file_lines(path, ev['sha'], 'README.md'): docs.insert(0, ('README.md', []))
     tree = subprocess.run(['git', '-C', str(path), 'ls-tree', '-r', '--name-only', ev['sha'], '.github/workflows'],
-                          capture_output=True, text=True).stdout.split()
+                          capture_output=True, text=True, env=gitenv.env()).stdout.split()
     docs = [(p, ev['units'].get(p, [])) for p in tree if p.endswith(('.yml', '.yaml'))] + docs  # CI가 무엇을 돌리는지 보여 준다
     texts = S.read_files(path, ev['sha'], [p for p, _ in docs])
     docs = [(p, '\n'.join(texts[p]), r) for p, r in docs]

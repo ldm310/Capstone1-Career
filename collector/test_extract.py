@@ -3,6 +3,7 @@
 네트워크를 쓰지 않는다. 레포는 임시 폴더에 만든다.
 """
 import base64
+import contextlib
 import email.message
 import io
 import os
@@ -10,6 +11,7 @@ import re
 import shutil
 import sqlite3
 import subprocess
+import sys
 import tempfile
 import unittest
 import urllib.error
@@ -20,7 +22,9 @@ import extract
 import gitenv
 import paths
 import store
-from testkit import EMAILS, GIT, MATE, ME, NAMES, TWIN, FakeApi, Repo, lines
+from testkit import EMAILS, GIT, MATE, ME, NAMES, TWIN, FakeApi, Paged, Repo, lines
+
+HERE = Path(__file__).resolve().parent
 
 
 def blame_reference(path, sha, emails, names):
@@ -350,6 +354,16 @@ class FakeApiBehavior(unittest.TestCase):
         self.assertEqual(list(api.pages('/none', {})) + list(api.pages('/empty', {}, max_pages=3)), [])
         self.assertEqual((api.calls, api.seen[0]), (3, ('/l', {'per_page': 100})))
 
+    def test_paged_route_serves_up_to_max_pages(self):  # 진짜 API처럼 쪽으로 나뉜 응답: get은 첫 쪽, pages는 max_pages쪽까지(key가 있으면 그 칸의 목록)
+        api = FakeApi({'/s': Paged(dict(items=[1, 2]), dict(items=[3])), '/l': Paged([1], [2], [3])})
+        self.assertEqual(api.get('/s')[0], dict(items=[1, 2]))
+        self.assertEqual(list(api.pages('/s', {}, key='items')), [1, 2, 3])
+        self.assertEqual(list(api.pages('/s', {}, max_pages=1, key='items')), [1, 2])
+        self.assertEqual(list(api.pages('/l', {}, max_pages=2)), [1, 2])
+        self.assertEqual(list(api.pages('/l', {}, max_pages=None)), [1, 2, 3])
+        self.assertEqual(list(FakeApi({'/d': dict(items=[5]), '/n': None}).pages('/d', {}, key='items')), [5])  # 쪽으로 나뉘지 않은 값도 key를 쓴다
+        self.assertEqual(list(FakeApi({'/n': None}).pages('/n', {}, key='items')), [])
+
 
 def bare(dest, src=None):
     """file:// 원격으로 쓸 bare 레포(src가 없으면 빈 레포). 부분 clone이 실제로 걸러지도록 upload-pack에 filter와 lazy fetch를 허용한다."""
@@ -378,20 +392,21 @@ def repo_routes(full, commits=()):
 
 
 class Listing(FakeApi):
-    """FakeApi는 경로만 보므로 /users/me/repos만 type(owner·member)별로 나눠 돌려주고 max_pages를 기록한다. 계정 단계 경로는 기본값을 둔다.
+    """FakeApi는 경로만 보므로 /users/me/repos만 type(owner·member)별로 나눠 돌려준다. pages의 max_pages는 경로별로 기록한다. 계정 단계 경로는 기본값을 둔다.
     own = /search/commits에 나올 레포. hooks = {경로: 함수}: 그 경로를 처음 물을 때 함수를 먼저 부른다(중간에 원격을 없애는 데 쓴다)."""
     def __init__(self, routes=None, owner=(), member=(), own=(), hooks=None):
         base = {'/users/me': dict(login='me', id=7, email=ME[1]), '/search/issues': dict(items=[]),
                 '/search/commits': dict(items=[dict(repository=dict(full_name=f)) for f in own])}
         super().__init__({**base, **(routes or {})})
-        self.listing, self.hooks, self.listed = dict(owner=list(owner), member=list(member)), dict(hooks or {}), []
+        self.listing, self.hooks, self.listed, self.max_pages = dict(owner=list(owner), member=list(member)), dict(hooks or {}), [], {}
 
     def _ask(self, path, params):
         if path in self.hooks: self.hooks.pop(path)()
         return super()._ask(path, params)
 
-    def pages(self, path, params, max_pages=10):
-        if path != '/users/me/repos': return super().pages(path, params, max_pages)
+    def pages(self, path, params, max_pages=10, key=None):
+        self.max_pages[path] = max_pages
+        if path != '/users/me/repos': return super().pages(path, params, max_pages, key)
         self.listed.append((params['type'], max_pages))
         return iter(self.listing[params['type']])
 
@@ -691,6 +706,114 @@ class Collect(unittest.TestCase):
         chain = [(200, {'Link': f'<https://api.github.com/l?page={i + 2}>; rel="next"'} if i < 11 else {}, f'[{i}]'.encode()) for i in range(12)]
         self.assertEqual(list(extract.Api(None, opener=Opener(*chain)).pages('/l', {}, max_pages=None)), list(range(12)))
         self.assertEqual(list(extract.Api(None, opener=Opener(*chain)).pages('/l', {})), list(range(10)))
+
+    def test_pages_reads_the_items_of_search_results(self):  # 검색 API는 목록 대신 {"items": [...]}를 쪽마다 준다
+        link = {'Link': '<https://api.github.com/search/commits?q=x&page=2>; rel="next"'}
+        opener = Opener((200, link, b'{"total_count": 3, "items": [1, 2]}'), (200, {}, b'{"total_count": 3, "items": [3]}'))
+        self.assertEqual(list(extract.Api(None, opener=opener).pages('/search/commits', {'q': 'x'}, max_pages=10, key='items')), [1, 2, 3])
+
+    def test_search_reads_every_page_for_discovery(self):  # 레포 찾기의 commit·PR 검색은 API 최대(100개씩 10쪽 = 1,000개)까지 읽는다
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            hit = lambda full: dict(repository=dict(full_name=full))
+            pr = lambda full: dict(repository_url=f'https://api.github.com/repos/{full}')
+            routes = {'/search/commits': Paged(dict(items=[hit('me/own')]), dict(items=[hit('team/second')])),  # 둘째 쪽에만 나오는 본인 commit 레포
+                      '/search/issues': Paged(dict(items=[]), dict(items=[pr('team/pr')])),
+                      '/repos/team/second': meta('team/second'), '/repos/team/pr': meta('team/pr')}
+            api = Listing(routes, owner=[meta('me/plain'), meta('me/own')])
+            res = self.extract(d, api, dict.fromkeys(['me/plain', 'me/own', 'team/second', 'team/pr'], bare(d / 'empty.git')))
+            self.assertEqual([(r['full'], r['source']) for r in res['repos']],
+                             [('me/own', 'owner'), ('team/second', 'search'), ('me/plain', 'owner'), ('team/pr', 'search')])  # 본인 commit 레포가 먼저
+            self.assertEqual((api.max_pages['/search/commits'], api.max_pages['/search/issues']), (10, 10))
+            self.assertEqual(res['external_pr_repos'], ['team/pr', 'team/second'])
+            self.assertIsNone(res['stopped'])
+
+
+def isolated(env):
+    """gitenv 환경인가: 시스템 설정을 끄고 credential helper를 빈 값으로 지웠으며, 토큰 헤더는 없다(로컬 읽기)."""
+    if not env or env.get('GIT_CONFIG_NOSYSTEM') != '1': return False
+    config = [(env.get(f'GIT_CONFIG_KEY_{i}'), env.get(f'GIT_CONFIG_VALUE_{i}')) for i in range(int(env.get('GIT_CONFIG_COUNT', '0')))]
+    return ('credential.helper', '') in config and not any(k.endswith('.extraheader') for k, _ in config)
+
+
+class LocalReads(unittest.TestCase):
+    """extract 밖의 git 읽기(skills·assess·export_stat)도 gitenv 환경으로 돈다. 부분 clone에서 없는 blob을 읽으면 내려받는데,
+    사용자 환경이면 시스템 credential helper(osxkeychain)가 개인 자격 증명을 내줄 수 있기 때문이다."""
+    def test_git_reads_in_skills_assess_export_use_the_isolated_env(self):
+        import assess as A
+        import export_stat as X
+        import skills as S
+        with tempfile.TemporaryDirectory() as d:
+            r = source(Path(d) / 'o__r').commit(ME, {'app.py': 'import numpy\nx = 1\ny = 2\n', 'README.md': '# r\n', '.github/workflows/ci.yml': 'on: push\n'})
+            sha, units = r.head(), {'app.py': [[1, 3]]}
+            with mock.patch.object(subprocess, 'run', wraps=subprocess.run) as run:
+                self.assertEqual(S.file_lines(r.path, sha, 'README.md'), ['# r'])                       # git show
+                self.assertEqual(S.read_files(r.path, sha, ['app.py'])['app.py'][0], 'import numpy')   # cat-file --batch
+                chosen, _ = A.targets([dict(full_name='o/r', evals=[dict(sha=sha, branches='main', units=units)])], d, {}, 0, None)  # cat-file -e, detect의 ls-tree
+                A.materials(*chosen[0][:5])                                                           # read_files, README, workflow ls-tree
+                self.assertEqual(X.workflows(r.path, sha), ['.github/workflows/ci.yml'])               # ls-tree
+            gits = [c for c in run.call_args_list if c.args[0][0] == 'git']
+            self.assertEqual({c.args[0][3] for c in gits}, {'show', 'cat-file', 'ls-tree'})
+            self.assertEqual([c.args[0] for c in gits if not isolated(c.kwargs.get('env'))], [])
+
+
+class Token(unittest.TestCase):
+    """GitHub 토큰은 ~/.config/career-stat/github.env의 GITHUB_TOKEN(career-stat-bot)에서만 읽는다. 환경 변수 GITHUB_TOKEN·GH_TOKEN은 보지 않고,
+    파일이나 값이 없으면 토큰 없이 돌지 않고 멈춘다. 시험은 임시 파일만 쓴다(진짜 ~/.config 파일은 읽지 않는다)."""
+    DECOYS = {'GITHUB_TOKEN': 'env-decoy', 'GH_TOKEN': 'gh-decoy'}
+
+    def write(self, d, text):
+        path = Path(d) / 'github.env'
+        path.write_text(text)
+        return path
+
+    def test_file_value_wins_over_decoys_in_the_environment(self):
+        with tempfile.TemporaryDirectory() as d, mock.patch.dict(os.environ, self.DECOYS):
+            self.assertEqual(gitenv.github_token(self.write(d, '# career-stat-bot\n\nOTHER=1\nGITHUB_TOKEN=file-token\n')), 'file-token')
+
+    def test_export_quotes_and_comments(self):
+        with tempfile.TemporaryDirectory() as d:
+            for text in ('export GITHUB_TOKEN="x"\n', "GITHUB_TOKEN='x'\n", '  export  GITHUB_TOKEN=x  # bot\n', 'GITHUB_TOKEN=x'):
+                self.assertEqual(gitenv.github_token(self.write(d, text)), 'x', text)
+            self.assertEqual(gitenv.github_token(self.write(d, '# GITHUB_TOKEN=old\nGITHUB_TOKEN=new\n')), 'new')  # 주석 줄은 건너뛴다
+
+    def test_missing_file_or_key_is_an_error_that_never_shows_a_value(self):
+        with tempfile.TemporaryDirectory() as d, mock.patch.dict(os.environ, self.DECOYS):
+            with self.assertRaisesRegex(gitenv.TokenError, 'github.env'): gitenv.github_token(Path(d) / 'github.env')
+            for text in ('GH_TOKEN=secret-gh\n', 'GITHUB_TOKEN=\n', 'GITHUB_TOKEN=""\n', '# GITHUB_TOKEN=secret-old\n', ''):
+                with self.assertRaises(gitenv.TokenError, msg=text) as caught: gitenv.github_token(self.write(d, text))
+                self.assertNotIn('secret', str(caught.exception))
+                self.assertNotIn('decoy', str(caught.exception))
+            (Path(d) / 'dir.env').mkdir()
+            (Path(d) / 'bin.env').write_bytes(b'GITHUB_TOKEN=\xff\xfe secret\n')
+            for bad in ('dir.env', 'bin.env'):  # 읽을 수 없는 파일도 같은 오류(종료 코드 2)로 멈춘다. 날것의 예외로 끝나지 않는다
+                with self.assertRaisesRegex(gitenv.TokenError, bad) as caught: gitenv.github_token(Path(d) / bad)
+                self.assertNotIn('secret', str(caught.exception))
+
+    def test_check_github_stops_with_exit_2_without_the_token_file(self):  # 환경 변수로 대신 돌거나 토큰 없이 돌지 않는다
+        with tempfile.TemporaryDirectory() as d:
+            db = Path(d) / 'g.sqlite'
+            r = subprocess.run([sys.executable, 'check_github.py', 'me', '--db', str(db)], cwd=HERE, capture_output=True, text=True, timeout=120,
+                               env={**os.environ, **self.DECOYS, 'HOME': d})  # 기본 파일 위치(~/.config/...)가 임시 폴더를 가리킨다
+            self.assertEqual(r.returncode, 2)
+            self.assertIn('.config/career-stat/github.env', r.stderr)
+            self.assertNotIn('decoy', r.stdout + r.stderr)
+            self.assertFalse(db.exists())  # 동의 확인·DB보다 먼저 멈춘다
+
+    def test_bench_reads_the_token_file_before_doing_anything(self):
+        import bench_collector as B
+        with tempfile.TemporaryDirectory() as d, mock.patch.object(B, 'OUT', Path(d) / 'bench'), \
+                mock.patch.multiple(B, synthetic=mock.DEFAULT, integration=mock.DEFAULT, storage=mock.DEFAULT, real=mock.DEFAULT) as stub, \
+                mock.patch('sys.argv', ['bench_collector.py', '--login', 'me']), mock.patch.dict(os.environ, self.DECOYS), \
+                contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()) as err:
+            with mock.patch.object(gitenv, 'github_token', side_effect=gitenv.TokenError('토큰 파일이 없습니다')):
+                with self.assertRaises(SystemExit) as caught: B.main()
+            self.assertEqual(caught.exception.code, 2)
+            self.assertIn('토큰 파일이 없습니다', err.getvalue())
+            self.assertFalse((Path(d) / 'bench').exists())
+            stub['synthetic'].assert_not_called()
+            with mock.patch.object(gitenv, 'github_token', return_value='file-token'): B.main()
+            self.assertEqual(stub['real'].call_args.args, ('me', 2, 'file-token'))
 
 
 if __name__ == '__main__': unittest.main()

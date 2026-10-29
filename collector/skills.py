@@ -10,6 +10,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import gitenv  # git 읽기도 사용자 설정과 분리한다(부분 clone에서 없는 blob을 내려받을 때 개인 자격 증명이 쓰이지 않게)
+
 DICTIONARY = Path(__file__).resolve().parent.parent / '04-repo' / 'feature-job-skill@4957696' / 'job-skill' / 'capabilities.json'
 EXT = {'.py': 'Python', '.js': 'JavaScript', '.jsx': 'JavaScript', '.mjs': 'JavaScript', '.ts': 'TypeScript', '.tsx': 'TypeScript',
        '.java': 'Java', '.kt': 'Kotlin', '.go': 'Go', '.rs': 'Rust', '.c': 'C', '.h': 'C', '.cpp': 'C++', '.cc': 'C++', '.hpp': 'C++',
@@ -89,7 +91,7 @@ def split_lines(raw):
 
 
 def file_lines(repo_path, sha, path):
-    r = subprocess.run(['git', '-C', str(repo_path), 'show', f'{sha}:{path}'], capture_output=True)
+    r = subprocess.run(['git', '-C', str(repo_path), 'show', f'{sha}:{path}'], capture_output=True, env=gitenv.env())
     return split_lines(r.stdout) if r.returncode == 0 else []
 
 
@@ -102,7 +104,7 @@ def read_files(repo_path, sha, paths, chunk=500):
     for k in range(0, len(batch), chunk):
         part = batch[k:k + chunk]
         raw = subprocess.run(['git', '-C', str(repo_path), 'cat-file', '--batch'], input=''.join(f'{sha}:{p}\n' for p in part).encode(),
-                             capture_output=True).stdout
+                             capture_output=True, env=gitenv.env()).stdout
         i = 0
         for p in part:
             j = raw.index(b'\n', i)
@@ -116,7 +118,8 @@ def read_files(repo_path, sha, paths, chunk=500):
 def detect(repo_path, sha, units, index):
     """units: 이 commit의 본인 줄 증거 단위 [{path, lines}] → {skills, unmatched}."""
     skills, unmatched = {}, {}
-    tree = subprocess.run(['git', '-C', str(repo_path), 'ls-tree', '-r', '-z', '--name-only', sha], capture_output=True, text=True).stdout.split('\0')
+    tree = subprocess.run(['git', '-C', str(repo_path), 'ls-tree', '-r', '-z', '--name-only', sha], capture_output=True, text=True,
+                          env=gitenv.env()).stdout.split('\0')
     # 레포 안 Python 모듈은 기술이 아니다: .py 파일 이름과 .py가 든 폴더 이름만 센다(react.svg 같은 파일 이름으로 React를 버리지 않게)
     local = {part for p in tree if p.endswith('.py') for part in [Path(p).stem, *Path(p).parent.parts]}
 

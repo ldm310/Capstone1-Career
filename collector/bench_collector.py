@@ -2,18 +2,19 @@
 
 A. 합성 케이스: 정답을 구성으로 정한 로컬 git 레포 10개로 본인 commit·본인 줄 판정 방식을 비교한다. 네트워크를 쓰지 않는다.
 B. DB 저장: 합성 레포를 분석해 저장한 뒤 다시 읽어 행 수·줄 수가 같은지 본다. 네트워크를 쓰지 않는다.
-C. 실제 계정(--login): 빈 캐시로 여러 번 추출해 시간·API 호출·재실행 일치를 재고, 알려진 값과 대조한다. GITHUB_TOKEN이 필요하다.
+C. 실제 계정(--login): 빈 캐시로 여러 번 추출해 시간·API 호출·재실행 일치를 재고, 알려진 값과 대조한다.
+   토큰은 ~/.config/career-stat/github.env의 GITHUB_TOKEN(career-stat-bot)에서만 읽는다(환경 변수는 보지 않는다). 없으면 아무것도 하지 않고 멈춘다.
 A의 정답은 합성이라 실제 사용자 정확도가 아니다. git blame 자체의 정확도는 재지 않는다(정답도 blame으로 만든다).
 """
 import argparse
 import json
-import os
 import subprocess
 import tempfile
 import time
 from pathlib import Path
 
 import extract as g
+import gitenv
 import store
 
 HERE = Path(__file__).resolve().parent
@@ -37,10 +38,10 @@ class Src:
     """정답을 아는 원본 레포. 날짜를 고정해서 매번 같은 SHA가 나온다."""
     def __init__(self, root):
         self.path, self.t = root / 'src', 1_760_000_000
-        subprocess.run([*GIT, 'init', '-q', '-b', 'main', str(self.path)], check=True, capture_output=True)
+        subprocess.run([*GIT, 'init', '-q', '-b', 'main', str(self.path)], check=True, capture_output=True, env=gitenv.env())
 
     def _git(self, *args, who=None):
-        env = os.environ
+        env = gitenv.env()  # 사용자 git 설정과 분리. 작성자는 아래 환경 변수로만 정한다
         if who:
             self.t += 60
             env = {**env, 'GIT_AUTHOR_NAME': who[0], 'GIT_AUTHOR_EMAIL': who[1], 'GIT_COMMITTER_NAME': who[0],
@@ -63,7 +64,7 @@ class Src:
     def clone(self):
         self.checkout('main')
         dst = self.path.parent / 'clone'
-        subprocess.run([*GIT, 'clone', '-q', str(self.path), str(dst)], check=True, capture_output=True)
+        subprocess.run([*GIT, 'clone', '-q', str(self.path), str(dst)], check=True, capture_output=True, env=gitenv.env())
         return dst
 
 
@@ -210,7 +211,7 @@ def storage():
     (OUT / 'storage.json').write_text(json.dumps(dict(want=want, got=got), ensure_ascii=False, indent=2) + '\n')
 
 
-def real(url, runs):
+def real(url, runs, token):
     login = g.parse_login(url)
     store.require_consent(HERE / 'out' / 'github.sqlite', login, readonly=True)  # 실제 계정은 동의 기록이 있을 때만 잰다
     volatile = ('started_at', 'finished_at', 'api_calls', 'rate_remaining')
@@ -218,7 +219,7 @@ def real(url, runs):
     with tempfile.TemporaryDirectory() as tmp:
         for _ in range(runs):
             t0 = time.monotonic()
-            res = g.extract(login, os.environ.get('GITHUB_TOKEN'), Path(tmp) / 'repos')
+            res = g.extract(login, token, Path(tmp) / 'repos')
             measured.append(dict(seconds=round(time.monotonic() - t0, 1), api_calls=res['api_calls'], stopped=res['stopped'], res=res))
             if res['stopped']: break
     first = measured[0]['res']
@@ -246,14 +247,18 @@ def real(url, runs):
 
 def main():
     p = argparse.ArgumentParser(description='수집기(흐름 1~2단계) 벤치마크')
-    p.add_argument('--login', help='실제 계정 측정(C)까지 할 때 계정 URL 또는 이름. GITHUB_TOKEN 필요')
+    p.add_argument('--login', help='실제 계정 측정(C)까지 할 때 계정 URL 또는 이름. ~/.config/career-stat/github.env의 GITHUB_TOKEN 필요')
     p.add_argument('--runs', type=int, default=2)
     a = p.parse_args()
+    token = None
+    if a.login:  # 합성 측정(A·B)도 돌리기 전에 확인한다
+        try: token = gitenv.github_token()
+        except gitenv.TokenError as e: p.error(str(e))
     OUT.mkdir(parents=True, exist_ok=True)
     synthetic()
     integration()
     storage()
-    if a.login: real(a.login, a.runs)
+    if a.login: real(a.login, a.runs, token)
     print(f'\n저장: {OUT}')
 
 

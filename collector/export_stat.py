@@ -14,6 +14,7 @@ from pathlib import Path
 import assess as A
 import engine as E
 import extract
+import gitenv
 import rejudge
 import rubric_source as R
 import skills as S
@@ -68,7 +69,8 @@ def root_of(db, a):
 
 
 def workflows(path, sha):
-    r = subprocess.run(['git', '-C', str(path), 'ls-tree', '-r', '--name-only', sha, '.github/workflows'], capture_output=True, text=True)
+    r = subprocess.run(['git', '-C', str(path), 'ls-tree', '-r', '--name-only', sha, '.github/workflows'], capture_output=True, text=True,
+                       env=gitenv.env())
     return [p for p in r.stdout.split() if p.endswith(('.yml', '.yaml'))]
 
 

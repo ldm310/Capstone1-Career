@@ -4,11 +4,35 @@ os.environ에서는 PATH·HOME·LANG만 복사한다. Anthropic 키 같은 다�
 시스템·전역 gitconfig는 읽지 않는다(시스템 설정의 credential.helper=osxkeychain이 401 때 개인 GitHub 자격 증명을 내주고,
 전역 url.insteadOf가 개인 SSH 키로 바꿀 수 있다). 설정은 GIT_CONFIG_COUNT·GIT_CONFIG_KEY_n·GIT_CONFIG_VALUE_n 환경 변수로만 건다.
 그래서 명령줄(argv)과 .git/config에는 남지 않는다.
+토큰도 여기서 읽는다(github_token): ~/.config/career-stat/github.env의 GITHUB_TOKEN만 쓰고 환경 변수는 보지 않는다.
 """
 import base64
 import os
+import re
+from pathlib import Path
 
 KEEP = ('PATH', 'HOME', 'LANG')
+# 토큰 파일의 한 줄: [export ]GITHUB_TOKEN=값. 값은 "…"·'…'로 감싸도 되고, 뒤에 # 주석이 와도 된다
+TOKEN_LINE = re.compile(r'''\s*(?:export\s+)?GITHUB_TOKEN\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s#"']*))\s*(?:#.*)?''')
+
+
+class TokenError(RuntimeError):
+    """토큰 파일이 없거나 GITHUB_TOKEN 값이 없음. 메시지에 토큰 값은 넣지 않는다."""
+
+
+def github_token(path: Path = Path.home() / '.config/career-stat/github.env') -> str:
+    """서비스 전용 계정(career-stat-bot)의 GitHub 토큰: path 파일의 GITHUB_TOKEN 줄에서만 읽는다.
+    환경 변수(GITHUB_TOKEN·GH_TOKEN)는 보지 않는다: 개인 gh 토큰으로 넘어가는 길을 두지 않는다. 빈 줄과 # 주석 줄은 건너뛰고,
+    GITHUB_TOKEN 줄이 여럿이면 마지막 줄을 쓴다(셸에서 source한 것과 같다). 파일이나 값이 없으면 TokenError(토큰 없이 돌지 않는다)."""
+    try: text = Path(path).read_text(encoding='utf-8-sig')
+    except FileNotFoundError: raise TokenError(f'GitHub 토큰 파일이 없습니다: {path}') from None
+    except (OSError, UnicodeDecodeError) as e: raise TokenError(f'GitHub 토큰 파일을 읽지 못했습니다({type(e).__name__}): {path}') from None
+    token = None
+    for line in text.splitlines():
+        m = TOKEN_LINE.fullmatch(line)
+        if m: token = next(v for v in m.groups() if v is not None)
+    if not token: raise TokenError(f'{path}에 GITHUB_TOKEN 값이 없습니다(형식: GITHUB_TOKEN=값)')
+    return token
 
 
 def env(token=None, replace_base=None):
