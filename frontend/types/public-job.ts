@@ -39,6 +39,8 @@ export interface CompanyInfo {
   homepage?: string;
   address?: string;
 }
+// 근무지를 모르는 공고(백엔드 공고 등)의 location. 목록에는 그대로 쓰고 상세의 근무지 위치는 숨긴다.
+export const unknownLocation = "근무지 원문 확인";
 export interface PostingSection {
   title: string;
   items: string[];

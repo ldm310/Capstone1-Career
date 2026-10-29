@@ -6,6 +6,7 @@ import {
   type ExperienceKind,
 } from "@/lib/job-filters";
 import { collectedJobs } from "@/lib/server/job-feed";
+import { backendJobs } from "@/lib/server/backend-jobs";
 import { dummyJobs } from "@/lib/dummy-jobs";
 import type { PublicJob } from "@/types/public-job";
 const minimumJobs = 6;
@@ -41,10 +42,18 @@ export async function GET(request: Request) {
     return Response.json({ error: "잘못된 조회 조건입니다." }, { status: 400 });
   try {
     // 수집에 실패해도 더미 공고로 목록을 채운다. 실패 안내는 화면에 띄우지 않는다.
-    const feed = await collectedJobs().catch(() => ({
-      jobs: [],
-      checkedAt: new Date().toISOString(),
-    }));
+    // 백엔드 공고(BACKEND_URL)가 있으면 먼저 보여준다.
+    const [collected, fromBackend] = await Promise.all([
+      collectedJobs().catch(() => ({
+        jobs: [] as PublicJob[],
+        checkedAt: new Date().toISOString(),
+      })),
+      backendJobs(),
+    ]);
+    const feed = {
+      ...collected,
+      jobs: [...fromBackend, ...collected.jobs],
+    };
     const matches = (job: PublicJob) =>
       (!jobId || job.id === jobId) &&
       (role === "all" || job.category === role) &&

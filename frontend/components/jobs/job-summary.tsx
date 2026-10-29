@@ -8,7 +8,7 @@ import {
   Star,
   TrainFront,
 } from "lucide-react";
-import type { PublicJob } from "@/types/public-job";
+import { unknownLocation, type PublicJob } from "@/types/public-job";
 import { experienceLabels, jobExperience } from "@/lib/job-filters";
 import { useSavedJobs } from "@/lib/saved-jobs";
 import { OriginalLink } from "./original-link";
@@ -150,31 +150,34 @@ export function JobExtras({ job }: { job: PublicJob }) {
   const d = job.details ?? {};
   const c = d.company;
   const mapQuery = encodeURIComponent(d.address ?? job.location);
+  const knownPlace = !!d.address || job.location !== unknownLocation;
   return (
     <div className="job-extras">
-      <section aria-labelledby="job-place-title">
-        <h3 id="job-place-title">근무지 위치</h3>
-        <div className="job-box job-place">
-          <p>
-            <MapPin size={18} aria-hidden="true" />
-            {d.address ?? job.location}
-          </p>
-          {d.station && (
+      {knownPlace && (
+        <section aria-labelledby="job-place-title">
+          <h3 id="job-place-title">근무지 위치</h3>
+          <div className="job-box job-place">
             <p>
-              <TrainFront size={18} aria-hidden="true" />
-              {d.station}
+              <MapPin size={18} aria-hidden="true" />
+              {d.address ?? job.location}
             </p>
-          )}
-          <a
-            className="job-box-link"
-            href={`https://map.naver.com/p/search/${mapQuery}`}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            지도 보기<span className="sr-only"> (새 창)</span>
-          </a>
-        </div>
-      </section>
+            {d.station && (
+              <p>
+                <TrainFront size={18} aria-hidden="true" />
+                {d.station}
+              </p>
+            )}
+            <a
+              className="job-box-link"
+              href={`https://map.naver.com/p/search/${mapQuery}`}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              지도 보기<span className="sr-only"> (새 창)</span>
+            </a>
+          </div>
+        </section>
+      )}
       <section aria-labelledby="job-period-title">
         <h3 id="job-period-title">접수 기간, 방법</h3>
         <div className="job-box job-period">

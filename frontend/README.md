@@ -20,6 +20,22 @@ npm run build
 npm start
 ```
 
+## 백엔드 연결
+
+저장소 루트의 Spring 백엔드(`backend/`)에서 채용공고를 받아옵니다. `frontend/.env.local`에 주소를 적습니다.
+
+```sh
+BACKEND_URL=http://localhost:8080
+```
+
+- 백엔드는 루트에서 `docker compose up -d`로 띄웁니다. 공고 데이터는 job-skill 파이프라인이 DB에 넣습니다.
+- 브라우저는 백엔드를 직접 부르지 않습니다. 프론트 서버(`lib/server/backend-jobs.ts`)가 `GET /api/postings`, `GET /api/postings/{id}`를 불러 공고 형식으로 바꿉니다. 결과는 5분 동안 재사용합니다.
+- 진행 중 공고 가운데 데이터, 백엔드 직무만 보여줍니다. 공고 ID는 `be:<postingId>`입니다.
+- 추출 결과의 업무, 필수, 우대, 기타가 공고 내용의 주요 업무, 자격요건, 우대사항, 기타가 됩니다. 요건의 기술 이름(사전 이름, 없으면 적힌 이름)이 공고 기술이 됩니다.
+- 백엔드에 없는 근무지는 "근무지 원문 확인"으로 두고 상세의 근무지 위치는 숨깁니다.
+- `BACKEND_URL`이 없거나, 백엔드가 응답하지 않거나, 공고가 없으면 지금처럼 수집 공고와 더미 공고만 보여줍니다.
+- 아직 연결하지 않은 것: 로그인, 내 역량 LV(`/api/users/{id}/capabilities`), 공고 대비 내 LV(`/api/postings/{id}/fit`), 프로젝트 등록. 백엔드에 로그인이 생긴 뒤 연결합니다.
+
 ## 데모 계정
 
 | 항목     | 값                  |
