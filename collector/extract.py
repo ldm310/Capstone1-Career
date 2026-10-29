@@ -30,7 +30,6 @@ CLONE_FILTER = 'blob:limit=512k'  # 이 크기 이상인 blob은 받지 않는�
 BRANCHES = ('main', 'master', 'develop', 'dev', 'develope')  # 기본 브랜치와 함께 보는 브랜치(결정 9번, dev·develope는 2026-10-29 결정)
 SEARCH_PAGES = 10  # 검색 API가 주는 최대: 100개씩 10쪽 = 1,000개(그 뒤 쪽은 422)
 ENV = gitenv.env()  # 읽기용 git 환경(토큰 없음)
-LIST_ENV = {**ENV, 'GIT_NO_LAZY_FETCH': '1'}  # ls-tree -l용: 부분 clone이 받지 않은 blob을 크기 보느라 내려받지 않는다(크기 칸이 BAD)
 SYNCED = 'career-synced'  # clone·fetch가 끝까지 성공한 캐시에만 .git 안에 남기는 완료 표지(끊긴 clone을 가려낸다)
 # github.com/<이 이름>은 계정이 아니라 GitHub 화면 주소다. 같은 이름의 다른 계정을 분석하지 않도록 막는다.
 RESERVED = {'dashboard', 'settings', 'notifications', 'explore', 'orgs', 'organizations', 'marketplace', 'pulls', 'issues',
@@ -220,12 +219,13 @@ def commit_stats(path, shas):
     finally: repo.clear()
 
 
-def history(path, sha, emails, names):
+def history(path, sha, emails, names, env=None):
     """평가 commit까지의 commit이 바꾼 경로를 git log 한 번으로 본다. blame 없이도 결과를 아는 파일을 가리기 위해서다.
     돌려주는 것: 경로별 바뀐 횟수, 한 번 추가되고 끝난 경로의 작성자 구분(own·name_only·other),
     본인·이름 일치 commit이 닿았을 수 있는 경로(이름 바꾸기를 따라가고, 같은 commit의 삭제+추가도 이름 바꾸기로 넉넉히 본다).
-    작성자는 blame처럼 .mailmap을 적용한 값(%aE·%aN)으로 본다. merge commit은 어느 부모와도 다른 경로(충돌 해결)만 나온다."""
-    out = git(path, 'log', '--format=%x01%aE%x02%aN', '-M', '--name-status', '-z', '--diff-merges=dense-combined', sha, timeout=600)
+    작성자는 commit에 적힌 값(%ae·%an)이다: .mailmap을 적용하지 않으므로 레포에 심은 .mailmap이 팀원 commit을 본인 commit으로 바꾸지 못한다.
+    merge commit은 어느 부모와도 다른 경로(충돌 해결)만 나온다. env(None이면 ENV)는 git log에 넘긴다."""
+    out = git(path, 'log', '--format=%x01%ae%x02%an', '-M', '--name-status', '-z', '--diff-merges=dense-combined', sha, timeout=600, env=env)
     touches, added, reach, moves = {}, {}, set(), []
     for rec in out.split('\x01')[1:]:
         head, _, body = rec.partition('\0')
@@ -249,16 +249,17 @@ def history(path, sha, emails, names):
         reach |= more
 
 
-def scan_blobs(path, entries, chunk=500):
+def scan_blobs(path, entries, chunk=500, env=None):
     """entries [(경로, blob)]의 파일마다 줄 수(blame이 세는 방식: 마지막 줄에 줄바꿈이 없어도 한 줄)와 생성 파일 여부(paths.generated)를 구한다.
     blob은 git cat-file 묶음으로 한 번만 읽고, 내용이 같은 파일은 읽은 것을 함께 쓴다. 돌려주는 것: {경로: (줄 수, 생성 파일인가)}.
-    읽지 못한 blob(cat-file이 missing으로 답함. 부분 clone에서 내려받지 못한 경우)의 경로는 넣지 않는다: 건너뛴 파일과 같다."""
+    읽지 못한 blob(cat-file이 missing으로 답함. 부분 clone에서 내려받지 못한 경우)의 경로는 넣지 않는다: 건너뛴 파일과 같다.
+    env(None이면 ENV)는 git cat-file에 넘긴다."""
     by_blob, scanned = {}, {}
     for p, blob in entries: by_blob.setdefault(blob, []).append(p)
     blobs = sorted(by_blob)
     for k in range(0, len(blobs), chunk):
         out = subprocess.run(['git', '-C', str(path), 'cat-file', '--batch'], input=('\n'.join(blobs[k:k + chunk]) + '\n').encode(),
-                             capture_output=True, env=ENV, timeout=600, check=True).stdout
+                             capture_output=True, env=ENV if env is None else env, timeout=600, check=True).stdout
         i = 0
         while i < len(out):
             j = out.index(b'\n', i)
@@ -273,23 +274,28 @@ def scan_blobs(path, entries, chunk=500):
     return scanned
 
 
-def blame(path, sha, emails, names):
+def blame(path, sha, emails, names, env=None):
     """평가 commit에서 줄마다 마지막 작성자를 보고, 본인 줄을 증거 단위 {sha, path, lines}로 묶는다.
     경로·내용 필터(paths.skipped·generated)에 걸린 파일은 어디에도 세지 않는다.
     나머지는 모든 파일을 blame한 결과와 같되, 결과가 정해진 파일은 줄 수만 센다: 본인·이름 일치 commit이 닿지 않은 파일(전부 다른 사람),
     한 번 추가되고 바뀐 적 없는 파일(전부 그 commit 작성자). 커널 소스처럼 한 번에 올린 파일 수만 개도 몇 초 안에 끝난다.
-    blame이 실패하면(부분 clone이 받지 않은 옛 blob을 내려받지 못함, 시간 초과) 처음 실패한 파일로 BlameError를 던진다."""
+    blame이 실패하면(부분 clone이 받지 않은 옛 blob을 내려받지 못함, 시간 초과) 처음 실패한 파일로 BlameError를 던진다.
+    작성자는 blame의 author-mail·author다. blame에는 .mailmap을 끄는 옵션이 없고 작업 트리의 .mailmap은 어떤 설정으로도 끌 수 없다(git 2.55 실측).
+    그래서 checkout 없는 clone(sync)에서, mailmap 설정(mailmap.file·mailmap.blob)을 끈 gitenv 환경으로만 돌린다: 그러면 history의 %ae·%an과 같은 값이다.
+    env(None이면 ENV)는 이 함수가 돌리는 모든 git(ls-tree·log·cat-file·blame)에 넘긴다. gitenv.env(...)로 만든 환경이어야 한다(graft 이름공간 등)."""
+    env = ENV if env is None else env
     count, units = dict(own=0, name_only=0, other=0, files=0), []
     entries = []
-    for entry in git(path, 'ls-tree', '-r', '-l', '-z', sha, env=LIST_ENV).split('\0'):
+    # ls-tree -l은 GIT_NO_LAZY_FETCH로 돈다: 부분 clone이 받지 않은 blob을 크기 보느라 내려받지 않는다(크기 칸이 BAD)
+    for entry in git(path, 'ls-tree', '-r', '-l', '-z', sha, env={**env, 'GIT_NO_LAZY_FETCH': '1'}).split('\0'):
         if not entry: continue
         meta, p = entry.split('\t', 1)
         _, kind, blob, size = meta.split()
         # 부분 clone이 받지 않은 blob은 크기가 BAD로 나온다: 숫자와 상관없이 건너뛴다(512KiB 이상이라 paths.skipped와 같은 파일)
         if kind == 'blob' and size != 'BAD' and not skipped(p, int(size)): entries.append((p, blob))
-    touches, added, reach = history(path, sha, emails, names)
+    touches, added, reach = history(path, sha, emails, names, env=env)
     known = lambda p: p not in reach or (touches.get(p) == 1 and p in added)
-    scanned = scan_blobs(path, entries)  # 후보 blob을 한 번씩만 읽는다: 줄 수(빠른 길 파일)와 생성 파일 여부(모든 파일)
+    scanned = scan_blobs(path, entries, env=env)  # 후보 blob을 한 번씩만 읽는다: 줄 수(빠른 길 파일)와 생성 파일 여부(모든 파일)
     for p, _ in entries:
         if p not in scanned: continue  # 읽지 못한 blob은 누구의 줄로도 세지 않는다
         n, is_generated = scanned[p]
@@ -302,7 +308,7 @@ def blame(path, sha, emails, names):
             continue
         # 바이트로 읽는다: 텍스트로 읽으면 Python이 혼자 있는 \r도 줄바꿈으로 바꿔 줄 수가 git과 달라진다
         try: out = subprocess.run(['git', '-C', str(path), 'blame', '-w', '--line-porcelain', sha, '--', p],
-                                  capture_output=True, env=ENV, timeout=120, check=True).stdout
+                                  capture_output=True, env=env, timeout=120, check=True).stdout
         except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:  # 파일 하나를 조용히 빼면 덜 센 결과가 성공처럼 남는다
             raise BlameError(p) from e
         count['files'] += 1

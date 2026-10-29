@@ -27,17 +27,19 @@ from testkit import EMAILS, GIT, MATE, ME, NAMES, TWIN, FakeApi, Paged, Repo, St
 HERE = Path(__file__).resolve().parent
 
 
-def blame_reference(path, sha, emails, names):
-    """정답 기준: 경로·내용 필터(paths.skipped·generated)를 거친 모든 파일을 blame한다. git 출력은 바이트로 읽고, 줄은 git이 내준 줄 번호 그대로 센다."""
+def blame_reference(path, sha, emails, names, env=None):
+    """정답 기준: 경로·내용 필터(paths.skipped·generated)를 거친 모든 파일을 blame한다. git 출력은 바이트로 읽고, 줄은 git이 내준 줄 번호 그대로 센다.
+    git은 extract.blame과 같은 환경으로 돈다(None이면 extract.ENV: 사용자 git 설정과 분리하고 mailmap 설정을 끈 환경)."""
+    env = extract.ENV if env is None else env
     count, units = dict(own=0, name_only=0, other=0, files=0), []
-    for entry in extract.git(path, 'ls-tree', '-r', '-l', '-z', sha).split('\0'):
+    for entry in extract.git(path, 'ls-tree', '-r', '-l', '-z', sha, env=env).split('\0'):
         if not entry: continue
         meta, p = entry.split('\t', 1)
         _, kind, blob, size = meta.split()
         if kind != 'blob' or paths.skipped(p, int(size)): continue
-        head = subprocess.run(['git', '-C', str(path), 'cat-file', 'blob', blob], capture_output=True, check=True).stdout[:paths.HEAD_BYTES]
+        head = subprocess.run(['git', '-C', str(path), 'cat-file', 'blob', blob], capture_output=True, check=True, env=env).stdout[:paths.HEAD_BYTES]
         if paths.generated(p, head): continue
-        r = subprocess.run(['git', '-C', str(path), 'blame', '-w', '--line-porcelain', sha, '--', p], capture_output=True)
+        r = subprocess.run(['git', '-C', str(path), 'blame', '-w', '--line-porcelain', sha, '--', p], capture_output=True, env=env)
         if r.returncode: continue
         count['files'] += 1
         mine, by_line, mail, author, line = [], {}, None, None, None
@@ -833,6 +835,91 @@ class Collect(unittest.TestCase):
             self.assertEqual((api.max_pages['/search/commits'], api.max_pages['/search/issues']), (10, 10))
             self.assertEqual(res['external_pr_repos'], ['team/pr', 'team/second'])
             self.assertIsNone(res['stopped'])
+
+
+MAILMAP = 'Me <me@example.com> <mate@example.com>\n'  # 팀원 메일(mate@)의 commit을 내 이름·메일로 바꾸라는 .mailmap 한 줄
+
+
+class Identity(unittest.TestCase):
+    """레포가 귀속을 바꾸지 못한다: 팀원이 레포에 심은 .mailmap(팀원 메일 → 나)이 팀원 줄을 내 줄로 바꾸면 안 된다.
+    git blame에는 .mailmap을 끄는 옵션이 없고, 작업 트리의 .mailmap은 어떤 설정으로도 끌 수 없다(git 2.55 실측). 그래서
+    분석은 checkout 없는 clone(extract.sync)에서만 하고, git은 mailmap 설정(mailmap.file·mailmap.blob)을 끈 환경(gitenv.env)으로 돌며,
+    history는 commit에 적힌 작성자(%ae·%an)를 그대로 읽는다. checkout clone이 안전하다고 보는 시험은 두지 않는다."""
+
+    def planted(self, d, mine_first=False):
+        """팀원(MATE)이 app.py에 10줄을 쓰고, 다른 commit에서 .mailmap을 심은 레포를 원격으로 두고 sync로 받는다 → (캐시 경로, 끝 commit).
+        mine_first면 내가 먼저 app.py를 만들고 팀원이 10줄로 모두 바꾼다: 내 commit이 닿은 파일이라 git blame 길로 센다(아니면 빠른 길)."""
+        src = source(d / 'src')
+        if mine_first: src.commit(ME, {'app.py': lines('me', 3)})
+        src.commit(MATE, {'app.py': lines('mate', 10)})
+        src.commit(MATE, {'.mailmap': MAILMAP})
+        return extract.sync('o/r', d / 'cache', None, bare(d / 'src.git', src.path).as_uri()), src.head()
+
+    def test_planted_mailmap_cannot_claim_lines(self):
+        """빠른 길(한 번 추가된 파일: history의 작성자)과 blame 길(내 commit이 닿은 파일: blame의 author-mail) 모두 팀원 줄로 센다.
+        대조 기준(blame_reference)도 같은 환경으로 돌아 같은 값을 낸다. history도 팀원 commit을 내 commit으로 보지 않는다."""
+        for mine_first in (False, True):
+            with self.subTest(blame_path=mine_first), tempfile.TemporaryDirectory() as d:
+                path, sha = self.planted(Path(d), mine_first)
+                with mock.patch.object(subprocess, 'run', wraps=subprocess.run) as run:
+                    count, units = extract.blame(path, sha, EMAILS, NAMES)
+                blamed = [c.args[0][-1] for c in run.call_args_list if c.args[0][3] == 'blame']
+                self.assertEqual(blamed, ['app.py'] if mine_first else [])  # 두 길을 실제로 지난다
+                self.assertEqual((count, units), (dict(own=0, name_only=0, other=10 + 1, files=2), []))  # 팀원 10줄 + .mailmap 1줄
+                self.assertEqual((count, units), blame_reference(path, sha, EMAILS, NAMES))
+                touches, added, reach = extract.history(path, sha, EMAILS, NAMES)
+                self.assertEqual(added, {'app.py': 'own' if mine_first else 'other', '.mailmap': 'other'})  # 파일을 처음 만든 사람
+                self.assertEqual(reach, {'app.py'} if mine_first else set())  # 본인 commit이 닿은 경로: 내가 만든 app.py뿐
+
+    def test_history_reads_the_author_written_in_the_commit(self):
+        """history는 .mailmap을 적용하지 않는 칸(%ae·%an)을 읽는다: mailmap 출처가 git에 닿아도 팀원 commit을 내 commit으로 보지 않는다.
+        여기서는 mailmap.blob을 다시 켠다(bare 레포에서 git이 기본으로 읽는 HEAD:.mailmap과 같은 출처). 환경이 하나 빠져도 빠른 길은 지킨다."""
+        with tempfile.TemporaryDirectory() as d:
+            path, sha = self.planted(Path(d))
+            n = int(extract.ENV['GIT_CONFIG_COUNT'])  # 뒤에 건 설정이 앞의 mailmap.blob= 를 이긴다
+            on = {**extract.ENV, 'GIT_CONFIG_COUNT': str(n + 1), f'GIT_CONFIG_KEY_{n}': 'mailmap.blob', f'GIT_CONFIG_VALUE_{n}': f'{sha}:.mailmap'}
+            self.assertEqual(extract.git(path, 'log', '-1', '--format=%aE', sha, env=on), ME[1] + '\n')  # 이 환경에서는 mailmap이 실제로 켜진다
+            touches, added, reach = extract.history(path, sha, EMAILS, NAMES, env=on)
+            self.assertEqual((added, reach), ({'app.py': 'other', '.mailmap': 'other'}, set()))
+
+    def test_env_reaches_every_git_call_of_blame_and_history(self):  # 뒤 작업(graft)이 넘기는 환경이 git 호출마다 닿는다
+        with tempfile.TemporaryDirectory() as d:
+            path, sha = self.planted(Path(d), mine_first=True)  # git blame까지 가는 레포
+            env = gitenv.env(replace_base='refs/career/replace/')
+            with mock.patch.object(subprocess, 'run', wraps=subprocess.run) as run:
+                extract.blame(path, sha, EMAILS, NAMES, env=env)
+                extract.history(path, sha, EMAILS, NAMES, env=env)
+            calls = [(c.args[0][3], c.kwargs['env']) for c in run.call_args_list]
+            self.assertEqual(sorted(cmd for cmd, _ in calls), ['blame', 'cat-file', 'log', 'log', 'ls-tree'])
+            for cmd, got in calls:  # 넘긴 환경 그대로. ls-tree -l만 크기를 보느라 blob을 내려받지 않게 GIT_NO_LAZY_FETCH를 더한다
+                self.assertEqual(got, {**env, 'GIT_NO_LAZY_FETCH': '1'} if cmd == 'ls-tree' else env, cmd)
+
+    def test_sync_never_leaves_a_working_tree(self):
+        """분석하는 캐시에는 checkout이 없다: 새 clone도, 다시 받은(fetch) 캐시도 파일을 꺼내지 않는다(.mailmap 파일이 생기지 않는다).
+        작업 트리가 있는 캐시(옛 방식 clone)는 쓰지 않고(CacheError, 그 레포는 실패로 남고 줄을 세지 않음) 옮기거나 지우지도 않는다."""
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            src = source(d / 'src').commit(MATE, {'app.py': lines('mate', 10), '.mailmap': MAILMAP})
+            remote = bare(d / 'src.git', src.path)
+            tree = lambda p: (sorted(q.name for q in p.iterdir()), (p / '.git' / 'index').exists())  # (캐시 폴더의 항목, index가 있나)
+            path = extract.sync('o/r', d / 'cache', None, remote.as_uri())  # 새 clone
+            self.assertEqual(tree(path), (['.git'], False))
+            src.commit(MATE, {'lib.py': lines('mate', 4)})
+            src.git('push', '-q', str(remote), 'main')
+            self.assertEqual(extract.sync('o/r', d / 'cache', None, remote.as_uri()), path)  # 다시 받기(fetch)
+            self.assertEqual(extract.ref(path, 'main'), src.head())
+            self.assertEqual(tree(path), (['.git'], False))
+            old = d / 'old' / 'o__r'  # 작업 트리가 있는 캐시: .mailmap이 꺼내져 있다
+            subprocess.run([*GIT, 'clone', '-q', remote.as_uri(), str(old)], check=True, capture_output=True)
+            before = tree(old)
+            self.assertEqual(before, (['.git', '.mailmap', 'app.py', 'lib.py'], True))
+            with self.assertRaises(extract.CacheError): extract.sync('o/r', d / 'old', None, remote.as_uri())
+            res = extract.extract('me', None, d / 'old', api=Listing(repo_routes('o/r'), owner=[meta('o/r')]), remote_url=lambda full: remote.as_uri())
+            self.assertIn('checkout', res['repos'][0]['error'])
+            self.assertNotIn('evals', res['repos'][0])
+            self.assertEqual(res['evidence'], [])
+            self.assertEqual(tree(old), before)  # 쓰지도 옮기지도 지우지도 않았다
+            self.assertFalse((d / 'old' / '.broken').exists())
 
 
 def isolated(env):

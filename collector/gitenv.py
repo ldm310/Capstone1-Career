@@ -41,6 +41,8 @@ def env(token=None, replace_base=None):
     GitPython(PyDriller)처럼 os.environ 위에 덮어쓰는 경우에도 자격 증명으로 가는 길은 막힌다: askpass와 -c 설정(GIT_CONFIG_PARAMETERS)을 빈 값으로 둔다."""
     config = [('credential.helper', ''),  # 빈 값은 앞에서 정한 helper를 모두 지운다
               ('core.attributesFile', '/dev/null'),  # 사용자 전역 attributes(~/.config/git/attributes)도 읽지 않는다
+              # 설정 파일·blob으로 읽는 .mailmap을 끈다(bare 레포가 기본으로 읽는 HEAD:.mailmap 포함). 작업 트리의 .mailmap은 설정으로 끌 수 없어서
+              # clone은 checkout 없이 받는다(extract.sync)
               ('mailmap.file', ''), ('mailmap.blob', ''), ('log.mailmap', 'false')]
     if token:
         basic = base64.b64encode(f'x-access-token:{token}'.encode()).decode()
