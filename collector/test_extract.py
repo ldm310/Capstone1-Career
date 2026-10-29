@@ -72,16 +72,35 @@ class Paths(unittest.TestCase):
         for name in ('data.json', 'page.html', 'README'):
             self.assertTrue(paths.generated(name, b'x' * 5000 + b'\n'), name)
 
-    def test_long_line_rule_counts_characters_not_bytes(self):  # 한글은 3바이트라 바이트로 재면 손으로 쓴 한글 HTML이 길어 보인다
+    def test_long_line_rule_counts_bytes(self):  # 글자 수가 아니라 바이트: 보수적인 쪽이고, 캐시 7만 파일에서 판정이 달라지는 파일이 없었다
         korean = ('가' * 130).encode() + b'\n'  # 130글자, 391바이트
-        self.assertFalse(paths.generated('page.html', korean * 30))
-        self.assertTrue(paths.generated('page.html', ('가' * 301).encode() + b'\n'))  # 글자 301개 -> 생성 파일
+        self.assertEqual(len(korean), 391)
+        self.assertTrue(paths.generated('page.html', korean * 30))
 
     def test_nul_byte_in_first_8000_bytes_means_binary(self):  # git의 바이너리 판별과 같다. 확장자와 상관없이 적용
         self.assertTrue(paths.generated('model.tflite', b'\x00abc\n' * 3))
         self.assertTrue(paths.generated('out.txt', 'hello\nworld\n'.encode('utf-16')))  # UTF-16 텍스트
-        self.assertTrue(paths.generated('a.py', b'a\n' * 3999 + b'\x00'))  # 인덱스 7999
-        self.assertFalse(paths.generated('a.txt', b'a\n' * 4000 + b'\x00\n'))  # 인덱스 8000은 이 규칙이 아니다
+        inside, outside = b'a\n' * 3999 + b'a\x00', b'a\n' * 4000 + b'\x00\n'
+        self.assertEqual((inside.index(b'\x00'), outside.index(b'\x00')), (7999, 8000))
+        self.assertTrue(paths.generated('a.dat', inside))  # 인덱스 7999: 앞 8000바이트 안
+        self.assertFalse(paths.generated('a.dat', outside))  # 인덱스 8000: 이 규칙이 아니다
+
+    def test_sql_dump_tool_markers_in_first_5_lines(self):  # 덤프 도구가 머리말에 남기는 표지. 본문이 짧은 줄뿐이라 다른 규칙으로는 안 걸린다
+        mysql_body = (b'DROP TABLE IF EXISTS `users`;\nCREATE TABLE `users` (\n  `id` int NOT NULL,\n  `name` varchar(50) DEFAULT NULL\n'
+                      b') ENGINE=InnoDB;\nLOCK TABLES `users` WRITE;\nUNLOCK TABLES;\n')
+        pg_body = b'SET statement_timeout = 0;\nCREATE TABLE public.t (\n    id integer NOT NULL\n);\nCOPY public.t (id) FROM stdin;\n1\n2\n3\n\\.\n'
+        host = b'--\n-- Host: localhost    Database: shop\n--\n\n'
+        dumps = {
+            b'-- MySQL dump': b'-- MySQL dump 10.13  Distrib 8.0.33, for Linux (x86_64)\n' + host + mysql_body,
+            b'-- MariaDB dump': b'-- MariaDB dump 10.19  Distrib 10.11.2-MariaDB, for debian-linux-gnu (x86_64)\n' + host + mysql_body,
+            b'-- PostgreSQL database dump': b'--\n-- PostgreSQL database dump\n--\n\n-- Dumped from database version 15.3\n-- Dumped by pg_dump version 15.3\n\n' + pg_body,
+            b'-- phpMyAdmin SQL Dump': b'-- phpMyAdmin SQL Dump\n-- version 5.2.1\n-- https://www.phpmyadmin.net/\n' + host + mysql_body,
+        }
+        for marker, dump in dumps.items():
+            self.assertTrue(paths.generated('dump.sql', dump), marker)
+            self.assertFalse(paths.generated('dump.sql', dump.replace(marker, b'-- note')), marker)  # 표지만 빼면 다른 규칙으로는 안 걸린다
+        self.assertFalse(paths.generated('dump.sql', b'-- x\n' * 5 + b'-- MySQL dump 10.13\n' + mysql_body))  # 6번째 줄
+        self.assertFalse(paths.generated('dump.sql', b'-- mysql dump 10.13\n' + mysql_body))  # 대소문자를 구분한다
 
     def test_line_count_helper_and_passed_in_count(self):  # 줄 수 = 줄바꿈 수 + 줄바꿈 없이 끝나는 마지막 줄. 센 값을 넘기면 다시 세지 않는다
         for body, want in ((b'', 0), (b'\n', 1), (b'a', 1), (b'a\n', 1), (b'a\nb', 2), (b'a\n\nb\n', 3), (b'a\r\tb\n', 1)):

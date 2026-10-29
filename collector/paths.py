@@ -14,8 +14,9 @@ MAX_BLOB = 512 * 1024
 HEAD_BYTES = 64 * 1024  # generated가 보는 blob 앞부분
 # 긴 줄 규칙(minified 판별)에서 빼는 확장자: 노트북은 base64 출력이 한 줄이고, 한글 문서는 한 글자가 3바이트라 줄이 길어 보인다
 LONG_LINE_EXT = ('.ipynb', '.md', '.markdown', '.rst', '.txt')
-CONT = bytes(range(0x80, 0xC0))  # UTF-8 연속 바이트: 빼면 글자 수가 된다
 BINARY_SCAN = 8000  # 이 앞에 NUL 바이트가 있으면 바이너리(git과 같은 기준)
+# 앞 5줄 안에 있으면 생성 파일인 표지(대소문자 구분): 생성 코드 표지와 SQL 덤프 도구가 머리말에 남기는 글귀
+MARKERS = (b'@generated', b'DO NOT EDIT', b'-- MySQL dump', b'-- MariaDB dump', b'-- PostgreSQL database dump', b'-- phpMyAdmin SQL Dump')
 INSERT = re.compile(rb'\s*INSERT INTO', re.I)
 
 
@@ -34,9 +35,9 @@ def line_count(data):
 def generated(path, head, lines=None):
     """내용으로 빼는 데이터·생성 파일. head = blob 앞 64KB(바이트). 아래 중 하나면 True다.
     ⓪ 앞 8000바이트 안에 NUL 바이트(바이너리·UTF-16 텍스트. 확장자와 상관없이 적용)
-    ① 줄 평균 길이 > 300글자(minified. UTF-8 글자 수로 센다. 노트북·문서는 이 규칙에서 뺀다)
+    ① 줄 평균 길이 > 300바이트(minified. 노트북·문서는 이 규칙에서 뺀다)
     ② 앞 50줄의 60% 이상이 INSERT INTO(SQL 덤프. 직접 쓴 schema.sql은 남는다)
-    ③ 앞 5줄 안에 @generated 또는 DO NOT EDIT(대소문자 구분)
+    ③ 앞 5줄 안에 MARKERS의 글귀(@generated, DO NOT EDIT, mysqldump·pg_dump·phpMyAdmin 머리말. 대소문자 구분)
     lines = head의 줄 수. 호출하는 쪽이 이미 셌으면 넘겨서 다시 세지 않는다."""
     if not head: return False
     if b'\x00' in head[:BINARY_SCAN]: return True
@@ -44,7 +45,7 @@ def generated(path, head, lines=None):
     if rows[-1] == b'': rows.pop()  # 마지막 줄바꿈 뒤의 빈 조각은 줄이 아니다
     rows = rows[:50]
     top = b'\n'.join(rows[:5])
-    if b'@generated' in top or b'DO NOT EDIT' in top: return True
+    if any(m in top for m in MARKERS): return True
     if 10 * sum(bool(INSERT.match(r)) for r in rows) >= 6 * len(rows): return True
     if path.lower().endswith(LONG_LINE_EXT): return False
-    return len(head.translate(None, CONT)) > 300 * (line_count(head) if lines is None else lines)
+    return len(head) > 300 * (line_count(head) if lines is None else lines)
