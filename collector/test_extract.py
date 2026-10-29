@@ -22,7 +22,7 @@ import extract
 import gitenv
 import paths
 import store
-from testkit import EMAILS, GIT, MATE, ME, NAMES, TWIN, FakeApi, Paged, Repo, lines
+from testkit import EMAILS, GIT, MATE, ME, NAMES, TWIN, FakeApi, Paged, Repo, Status, lines
 
 HERE = Path(__file__).resolve().parent
 
@@ -364,6 +364,13 @@ class FakeApiBehavior(unittest.TestCase):
         self.assertEqual(list(FakeApi({'/d': dict(items=[5]), '/n': None}).pages('/d', {}, key='items')), [5])  # 쪽으로 나뉘지 않은 값도 key를 쓴다
         self.assertEqual(list(FakeApi({'/n': None}).pages('/n', {}, key='items')), [])
 
+    def test_status_route_answers_with_a_bare_http_status(self):  # 본문 없는 상태 답: ok·empty에 있으면 값 없이, 아니면 진짜처럼 StopCheck
+        api = FakeApi({'/gone': Status(410)})
+        self.assertEqual(api.get('/gone', ok=(200, 410)), (None, {}, 410))
+        with self.assertRaisesRegex(extract.StopCheck, 'GET /gone → HTTP 410'): api.get('/gone')
+        self.assertEqual(list(api.pages('/gone', {}, empty=(409, 410))), [])
+        with self.assertRaisesRegex(extract.StopCheck, 'GET /gone → HTTP 410'): list(api.pages('/gone', {}))
+
 
 def bare(dest, src=None):
     """file:// 원격으로 쓸 bare 레포(src가 없으면 빈 레포). 부분 clone이 실제로 걸러지도록 upload-pack에 filter와 lazy fetch를 허용한다."""
@@ -404,9 +411,9 @@ class Listing(FakeApi):
         if path in self.hooks: self.hooks.pop(path)()
         return super()._ask(path, params)
 
-    def pages(self, path, params, max_pages=10, key=None):
+    def pages(self, path, params, max_pages=10, key=None, empty=(409,)):
         self.max_pages[path] = max_pages
-        if path != '/users/me/repos': return super().pages(path, params, max_pages, key)
+        if path != '/users/me/repos': return super().pages(path, params, max_pages, key, empty)
         self.listed.append((params['type'], max_pages))
         return iter(self.listing[params['type']])
 
@@ -462,12 +469,16 @@ class Collect(unittest.TestCase):
             self.assertEqual(list(heads['me/b']), ['trunk', 'master', 'develope'])  # 기본 브랜치가 맨 앞, main이 없으면 master
             self.assertIsNone(res['stopped'])
 
-    def test_empty_repo_is_not_failure(self):
+    def test_empty_repo_is_not_failure(self):  # 빈 원격도 clone은 끝까지 성공한 것이라 완료 표지를 남기고, 다음 실행도 「빈 레포」다
         with tempfile.TemporaryDirectory() as d:
             d = Path(d)
-            res = self.extract(d, Listing(owner=[meta('me/empty')]), {'me/empty': bare(d / 'empty.git')})
-            self.assertEqual(res['repos'][0]['error'], '빈 레포')
-            self.assertIsNone(res['stopped'])
+            remotes = {'me/empty': bare(d / 'empty.git')}
+            for _ in range(2):
+                res = self.extract(d, Listing(owner=[meta('me/empty')]), remotes)
+                self.assertEqual(res['repos'][0]['error'], '빈 레포')
+                self.assertIsNone(res['stopped'])
+                self.assertTrue((d / 'cache' / 'me__empty' / '.git' / extract.SYNCED).exists())
+            self.assertFalse((d / 'cache' / '.broken').exists())
 
     def test_api_error_isolates_one_repo(self):  # 1단계(본인 commit)와 2단계(실행·활용 기록) 모두, 한도 소진도 그 레포만
         with tempfile.TemporaryDirectory() as d:
@@ -706,6 +717,101 @@ class Collect(unittest.TestCase):
         chain = [(200, {'Link': f'<https://api.github.com/l?page={i + 2}>; rel="next"'} if i < 11 else {}, f'[{i}]'.encode()) for i in range(12)]
         self.assertEqual(list(extract.Api(None, opener=Opener(*chain)).pages('/l', {}, max_pages=None)), list(range(12)))
         self.assertEqual(list(extract.Api(None, opener=Opener(*chain)).pages('/l', {})), list(range(10)))
+
+    def test_relative_cache_path_clones_in_place(self):  # F1: 상대 캐시 경로도 git -C 아래에 겹쳐 clone되지 않는다(처음은 clone, 다음은 fetch)
+        with tempfile.TemporaryDirectory() as d, contextlib.chdir(d):
+            src = source(Path('src')).commit(ME, {'a.py': lines('me', 3)})
+            remote = bare(Path(d) / 'src.git', src.path)
+            for _ in range(2):
+                path = extract.sync('o/r', Path('cache'), None, remote.as_uri())
+                self.assertEqual(extract.branch_heads(path, 'main'), {'main': src.head()})
+            self.assertFalse((Path(d) / 'cache' / 'cache').exists())
+            res = extract.extract('me', None, Path('cache2'), api=Listing(repo_routes('me/r'), owner=[meta('me/r')]), remote_url=lambda full: remote.as_uri())
+            self.assertEqual(res['repos'][0]['heads'], {'main': src.head()})
+
+    def test_failed_lookup_of_a_search_found_repo_marks_only_that_repo(self):  # F2: 검색으로 찾은 레포 하나의 /repos 조회 실패는 그 레포만
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            src = source(d / 'src').commit(ME, {'app.py': lines('me', 5)})
+            failing = {'team/r502': extract.StopCheck('GET https://api.github.com/repos/team/r502 → HTTP 502'),
+                       'team/r451': extract.StopCheck('GET https://api.github.com/repos/team/r451 → HTTP 451'),
+                       'team/r403': extract.StopCheck('GET https://api.github.com/repos/team/r403 → HTTP 403'),
+                       'team/limit': extract.RateLimited('GET https://api.github.com/repos/team/limit → API 한도 소진(HTTP 403, 3번 시도)')}
+            routes = {**repo_routes('me/a'), **{f'/repos/{full}': e for full, e in failing.items()},
+                      '/search/commits': dict(items=[dict(repository=dict(full_name=full)) for full in failing])}
+            res = self.extract(d, Listing(routes, owner=[meta('me/a')]), {'me/a': bare(d / 'src.git', src.path)})
+            self.assertIsNone(res['stopped'])
+            rows = {row['full']: row for row in res['repos']}
+            self.assertEqual(rows['me/a']['evals'][src.head()]['own'], 5)
+            for full, e in failing.items(): self.assertEqual(rows[full]['error'], f'API 실패: {e}')
+            db = d / 'g.sqlite'
+            store.save(db, res, store.add_account(db, 'me', '본인', '시험', '2026-10-29'))  # 정보를 모르는 행도 저장된다
+
+    def test_blame_failure_marks_the_repo_instead_of_dropping_the_file(self):  # F3: 부분 clone에서 옛 큰 blob을 못 받아 blame이 실패하면 그 레포는 실패
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            row = lambda i: f'mate big {i} padding padding padding padding\n'
+            big, small = ''.join(map(row, range(14_000))), ''.join(map(row, range(100)))  # 큰 판은 512KiB 이상: 부분 clone이 받지 않는다
+            src = source(d / 'src').commit(ME, {'app.py': lines('me', 10)}).commit(MATE, {'data.txt': big}).commit(MATE, {'data.txt': small})
+            src.commit(ME, {'data.txt': small + lines('me', 40)})  # 내 commit은 작은 판만 건드려 PyDriller는 큰 blob이 필요 없다
+            ok = source(d / 'ok').commit(ME, {'ok.py': lines('me', 4)})
+            remotes = {'me/r': bare(d / 'r.git', src.path), 'me/ok': bare(d / 'ok.git', ok.path)}
+            gone = lambda: shutil.move(remotes['me/r'], d / 'gone.git')  # clone한 뒤 원격이 사라진다
+            api = Listing({**repo_routes('me/r'), **repo_routes('me/ok')}, owner=[meta('me/r'), meta('me/ok')], hooks={'/repos/me/r/commits': gone})
+            res = self.extract(d, api, remotes)
+            rows = {row['full']: row for row in res['repos']}
+            self.assertEqual(rows['me/r']['error'], 'blame 실패: data.txt')
+            self.assertEqual(rows['me/ok']['evals'][ok.head()]['own'], 4)
+            self.assertEqual([u['repo'] for u in res['evidence']], ['me/ok'])  # 일부 파일만 빠진 결과를 남기지 않는다
+            self.assertIsNone(res['stopped'])
+
+    def test_renamed_repo_found_under_its_old_name_is_one_row(self):  # F4: 옛 이름 조회가 새 이름(이미 소유 목록에 있음)으로 오면 한 번만 처리한다
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            src = source(d / 'src').commit(ME, {'app.py': lines('me', 5)})
+            routes = {**repo_routes('me/new'), '/repos/me/old': meta('me/new'), '/search/commits': dict(items=[dict(repository=dict(full_name='me/old'))])}
+            api = Listing(routes, owner=[meta('me/plain'), meta('me/new')])
+            res = self.extract(d, api, {'me/plain': bare(d / 'empty.git'), 'me/new': bare(d / 'src.git', src.path)})
+            self.assertEqual([(r['full'], r['source']) for r in res['repos']], [('me/new', 'owner'), ('me/plain', 'owner')])  # 본인 commit 레포로 먼저
+            self.assertEqual(len(res['evidence']), 1)
+            db = d / 'g.sqlite'
+            store.save(db, res, store.add_account(db, 'me', '본인', '시험', '2026-10-29'))  # UNIQUE (run_id, full_name)에 걸리지 않는다
+
+    def test_cache_entry_left_by_a_killed_clone_is_moved_aside_and_recloned(self):  # F5: 완료 표지가 없는 캐시는 .broken/으로 옮기고(지우지 않음) 새로 받는다
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            src = source(d / 'src').commit(ME, {'a.py': lines('me', 3)})
+            remote = bare(d / 'src.git', src.path)
+            junk = d / 'cache' / 'o__r'  # 시간 초과로 끊긴 clone이 남긴 모양: .git과 원격 주소뿐(fetch 설정·ref·완료 표지 없음)
+            subprocess.run(['git', 'init', '-q', '-b', 'main', str(junk)], check=True, capture_output=True, env=gitenv.env())
+            for key, value in (('remote.origin.url', remote.as_uri()), ('remote.origin.tagopt', '--no-tags')):
+                subprocess.run(['git', '-C', str(junk), 'config', key, value], check=True, env=gitenv.env())
+            with mock.patch.object(Path, 'rename', side_effect=PermissionError('denied')):  # 옮기지 못하면 그 레포만 캐시 문제(실행 전체가 멈추지 않게)
+                with self.assertRaises(extract.CacheError): extract.sync('o/r', d / 'cache', None, remote.as_uri())
+            self.assertTrue((junk / '.git' / 'config').exists())
+            path = extract.sync('o/r', d / 'cache', None, remote.as_uri())
+            self.assertEqual(extract.branch_heads(path, 'main'), {'main': src.head()})
+            aside = list((d / 'cache' / '.broken').iterdir())
+            self.assertEqual([p.name.startswith('o__r-') for p in aside], [True])
+            self.assertTrue((aside[0] / '.git' / 'config').exists())  # 옮겼을 뿐 지우지 않았다
+            self.assertEqual(extract.sync('o/r', d / 'cache', None, remote.as_uri()), path)  # 다음 실행은 fetch(표지가 있다)
+            self.assertEqual(len(list((d / 'cache' / '.broken').iterdir())), 1)
+
+    def test_issues_disabled_410_counts_as_no_issues(self):  # F6: 이슈를 끈 레포(fork의 기본값)는 /issues가 410이다 → 이슈 0, 레포는 정상 처리
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            src = source(d / 'src').commit(ME, {'app.py': lines('me', 5)})
+            routes = {**repo_routes('me/fork'), '/repos/me/fork/issues': Status(410)}
+            res = self.extract(d, Listing(routes, owner=[meta('me/fork')]), {'me/fork': bare(d / 'src.git', src.path)})
+            row = res['repos'][0]
+            self.assertNotIn('error', row)
+            self.assertEqual(row['activity'], dict(pulls=0, pulls_merged=0, pulls_own=0, issues=0, deployments=0, actions_all=0))
+
+    def test_pages_can_treat_a_status_as_an_empty_list(self):  # Api.pages(empty=): 409(빈 레포)는 기본, 이슈 목록은 410도 빈 목록
+        api = extract.Api(None, opener=Opener((410, {}, b'{"message": "Issues are disabled for this repo"}')))
+        self.assertEqual(list(api.pages('/repos/o/r/issues', {}, empty=(409, 410))), [])
+        api = extract.Api(None, opener=Opener((410, {}, b'{}')))
+        with self.assertRaisesRegex(extract.StopCheck, 'HTTP 410'): list(api.pages('/repos/o/r/issues', {}))
 
     def test_pages_reads_the_items_of_search_results(self):  # 검색 API는 목록 대신 {"items": [...]}를 쪽마다 준다
         link = {'Link': '<https://api.github.com/search/commits?q=x&page=2>; rel="next"'}

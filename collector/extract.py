@@ -13,6 +13,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from datetime import datetime, timezone
 from pathlib import Path
 
 import certifi
@@ -30,6 +31,7 @@ BRANCHES = ('main', 'master', 'develop', 'dev', 'develope')  # 기본 브랜치�
 SEARCH_PAGES = 10  # 검색 API가 주는 최대: 100개씩 10쪽 = 1,000개(그 뒤 쪽은 422)
 ENV = gitenv.env()  # 읽기용 git 환경(토큰 없음)
 LIST_ENV = {**ENV, 'GIT_NO_LAZY_FETCH': '1'}  # ls-tree -l용: 부분 clone이 받지 않은 blob을 크기 보느라 내려받지 않는다(크기 칸이 BAD)
+SYNCED = 'career-synced'  # clone·fetch가 끝까지 성공한 캐시에만 .git 안에 남기는 완료 표지(끊긴 clone을 가려낸다)
 # github.com/<이 이름>은 계정이 아니라 GitHub 화면 주소다. 같은 이름의 다른 계정을 분석하지 않도록 막는다.
 RESERVED = {'dashboard', 'settings', 'notifications', 'explore', 'orgs', 'organizations', 'marketplace', 'pulls', 'issues',
             'topics', 'trending', 'login', 'logout', 'signup', 'new', 'codespaces', 'sponsors', 'features', 'about',
@@ -45,6 +47,13 @@ class RateLimited(StopCheck):
 
 class CacheError(RuntimeError):
     """clone 캐시를 쓸 수 없음(작업 트리가 있는 옛 방식 clone). 그 레포만 실패로 둔다."""
+
+
+class BlameError(RuntimeError):
+    """git blame이 실패함(부분 clone이 받지 않은 옛 blob을 내려받지 못함, 시간 초과 등). 파일 하나를 빼고 세지 않고 그 레포를 실패로 둔다."""
+    def __init__(self, path):
+        super().__init__(path)
+        self.path = path
 
 
 class Api:
@@ -101,13 +110,13 @@ class Api:
     def get(self, path, params=None, ok=(200,)):
         return self._open(API + path + ('?' + urllib.parse.urlencode(params) if params else ''), ok)
 
-    def pages(self, path, params, max_pages=10, key=None):
+    def pages(self, path, params, max_pages=10, key=None, empty=(409,)):
         """목록 API를 Link 머리말의 다음 쪽을 따라 읽는다. max_pages=None이면 끝까지 읽는다.
-        key는 본문에서 목록이 든 칸이다(검색 API는 {"items": [...]}를 준다)."""
+        key는 본문에서 목록이 든 칸이다(검색 API는 {"items": [...]}를 준다). empty는 빈 목록으로 보는 상태다(409 = 빈 레포)."""
         url, n = API + path + '?' + urllib.parse.urlencode(params), 0
         while url and (max_pages is None or n < max_pages):
-            data, h, status = self._open(url, (200, 409))  # 409 = 빈 레포
-            if status == 409: return
+            data, h, status = self._open(url, (200, *empty))
+            if status in empty: return
             yield from ((data or {}).get(key) if key else data) or []
             nxt = re.search(r'<([^>]+)>;\s*rel="next"', h.get('Link') or '')
             url, n = nxt and nxt.group(1), n + 1
@@ -130,17 +139,26 @@ def git(path, *args, timeout=120, env=None):
 def sync(full, cache, token, url=None):
     """레포를 캐시에 받는다: checkout 없는 부분 clone(512KiB 이상 blob은 받지 않음, 태그 없음). 이미 받았으면 fetch --prune만 한다.
     checkout이 없어야 레포에 심은 .mailmap 파일이 작성자를 바꾸지 못한다. 작업 트리가 있는 캐시(옛 방식 clone)는 쓰지도 지우지도 않는다(CacheError).
+    clone·fetch가 끝까지 성공해야 .git 안에 완료 표지(SYNCED)를 남긴다. 표지가 없는 캐시(시간 초과로 끊긴 clone 등)는
+    <캐시>/.broken/<이름>-<UTC 시각>으로 옮겨 두고(지우지 않는다) 새로 clone한다. 빈 원격도 clone이 성공했으니 표지를 남긴다.
     토큰은 gitenv가 환경 변수의 HTTP 헤더로만 넘긴다(URL·명령줄·.git/config에 남지 않음). url은 시험에서 file:// 원격으로 바꿔 끼운다."""
-    path = Path(cache) / full.replace('/', '__')
-    env = gitenv.env(token)
-    if (path / '.git').exists():
+    cache = Path(cache).absolute()  # 상대 경로면 git -C <캐시> 아래에 한 번 더 겹쳐 clone되므로 절대 경로로 바꾼다
+    path, env = cache / full.replace('/', '__'), gitenv.env(token)
+    if path.exists():
         if (path / '.git' / 'index').exists() or any(p.name != '.git' for p in path.iterdir()):
             raise CacheError(f'캐시 {path.name}에 checkout(작업 트리)이 있어 쓰지 않음')
-        git(path, 'fetch', '--quiet', '--prune', '--no-tags', 'origin', timeout=600, env=env)
+        if not (path / '.git' / SYNCED).exists():  # 끝까지 받지 못한 캐시: 옮겨 두고 새로 받는다
+            aside = cache / '.broken' / f'{path.name}-{datetime.now(timezone.utc):%Y%m%dT%H%M%S.%fZ}'
+            try:
+                aside.parent.mkdir(parents=True, exist_ok=True)
+                path.rename(aside)
+            except OSError as e: raise CacheError(f'끝까지 받지 못한 캐시 {path.name}를 옮기지 못함({type(e).__name__})') from e
+    if path.exists(): git(path, 'fetch', '--quiet', '--prune', '--no-tags', 'origin', timeout=600, env=env)
     else:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        git(path.parent, 'clone', '--quiet', '--no-checkout', f'--filter={CLONE_FILTER}', '--no-tags',
+        cache.mkdir(parents=True, exist_ok=True)
+        git(cache, 'clone', '--quiet', '--no-checkout', f'--filter={CLONE_FILTER}', '--no-tags',
             url or f'https://github.com/{full}.git', str(path), timeout=600, env=env)
+    (path / '.git' / SYNCED).write_text(now() + '\n')
     return path
 
 
@@ -259,7 +277,8 @@ def blame(path, sha, emails, names):
     """평가 commit에서 줄마다 마지막 작성자를 보고, 본인 줄을 증거 단위 {sha, path, lines}로 묶는다.
     경로·내용 필터(paths.skipped·generated)에 걸린 파일은 어디에도 세지 않는다.
     나머지는 모든 파일을 blame한 결과와 같되, 결과가 정해진 파일은 줄 수만 센다: 본인·이름 일치 commit이 닿지 않은 파일(전부 다른 사람),
-    한 번 추가되고 바뀐 적 없는 파일(전부 그 commit 작성자). 커널 소스처럼 한 번에 올린 파일 수만 개도 몇 초 안에 끝난다."""
+    한 번 추가되고 바뀐 적 없는 파일(전부 그 commit 작성자). 커널 소스처럼 한 번에 올린 파일 수만 개도 몇 초 안에 끝난다.
+    blame이 실패하면(부분 clone이 받지 않은 옛 blob을 내려받지 못함, 시간 초과) 처음 실패한 파일로 BlameError를 던진다."""
     count, units = dict(own=0, name_only=0, other=0, files=0), []
     entries = []
     for entry in git(path, 'ls-tree', '-r', '-l', '-z', sha, env=LIST_ENV).split('\0'):
@@ -284,7 +303,8 @@ def blame(path, sha, emails, names):
         # 바이트로 읽는다: 텍스트로 읽으면 Python이 혼자 있는 \r도 줄바꿈으로 바꿔 줄 수가 git과 달라진다
         try: out = subprocess.run(['git', '-C', str(path), 'blame', '-w', '--line-porcelain', sha, '--', p],
                                   capture_output=True, env=ENV, timeout=120, check=True).stdout
-        except (subprocess.CalledProcessError, subprocess.TimeoutExpired): continue
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:  # 파일 하나를 조용히 빼면 덜 센 결과가 성공처럼 남는다
+            raise BlameError(p) from e
         count['files'] += 1
         mine, line, mail, author = [], None, None, None
         for row in out.split(b'\n'):
@@ -335,7 +355,8 @@ def run_records(api, full, sha):
 
 def activity(api, full, login):
     pulls = list(api.pages(f'/repos/{full}/pulls', {'state': 'all', 'per_page': 100}, max_pages=3))
-    issues = [i for i in api.pages(f'/repos/{full}/issues', {'state': 'all', 'per_page': 100}, max_pages=3) if 'pull_request' not in i]
+    issues = [i for i in api.pages(f'/repos/{full}/issues', {'state': 'all', 'per_page': 100}, max_pages=3, empty=(409, 410))  # 410 = 이슈를 끈 레포: 이슈 0
+              if 'pull_request' not in i]
     deploys = list(api.pages(f'/repos/{full}/deployments', {'per_page': 100}, max_pages=3))
     runs, _, _ = api.get(f'/repos/{full}/actions/runs', {'per_page': 1}, ok=(200, 404))
     return dict(pulls=len(pulls), pulls_merged=sum(bool(p.get('merged_at')) for p in pulls),
@@ -359,7 +380,7 @@ def extract(login, token, cache, max_size_mb=None, *, api=None, remote_url=lambd
         login = res['login'] = user['login']
         res['github_id'] = user['id']
         # 레포 찾기: 소유 + 멤버(collaborator·조직) + 본인 commit·PR 검색. private은 뺀다. 평가는 어디서든 main·develop 계열의 본인 줄만 한다.
-        found = {}
+        found, failed = {}, {}  # failed: 검색으로 찾았지만 조회하지 못한 레포 → 이유
         for kind in ('owner', 'member'):
             for r in api.pages(f'/users/{login}/repos', {'type': kind, 'per_page': 100}, max_pages=None):
                 if not r['private']: found.setdefault(r['full_name'], (r, kind))
@@ -369,10 +390,13 @@ def extract(login, token, cache, max_size_mb=None, *, api=None, remote_url=lambd
         mine = {i['repository']['full_name'] for i in commits}  # 본인 commit이 검색된 레포(검색은 기본 브랜치만 본다: 순서에만 쓴다)
         searched = mine | {i['repository_url'].split('/repos/')[1] for i in prs}
         for full in sorted(searched - set(found)):
-            r, _, _ = api.get(f'/repos/{full}', ok=(200, 404))
-            if r and not r['private']: found[full] = (r, 'search')
+            try: r, _, _ = api.get(f'/repos/{full}', ok=(200, 404))
+            except StopCheck as e: failed[full] = f'API 실패: {e}'; continue  # 레포 하나의 조회 실패(5xx·403·451·한도 소진)는 그 레포만 미확인
+            if not r or r['private']: continue
+            if full in mine: mine.add(r['full_name'])  # 이름을 바꾸거나 옮긴 레포는 옛 이름으로 검색되고 새 이름으로 온다
+            found.setdefault(r['full_name'], (r, 'search'))  # 실제 이름으로 한 번만 넣는다(같은 레포를 두 번 처리하면 저장이 깨진다)
         repos = sorted(found.values(), key=lambda x: x[0]['full_name'] not in mine)  # 상한 없음. 안정 정렬이라 나머지 순서는 그대로
-        res['external_pr_repos'] = sorted(full for full, (_, kind) in found.items() if kind != 'owner')
+        res['external_pr_repos'] = sorted({full for full, (_, kind) in found.items() if kind != 'owner'} | set(failed))
 
         # 1단계: clone + API로 본인 commit(계정에 연결된 것)을 먼저 모아 신원 묶음을 만든다.
         emails |= {f"{user['id']}+{login}@users.noreply.github.com".lower(), f'{login}@users.noreply.github.com'.lower()}
@@ -399,10 +423,13 @@ def extract(login, token, cache, max_size_mb=None, *, api=None, remote_url=lambd
             except StopCheck as e: row['error'] = f'API 실패: {e}'; continue  # 한도 소진(RateLimited)도 이 레포만 미확인
             row['heads'] = heads
             work.append((row, path, api_shas))
+        for full, error in failed.items():  # 조회하지 못한 레포: 정보를 모르니 이유만 남긴다(fork는 알 수 없어 False로 둔다)
+            res['repos'].append(dict(full=full, fork=False, default_branch=None, size_kb=None, source='search', error=error))
 
         # 2단계: 본인 commit·본인 줄(로컬) → 실행·활용 기록(API)
         for row, path, api_shas in work:
             try: local, units = analyze_repo(path, row['heads'], api_shas, emails, names)
+            except BlameError as e: row['error'] = f'blame 실패: {e.path}'; continue  # 파일 하나가 빠진 결과로 판정하지 않는다(다시 수집할 때까지 제외)
             except (subprocess.CalledProcessError, subprocess.TimeoutExpired, GitError) as e:  # 레포 하나가 실패해도 나머지는 계속한다
                 row['error'] = f'분석 실패({type(e).__name__})'; continue
             row.update(local)
