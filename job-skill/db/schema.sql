@@ -90,7 +90,7 @@ CREATE TABLE posting (
     kind              text        NOT NULL CHECK (kind IN ('글', '이미지', '섞임')),
     status            text        NOT NULL DEFAULT '진행' CHECK (status IN ('진행', '마감')),
     deadline          date,
-    raw_path          text        NOT NULL,
+    body_html         text,
     raw_hash          char(64)    NOT NULL,
     collected_at      timestamptz NOT NULL DEFAULT now(),
     last_checked_at   timestamptz NOT NULL DEFAULT now(),
@@ -109,7 +109,7 @@ COMMENT ON COLUMN posting.employment_type   IS '고용 형태 (예: 정규직)';
 COMMENT ON COLUMN posting.kind              IS '공고 형태 (글/이미지/섞임)';
 COMMENT ON COLUMN posting.status            IS '상태 (진행/마감)';
 COMMENT ON COLUMN posting.deadline          IS '마감일 (상시채용이면 비움)';
-COMMENT ON COLUMN posting.raw_path          IS '원본 위치 (본문 HTML 파일 경로)';
+COMMENT ON COLUMN posting.body_html         IS '본문 HTML (사람인 본문 칸, 스크립트 등은 뺌, 이미지 주소는 전체 주소 — 웹 상세 화면용. 본문이 없으면 비움)';
 COMMENT ON COLUMN posting.raw_hash          IS '원본 해시 (보이는 글에서 띄어쓰기·줄바꿈을 지우고 만든 SHA-256)';
 COMMENT ON COLUMN posting.collected_at      IS '수집 시각';
 COMMENT ON COLUMN posting.last_checked_at   IS '마지막 확인 시각 (3일마다 수정 확인)';
@@ -119,19 +119,15 @@ CREATE TABLE posting_image (
     posting_id  bigint   NOT NULL REFERENCES posting (id) ON DELETE CASCADE,
     seq         smallint NOT NULL CHECK (seq >= 1),
     url         text     NOT NULL,
-    file_path   text     NOT NULL,
     kept        boolean,
-    ocr_path    text,
     UNIQUE (posting_id, seq)
 );
 COMMENT ON TABLE  posting_image            IS '공고 이미지';
 COMMENT ON COLUMN posting_image.id         IS '이미지ID';
 COMMENT ON COLUMN posting_image.posting_id IS '공고ID';
 COMMENT ON COLUMN posting_image.seq        IS '순서 (1, 2, 3…)';
-COMMENT ON COLUMN posting_image.url        IS '이미지 주소';
-COMMENT ON COLUMN posting_image.file_path  IS '파일 위치';
+COMMENT ON COLUMN posting_image.url        IS '이미지 주소 (원본 서버 — 웹은 이 주소로 띄운다)';
 COMMENT ON COLUMN posting_image.kept       IS '남김 여부 (rule base 결과, 판정 전이면 비움)';
-COMMENT ON COLUMN posting_image.ocr_path   IS 'OCR 결과 위치 (글자 + 좌표 JSON)';
 
 CREATE TABLE listing_seen (
     site             text        NOT NULL DEFAULT '사람인',
