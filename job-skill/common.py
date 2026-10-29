@@ -32,6 +32,8 @@ def images_by_posting() -> dict[str, list[dict]]:
     """{rec_idx: [manifest 행, ...]} — 이미지를 받은 공고만, targets.tsv 순서."""
     out: dict[str, list[dict]] = {}
     for r in load_manifest():
+        if not r.get("file"):  # 받기에 실패한 이미지(404·이미지 아님 등)는 파일이 없다 — OCR·화면에서 빼야 함
+            continue
         out.setdefault(r["rec_idx"], []).append(r)
     return out
 
