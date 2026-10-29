@@ -1,0 +1,98 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1480" height="880" viewBox="0 0 1480 880">
+<style>
+  text { font-family: "Malgun Gothic", "Apple SD Gothic Neo", Arial, sans-serif; fill: #1a1a1a; dominant-baseline: central; text-anchor: middle; }
+  .title { font-size: 24px; font-weight: 700; text-anchor: start; }
+  .subt { font-size: 14px; fill: #666; text-anchor: start; }
+  .gt { font-size: 15px; font-weight: 700; fill: #444; text-anchor: start; }
+  .nt { font-size: 15px; font-weight: 700; }
+  .sub { font-size: 12.5px; fill: #555; }
+  .el { font-size: 12px; fill: #333; font-weight: 700; }
+  .els { font-size: 12px; fill: #333; font-weight: 700; text-anchor: start; }
+  .note { font-size: 13.5px; text-anchor: start; }
+  .ln { fill: none; stroke: #1a1a1a; stroke-width: 1.4; }
+</style>
+<defs><marker id="a" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#1a1a1a"/></marker></defs>
+<rect width="1480" height="880" fill="#fff"/>
+<rect x="20" y="20" width="1440" height="840" fill="none" stroke="#999" stroke-width="1"/>
+<text class="title" x="44" y="56">채용공고 역량 추출 — AWS 구성도</text>
+<text class="subt" x="44" y="84">수집·OCR·LLM 은 노트북(Docker)에서, 서빙 DB·웹·비용 리포트는 AWS 서울에서 · 12/20까지(프리 플랜 크레딧)</text>
+<rect x="50" y="130" width="500" height="640" rx="6" fill="#f7f7f7" stroke="#888" stroke-width="1.1" stroke-dasharray="6 4"/><g transform="translate(62,140) scale(0.9166666666666666)" fill="none" stroke="#555" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 19l18 0" /><path d="M5 6m0 1a1 1 0 0 1 1 -1h12a1 1 0 0 1 1 1v8a1 1 0 0 1 -1 1h-12a1 1 0 0 1 -1 -1z" /></g><text class="gt" x="92" y="152">노트북 (Docker)</text>
+<rect x="600" y="130" width="300" height="640" rx="6" fill="#f7f7f7" stroke="#888" stroke-width="1.1" stroke-dasharray="6 4"/><g transform="translate(612,140) scale(0.9166666666666666)" fill="none" stroke="#555" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0" /><path d="M3.6 9h16.8" /><path d="M3.6 15h16.8" /><path d="M11.5 3a17 17 0 0 0 0 18" /><path d="M12.5 3a17 17 0 0 1 0 18" /></g><text class="gt" x="642" y="152">외부 서비스</text>
+<rect x="950" y="130" width="500" height="640" rx="6" fill="#f7f7f7" stroke="#888" stroke-width="1.1" stroke-dasharray="6 4"/><g transform="translate(962,140) scale(0.9166666666666666)" fill="none" stroke="#555" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M6.657 18c-2.572 0 -4.657 -2.007 -4.657 -4.483c0 -2.475 2.085 -4.482 4.657 -4.482c.393 -1.762 1.794 -3.2 3.675 -3.773c1.88 -.572 3.956 -.193 5.444 1c1.488 1.19 2.162 3.007 1.77 4.769h.99c1.913 0 3.464 1.56 3.464 3.486c0 1.927 -1.551 3.487 -3.465 3.487h-11.878" /></g><text class="gt" x="992" y="152">AWS 서울 (ap-northeast-2)</text>
+<rect x="355" y="180" width="175" height="376" rx="4" fill="#fff" stroke="#1a1a1a" stroke-width="1.3"/>
+<g transform="translate(429.5,198) scale(1.0833333333333333)" fill="none" stroke="#1a1a1a" stroke-width="1.48" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8h8.5a2.5 2.5 0 1 0 -2.34 -3.24" /><path d="M3 12h15.5a2.5 2.5 0 1 1 -2.34 3.24" /><path d="M4 16h5.5a2.5 2.5 0 1 1 -2.34 3.24" /></g>
+<text class="nt" x="442.5" y="244">Airflow</text>
+<text class="sub" x="442.5" y="276">③ 일회성 전체 수집</text>
+<text class="sub" x="442.5" y="294">(수동 1회)</text>
+<text class="sub" x="442.5" y="326">① 매일 수집</text>
+<text class="sub" x="442.5" y="344">(매일 00:00)</text>
+<text class="sub" x="442.5" y="386">풀 1자리씩</text>
+<text class="sub" x="442.5" y="404">사람인 · GPU · LLM</text>
+<text class="sub" x="442.5" y="446">관리 화면</text>
+<text class="sub" x="442.5" y="464">localhost:8080</text>
+<rect x="70" y="180" width="200" height="100" rx="4" fill="#fff" stroke="#1a1a1a" stroke-width="1.3"/>
+<g transform="translate(157.0,194) scale(1.0833333333333333)" fill="none" stroke="#1a1a1a" stroke-width="1.48" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8v-2a2 2 0 0 1 2 -2h2" /><path d="M4 16v2a2 2 0 0 0 2 2h2" /><path d="M16 4h2a2 2 0 0 1 2 2v2" /><path d="M16 20h2a2 2 0 0 0 2 -2v-2" /><path d="M8 12h8" /><path d="M8 9h6" /><path d="M8 15h4" /></g>
+<text class="nt" x="170.0" y="238">GPU OCR</text>
+<text class="sub" x="170.0" y="260">PaddleOCR · RTX 3060</text>
+<rect x="70" y="320" width="200" height="100" rx="4" fill="#fff" stroke="#1a1a1a" stroke-width="1.3"/>
+<g transform="translate(157.0,334) scale(1.0833333333333333)" fill="none" stroke="#1a1a1a" stroke-width="1.48" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h4l3 3h7a2 2 0 0 1 2 2v8a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-11a2 2 0 0 1 2 -2" /></g>
+<text class="nt" x="170.0" y="378">원본 파일</text>
+<text class="sub" x="170.0" y="400">본문·이미지·결과 (data/runs)</text>
+<rect x="70" y="460" width="200" height="100" rx="4" fill="#fff" stroke="#666" stroke-width="1.3" stroke-dasharray="5 4"/>
+<g transform="translate(157.0,474) scale(1.0833333333333333)" fill="none" stroke="#666" stroke-width="1.48" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6m-8 0a8 3 0 1 0 16 0a8 3 0 1 0 -16 0" /><path d="M4 6v6a8 3 0 0 0 16 0v-6" /><path d="M4 12v6a8 3 0 0 0 16 0v-6" /></g>
+<text class="nt" x="170.0" y="518">로컬 DB</text>
+<text class="sub" x="170.0" y="540">시험(pytest)만 · 로컬 브랜치</text>
+<path class="ln" d="M355,230.0 H270" marker-end="url(#a)"/><text class="el" x="312.5" y="218.0">이미지 OCR</text>
+<path class="ln" d="M355,370.0 H270" marker-end="url(#a)"/><text class="el" x="312.5" y="358.0">보관</text>
+<path class="ln" d="M355,510.0 H270" stroke-dasharray="5 4" marker-end="url(#a)"/><text class="el" x="312.5" y="498.0">시험</text>
+<rect x="640" y="180" width="220" height="100" rx="4" fill="#fff" stroke="#1a1a1a" stroke-width="1.3"/>
+<g transform="translate(737.0,194) scale(1.0833333333333333)" fill="none" stroke="#1a1a1a" stroke-width="1.48" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0" /><path d="M3.6 9h16.8" /><path d="M3.6 15h16.8" /><path d="M11.5 3a17 17 0 0 0 0 18" /><path d="M12.5 3a17 17 0 0 1 0 18" /></g>
+<text class="nt" x="750.0" y="238">사람인</text>
+<text class="sub" x="750.0" y="260">목록 · 본문 · 이미지</text>
+<rect x="640" y="320" width="220" height="100" rx="4" fill="#fff" stroke="#1a1a1a" stroke-width="1.3"/>
+<g transform="translate(737.0,334) scale(1.0833333333333333)" fill="none" stroke="#1a1a1a" stroke-width="1.48" stroke-linecap="round" stroke-linejoin="round"><path d="M11.217 19.384a3.501 3.501 0 0 0 6.783 -1.217v-5.167l-6 -3.35" /><path d="M5.214 15.014a3.501 3.501 0 0 0 4.446 5.266l4.34 -2.534v-6.946" /><path d="M6 7.63c-1.391 -.236 -2.787 .395 -3.534 1.689a3.474 3.474 0 0 0 1.271 4.745l4.263 2.514l6 -3.348" /><path d="M12.783 4.616a3.501 3.501 0 0 0 -6.783 1.217v5.067l6 3.45" /><path d="M18.786 8.986a3.501 3.501 0 0 0 -4.446 -5.266l-4.34 2.534v6.946" /><path d="M18 16.302c1.391 .236 2.787 -.395 3.534 -1.689a3.474 3.474 0 0 0 -1.271 -4.745l-4.308 -2.514l-5.955 3.42" /></g>
+<text class="nt" x="750.0" y="378">OpenAI</text>
+<text class="sub" x="750.0" y="400">gpt-5.6-luna · LLM 추출</text>
+<rect x="640" y="460" width="220" height="100" rx="4" fill="#fff" stroke="#1a1a1a" stroke-width="1.3"/>
+<g transform="translate(737.0,474) scale(1.0833333333333333)" fill="none" stroke="#1a1a1a" stroke-width="1.48" stroke-linecap="round" stroke-linejoin="round"><path d="M12 12v-6a2 2 0 0 1 4 0v6m0 -2a2 2 0 1 1 2 2h-6" /><path d="M12 12h6a2 2 0 0 1 0 4h-6m2 0a2 2 0 1 1 -2 2v-6" /><path d="M12 12v6a2 2 0 0 1 -4 0v-6m0 2a2 2 0 1 1 -2 -2h6" /><path d="M12 12h-6a2 2 0 0 1 0 -4h6m-2 0a2 2 0 1 1 2 -2v6" /></g>
+<text class="nt" x="750.0" y="518">Slack</text>
+<text class="sub" x="750.0" y="540">#data-pipeline</text>
+<path class="ln" d="M530,230.0 H640" marker-end="url(#a)"/><text class="el" x="585.0" y="218.0">초당 1건</text>
+<path class="ln" d="M530,370.0 H640" marker-end="url(#a)"/><text class="el" x="585.0" y="358.0">8건씩 동시</text>
+<path class="ln" d="M530,510.0 H640" marker-end="url(#a)"/><text class="el" x="585.0" y="498.0">실패·결과 알림</text>
+<rect x="980" y="320" width="200" height="100" rx="4" fill="#fff" stroke="#1a1a1a" stroke-width="1.3"/>
+<g transform="translate(1067.0,334) scale(1.0833333333333333)" fill="none" stroke="#1a1a1a" stroke-width="1.48" stroke-linecap="round" stroke-linejoin="round"><path d="M12 13m-7 0a7 7 0 1 0 14 0a7 7 0 1 0 -14 0" /><path d="M12 10l0 3l2 0" /><path d="M7 4l-2.75 2" /><path d="M17 4l2.75 2" /></g>
+<text class="nt" x="1080.0" y="378">스케줄러</text>
+<text class="sub" x="1080.0" y="400">EventBridge · 매일 09:00</text>
+<rect x="980" y="460" width="200" height="100" rx="4" fill="#fff" stroke="#1a1a1a" stroke-width="1.3"/>
+<g transform="translate(1067.0,474) scale(1.0833333333333333)" fill="none" stroke="#1a1a1a" stroke-width="1.48" stroke-linecap="round" stroke-linejoin="round"><path d="M6 20l6.5 -9" /><path d="M19 20c-6 0 -6 -16 -12 -16" /></g>
+<text class="nt" x="1080.0" y="518">Lambda</text>
+<text class="sub" x="1080.0" y="540">어제 AWS 비용 리포트</text>
+<rect x="980" y="600" width="200" height="100" rx="4" fill="#fff" stroke="#1a1a1a" stroke-width="1.3"/>
+<g transform="translate(1067.0,614) scale(1.0833333333333333)" fill="none" stroke="#1a1a1a" stroke-width="1.48" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5h-2a2 2 0 0 0 -2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-12a2 2 0 0 0 -2 -2h-2" /><path d="M9 3m0 2a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2v0a2 2 0 0 1 -2 2h-2a2 2 0 0 1 -2 -2z" /><path d="M14 11h-2.5a1.5 1.5 0 0 0 0 3h1a1.5 1.5 0 0 1 0 3h-2.5" /><path d="M12 17v1m0 -8v1" /></g>
+<text class="nt" x="1080.0" y="658">비용 탐색기</text>
+<text class="sub" x="1080.0" y="680">Cost Explorer · 1번 $0.01</text>
+<rect x="1220" y="180" width="200" height="100" rx="4" fill="#fff" stroke="#666" stroke-width="1.3" stroke-dasharray="5 4"/>
+<g transform="translate(1307.0,194) scale(1.0833333333333333)" fill="none" stroke="#666" stroke-width="1.48" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4m0 3a3 3 0 0 1 3 -3h12a3 3 0 0 1 3 3v2a3 3 0 0 1 -3 3h-12a3 3 0 0 1 -3 -3z" /><path d="M3 12m0 3a3 3 0 0 1 3 -3h12a3 3 0 0 1 3 3v2a3 3 0 0 1 -3 3h-12a3 3 0 0 1 -3 -3z" /><path d="M7 8l0 .01" /><path d="M7 16l0 .01" /></g>
+<text class="nt" x="1320.0" y="238">EC2 웹</text>
+<text class="sub" x="1320.0" y="260">BE · 깃허브 역량 분석 (예정)</text>
+<rect x="1220" y="460" width="200" height="100" rx="4" fill="#fff" stroke="#1a1a1a" stroke-width="1.3"/>
+<g transform="translate(1307.0,474) scale(1.0833333333333333)" fill="none" stroke="#1a1a1a" stroke-width="1.48" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6m-8 0a8 3 0 1 0 16 0a8 3 0 1 0 -16 0" /><path d="M4 6v6a8 3 0 0 0 16 0v-6" /><path d="M4 12v6a8 3 0 0 0 16 0v-6" /></g>
+<text class="nt" x="1320.0" y="518">RDS</text>
+<text class="sub" x="1320.0" y="540">PostgreSQL 18 · 서빙 DB</text>
+<path class="ln" d="M1080.0,420 V460" marker-end="url(#a)"/>
+<path class="ln" d="M1080.0,560 V600" marker-end="url(#a)"/><text class="els" x="1088.0" y="580.0">어제 비용 조회</text>
+<path class="ln" d="M980,510.0 H860" marker-end="url(#a)"/><text class="el" x="920.0" y="498.0">어제 비용</text>
+<path class="ln" d="M1320.0,280 V460" stroke-dasharray="5 4" marker-end="url(#a)"/><text class="els" x="1328.0" y="370.0">읽기·쓰기</text>
+<path class="ln" d="M1220,230.0 H920 V352.0 H860" stroke-dasharray="5 4" marker-end="url(#a)"/><text class="el" x="1060" y="218.0">깃허브 분석</text>
+<path class="ln" d="M442.5,556 V735 H1320.0 V560" marker-end="url(#a)"/><text class="el" x="760" y="723">공고·추출 결과 저장 (암호화 접속, 5432)</text>
+<rect x="1230" y="26" width="180" height="84" rx="4" fill="#fff" stroke="#1a1a1a" stroke-width="1.3"/>
+<g transform="translate(1307.0,40) scale(1.0833333333333333)" fill="none" stroke="#1a1a1a" stroke-width="1.48" stroke-linecap="round" stroke-linejoin="round"><path d="M9 7m-4 0a4 4 0 1 0 8 0a4 4 0 1 0 -8 0" /><path d="M3 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /><path d="M21 21v-2a4 4 0 0 0 -3 -3.85" /></g>
+<text class="nt" x="1320.0" y="84"></text>
+<text class="nt" x="1320" y="86">팀원 3명 (웹 브라우저)</text>
+<path class="ln" d="M1320.0,110 V180" marker-end="url(#a)"/>
+<g transform="translate(60,790) scale(0.8333333333333334)" fill="none" stroke="#d0342c" stroke-width="1.92" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4" /><path d="M10.363 3.591l-8.106 13.534a1.914 1.914 0 0 0 1.636 2.871h16.214a1.914 1.914 0 0 0 1.636 -2.87l-8.106 -13.536a1.914 1.914 0 0 0 -3.274 0z" /><path d="M12 16h.01" /></g>
+<text class="note" x="90" y="800">모든 Airflow 태스크: 두 번 다시 해도 실패하면 Slack · 넘어간 공고는 번호·사람인 링크까지</text>
+<g transform="translate(60,818) scale(0.8333333333333334)" fill="none" stroke="#777" stroke-width="1.92" stroke-linecap="round" stroke-linejoin="round"><path d="M15 8h.01" /><path d="M3 6a3 3 0 0 1 3 -3h12a3 3 0 0 1 3 3v12a3 3 0 0 1 -3 3h-12a3 3 0 0 1 -3 -3v-12z" /><path d="M3 16l5 -5c.928 -.893 2.072 -.893 3 0l5 5" /><path d="M14 14l1 -1c.928 -.893 2.072 -.893 3 0l3 3" /></g>
+<text class="note" x="90" y="828">웹 상세 화면: 본문 HTML 은 RDS(body_html), 이미지는 사람인 원본 주소로 띄움 · 비밀번호·키는 .env 와 Lambda 환경변수에만</text>
+</svg>

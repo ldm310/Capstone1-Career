@@ -144,6 +144,8 @@ docker compose -f docker-compose.airflow.yml exec airflow-scheduler python -m py
 
 ## AWS(RDS)로 돌리기 — `feature/job-skill-aws` 브랜치
 
+![AWS 구성도](docs/aws-architecture.png)
+
 로컬용(`feature/job-skill`)과 AWS용(`feature/job-skill-aws`) 브랜치를 따로 둔다. 다른 점은 **서빙 DB가 어디냐**뿐이다.
 수집·OCR·LLM(Airflow)은 두 브랜치 모두 노트북에서 돈다. AWS 브랜치에서는 결과를 **AWS RDS(PostgreSQL 18, 서울)**에 저장한다.
 
