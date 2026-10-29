@@ -231,7 +231,7 @@ def main():
     p.add_argument('--reuse-legacy', action='store_true', help='입력 해시가 없는 옛 판정(같은 계정·레포·commit·기술·모델)의 답도 다시 씀(그 답이 본 파일로만 검사)')
     p.add_argument('--repos', help='이 레포만 판정(쉼표로, 예: openmath2/OpenMath)')
     p.add_argument('--db', type=Path, default=HERE / 'out' / 'github.sqlite')
-    p.add_argument('--cache', type=Path, default=HERE / '.cache' / 'repos')
+    p.add_argument('--cache', type=Path, default=extract.CACHE_DIR)
     a = p.parse_args()
     try: login = extract.parse_login(a.url)
     except ValueError as e: p.error(str(e))

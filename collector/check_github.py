@@ -17,6 +17,7 @@ HERE = Path(__file__).resolve().parent
 def report(res):
     print(f"\n계정 {res['login']} · 공개 레포 {len(res['repos'])}개 · 신원 이메일 {len(res['identity']['emails'])}개 · 이름 {res['identity']['names']}개")
     for r in res['repos']:
+        if r.get('skipped'): print(f"\n■ {r['full']}  → 건너뜀(실패 아님): {r['skipped']}"); continue
         if r.get('error'): print(f"\n■ {r['full']}  → 건너뜀: {r['error']}"); continue
         if 'activity' not in r: print(f"\n■ {r['full']}  → 처리 전에 중단됨"); continue
         heads = ' · '.join(f'{b} {sha[:7]}' for b, sha in r['heads'].items())
@@ -47,9 +48,8 @@ def report(res):
 def main():
     p = argparse.ArgumentParser(description='GitHub 데이터 추출 (흐름 1~2단계) → DB 저장')
     p.add_argument('url', help='https://github.com/<계정> 또는 계정 이름')
-    p.add_argument('--max-repos', type=int, default=30)
-    p.add_argument('--max-size-mb', type=int, default=300, help='이보다 큰 레포는 clone하지 않음')
-    p.add_argument('--cache', type=Path, default=HERE / '.cache' / 'repos')
+    p.add_argument('--max-size-mb', type=int, default=None, help='이보다 큰 레포는 clone하지 않음(기본: 제한 없음. 부분 clone이라 512KB 이상 파일은 받지 않는다)')
+    p.add_argument('--cache', type=Path, default=extract.CACHE_DIR)
     p.add_argument('--db', type=Path, default=HERE / 'out' / 'github.sqlite')
     p.add_argument('--refresh-runs', action='store_true', help='다시 추출하지 않고, 최신 실행에서 실행 기록이 있는 commit의 기록만 새로 받음')
     p.add_argument('--consent', help='처음 보는 계정의 동의 기록: 받은 방법·범위(예: "2026-10-29 카톡, 공개 레포 분석에 동의")')
@@ -74,7 +74,7 @@ def main():
         n = store.refresh_runs(a.db, login, lambda full, sha: extract.run_records(api, full, sha))
         print(f'실행 기록이 있는 평가 commit {n}개를 새로 받음 · API {api.calls}회 · 남은 한도 {api.remaining}')
         return
-    res = extract.extract(login, os.environ.get('GITHUB_TOKEN'), a.cache, a.max_repos, a.max_size_mb)
+    res = extract.extract(login, os.environ.get('GITHUB_TOKEN'), a.cache, max_size_mb=a.max_size_mb)
     run_id = store.save(a.db, res, account['id'])
     report(res)
     print(f"저장: {a.db} (collect_run id {run_id}) · 본인 줄 증거 단위 {len(res['evidence'])}개")

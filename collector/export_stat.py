@@ -319,7 +319,7 @@ def main():
     p = argparse.ArgumentParser(description='내 STAT 미리보기용 JSON 내보내기(DB 읽기 전용, 비용 0)')
     p.add_argument('url', help='https://github.com/<계정> 또는 계정 이름')
     p.add_argument('--db', type=Path, default=HERE / 'out' / 'github.sqlite')
-    p.add_argument('--cache', type=Path, default=HERE / '.cache' / 'repos')
+    p.add_argument('--cache', type=Path, default=extract.CACHE_DIR)
     p.add_argument('--min-own-lines', type=int, default=50, help='assess.py와 같은 값(판정 대상·제외 목록 계산용)')
     p.add_argument('--out', type=Path, default=HERE / 'out' / 'stat_view.json')
     a = p.parse_args()

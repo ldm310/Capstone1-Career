@@ -110,7 +110,7 @@ def main():
     p.add_argument('--base-model', default='claude-opus-5-5')
     p.add_argument('--other', type=Path, required=True)
     p.add_argument('--other-model', default=E.MODEL)
-    p.add_argument('--cache', type=Path, default=HERE / '.cache' / 'repos')
+    p.add_argument('--cache', type=Path, default=extract.CACHE_DIR)
     a = p.parse_args()
     login = extract.parse_login(a.url)
     index, _ = S.load_dictionary()

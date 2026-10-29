@@ -319,7 +319,7 @@ def save(path, res, account_id):
         ids = {}
         for r in res['repos']:
             heads, a = r.get('heads', {}), r.get('activity', {})
-            error = r.get('error') or (None if a else '처리 전에 중단됨')
+            error = r.get('error') or r.get('skipped') or (None if a else '처리 전에 중단됨')  # 크기로 건너뜀(skipped)은 실패가 아니지만 분석하지 않은 이유라 같은 칸에 둔다
             ids[r['full']] = rid = db.execute(
                 'INSERT INTO repo (run_id, full_name, fork, default_branch, size_kb, default_sha, develop_sha, develop_contains_main, '
                 'reachable_commits, pulls, pulls_merged, pulls_own, issues, deployments, actions_all, error, source) '

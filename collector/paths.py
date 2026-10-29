@@ -10,7 +10,7 @@ SKIP_NAMES = {'package-lock.json', 'yarn.lock', 'pnpm-lock.yaml', 'poetry.lock',
 BUILD_EXT = ('.exe', '.dll', '.so', '.dylib', '.o', '.obj', '.pdb', '.a', '.lib', '.pyc', '.wasm')  # 컴파일 결과물
 SKIP_EXT = ('.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico', '.webp', '.pdf', '.zip', '.jar', '.class', '.woff', '.woff2',
             '.ttf', '.eot', '.mp4', '.mp3', '.map', '.min.js', '.min.css', '.bin', '.pt', '.onnx', '.pkl', '.h5', '.db', '.sqlite') + BUILD_EXT
-MAX_BLOB = 512 * 1024
+MAX_BLOB = 512 * 1024  # 이 크기 이상인 파일은 세지 않는다. 부분 clone(--filter=blob:limit=512k)이 받지 않는 blob과 정확히 같다
 HEAD_BYTES = 64 * 1024  # generated가 보는 blob 앞부분
 # 긴 줄 규칙(minified 판별)에서 빼는 확장자: 노트북은 base64 출력이 한 줄이고, 한글 문서는 한 글자가 3바이트라 줄이 길어 보인다
 LONG_LINE_EXT = ('.ipynb', '.md', '.markdown', '.rst', '.txt')
@@ -25,9 +25,9 @@ SQL_DDL = re.compile(rb'^[ \t]*(?:create|alter)[ \t]+table\b', re.M)  # 테이�
 
 
 def skipped(p, size):
-    """경로와 크기만으로 빼는 파일: 너무 큰 파일, lock 파일, 빌드·의존성 폴더 안, 이미지·컴파일 결과물 같은 확장자."""
+    """경로와 크기만으로 빼는 파일: 너무 큰 파일(512KiB 이상), lock 파일, 빌드·의존성 폴더 안, 이미지·컴파일 결과물 같은 확장자."""
     parts = p.split('/')
-    return (size > MAX_BLOB or parts[-1] in SKIP_NAMES or any(d in SKIP_DIRS for d in parts[:-1])
+    return (size >= MAX_BLOB or parts[-1] in SKIP_NAMES or any(d in SKIP_DIRS for d in parts[:-1])
             or parts[-1].lower().endswith(SKIP_EXT))
 
 

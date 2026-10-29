@@ -49,7 +49,7 @@ def main():
     p = argparse.ArgumentParser(description='저장된 LLM 답에 지금 규칙을 다시 적용(비용 0)')
     p.add_argument('url', help='https://github.com/<계정> 또는 계정 이름')
     p.add_argument('--db', type=Path, default=HERE / 'out' / 'github.sqlite')
-    p.add_argument('--cache', type=Path, default=HERE / '.cache' / 'repos')
+    p.add_argument('--cache', type=Path, default=extract.CACHE_DIR)
     p.add_argument('--min-own-lines', type=int, default=50)
     a = p.parse_args()
     login = extract.parse_login(a.url)

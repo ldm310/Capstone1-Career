@@ -167,7 +167,7 @@ def main():
     p.add_argument('--force', action='store_true', help='template: 같은 파일이 있어도 덮어씀')
     p.add_argument('--min-own-lines', type=int, default=50, help='assess.py와 같은 값')
     p.add_argument('--db', type=Path, default=HERE / 'out' / 'github.sqlite')
-    p.add_argument('--cache', type=Path, default=HERE / '.cache' / 'repos')
+    p.add_argument('--cache', type=Path, default=extract.CACHE_DIR)
     a = p.parse_args()
     if a.command == 'import':
         if not a.labeler: p.error('import에는 --labeler(정답을 적은 사람)가 필요합니다')

@@ -2,15 +2,25 @@
 
 네트워크를 쓰지 않는다. 레포는 임시 폴더에 만든다.
 """
+import base64
+import email.message
+import io
+import os
 import re
+import shutil
+import sqlite3
 import subprocess
 import tempfile
 import unittest
+import urllib.error
+from pathlib import Path
 from unittest import mock
 
 import extract
+import gitenv
 import paths
-from testkit import EMAILS, MATE, ME, NAMES, TWIN, FakeApi, Repo, lines
+import store
+from testkit import EMAILS, GIT, MATE, ME, NAMES, TWIN, FakeApi, Repo, lines
 
 
 def blame_reference(path, sha, emails, names):
@@ -57,8 +67,8 @@ class Paths(unittest.TestCase):
             self.assertTrue(paths.skipped(p, 10), p)
         for p in ('src/exe/run.py', 'src/lib/util.py', 'src/my_vendor/x.py', 'src/site_packages_notes.md', 'docs/data.alpha', 'main.c', 'src/solid.py'):
             self.assertFalse(paths.skipped(p, 10), p)
-        self.assertFalse(paths.skipped('big.txt', paths.MAX_BLOB))
-        self.assertTrue(paths.skipped('big.txt', paths.MAX_BLOB + 1))
+        self.assertFalse(paths.skipped('big.txt', paths.MAX_BLOB - 1))
+        self.assertTrue(paths.skipped('big.txt', paths.MAX_BLOB))  # 부분 clone(blob:limit=512k)이 받지 않는 크기와 같다: 512KiB 이상
 
     def test_long_line_rule_boundary_and_exemptions(self):
         line = b'x' * 299 + b'\n'  # 줄바꿈 포함 300바이트
@@ -339,6 +349,348 @@ class FakeApiBehavior(unittest.TestCase):
         self.assertEqual(list(api.pages('/l', {'per_page': 100})), [{'n': 1}, {'n': 2}])
         self.assertEqual(list(api.pages('/none', {})) + list(api.pages('/empty', {}, max_pages=3)), [])
         self.assertEqual((api.calls, api.seen[0]), (3, ('/l', {'per_page': 100})))
+
+
+def bare(dest, src=None):
+    """file:// 원격으로 쓸 bare 레포(src가 없으면 빈 레포). 부분 clone이 실제로 걸러지도록 upload-pack에 filter와 lazy fetch를 허용한다."""
+    subprocess.run([*GIT, 'clone', '-q', '--bare', str(src), str(dest)] if src else [*GIT, 'init', '-q', '--bare', str(dest)],
+                   check=True, capture_output=True)
+    for key in ('uploadpack.allowFilter', 'uploadpack.allowAnySHA1InWant'):
+        subprocess.run(['git', '-C', str(dest), 'config', key, 'true'], check=True)
+    return dest
+
+
+def source(root):
+    """폴더를 만들고 그 안에 시험용 레포(testkit.Repo)를 연다."""
+    Path(root).mkdir()
+    return Repo(root)
+
+
+def meta(full, default='main', size=10):
+    """/users/{login}/repos·/repos/{full}가 돌려주는 레포 정보(extract가 쓰는 칸만). size는 GitHub처럼 KB다."""
+    return dict(full_name=full, private=False, fork=False, default_branch=default, size=size)
+
+
+def repo_routes(full, commits=()):
+    """레포 단위 경로: 본인 commit(API, ME)과 본인 줄이 있을 때 묻는 활용 기록(빈 목록). 실행 기록 경로는 없어서 404다."""
+    return {f'/repos/{full}/commits': [dict(sha=sha, commit=dict(author=dict(name=ME[0], email=ME[1]))) for sha in commits],
+            **{f'/repos/{full}/{kind}': [] for kind in ('pulls', 'issues', 'deployments')}}
+
+
+class Listing(FakeApi):
+    """FakeApi는 경로만 보므로 /users/me/repos만 type(owner·member)별로 나눠 돌려주고 max_pages를 기록한다. 계정 단계 경로는 기본값을 둔다.
+    own = /search/commits에 나올 레포. hooks = {경로: 함수}: 그 경로를 처음 물을 때 함수를 먼저 부른다(중간에 원격을 없애는 데 쓴다)."""
+    def __init__(self, routes=None, owner=(), member=(), own=(), hooks=None):
+        base = {'/users/me': dict(login='me', id=7, email=ME[1]), '/search/issues': dict(items=[]),
+                '/search/commits': dict(items=[dict(repository=dict(full_name=f)) for f in own])}
+        super().__init__({**base, **(routes or {})})
+        self.listing, self.hooks, self.listed = dict(owner=list(owner), member=list(member)), dict(hooks or {}), []
+
+    def _ask(self, path, params):
+        if path in self.hooks: self.hooks.pop(path)()
+        return super()._ask(path, params)
+
+    def pages(self, path, params, max_pages=10):
+        if path != '/users/me/repos': return super().pages(path, params, max_pages)
+        self.listed.append((params['type'], max_pages))
+        return iter(self.listing[params['type']])
+
+
+class Response(io.BytesIO):
+    """urlopen이 돌려주는 응답 흉내: status·headers·read()·with."""
+    def __init__(self, status, headers, body):
+        super().__init__(body)
+        self.status, self.headers = status, headers
+
+
+class Opener:
+    """urllib.request.urlopen 흉내: 정해 둔 응답 (상태, 머리말, 본문)이나 예외를 차례로 낸다. 2xx가 아니면 urllib처럼 HTTPError를 던진다.
+    받은 요청은 requests에 쌓는다."""
+    def __init__(self, *responses):
+        self.responses, self.requests = list(responses), []
+
+    def __call__(self, req, timeout=None, context=None):
+        self.requests.append(req)
+        item = self.responses.pop(0)
+        if isinstance(item, Exception): raise item
+        status, headers, body = item
+        msg = email.message.Message()
+        for k, v in headers.items(): msg[k] = v
+        if status < 300: return Response(status, msg, body)
+        raise urllib.error.HTTPError(req.full_url, status, 'error', msg, io.BytesIO(body))
+
+
+class Collect(unittest.TestCase):
+    """수집 범위·clone 방식: 레포 상한 없음·본인 commit 레포 먼저, dev 계열 브랜치, checkout 없는 부분 clone, 토큰은 HTTP 헤더로만,
+    사용자 git 설정과 분리, API 실패는 그 레포만(계정 단계는 실행 전체), 한도 초과는 기다렸다 다시. 원격은 file:// bare 레포다."""
+
+    def extract(self, d, api, remotes, cache='cache', **kw):
+        return extract.extract('me', None, d / cache, api=api, remote_url=lambda full: remotes[full].as_uri(), **kw)
+
+    def test_branch_set_includes_dev_aliases(self):
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            a = source(d / 'a').commit(MATE, {'a.py': lines('mate', 3)})
+            a.git('checkout', '-q', '-b', 'dev')
+            a.commit(MATE, {'dev.py': lines('mate', 2)})
+            b = source(d / 'b').commit(MATE, {'b.py': lines('mate', 3)})
+            b.git('branch', '-m', 'main', 'trunk')  # 기본 브랜치가 main이 아니다
+            b.git('branch', 'master')
+            b.git('checkout', '-q', '-b', 'develope')
+            b.commit(MATE, {'x.py': lines('mate', 1)})
+            remotes = {'me/a': bare(d / 'a.git', a.path), 'me/b': bare(d / 'b.git', b.path)}
+            api = Listing({**repo_routes('me/a'), **repo_routes('me/b')}, owner=[meta('me/a'), meta('me/b', default='trunk')])
+            res = self.extract(d, api, remotes)
+            heads = {row['full']: row['heads'] for row in res['repos']}
+            self.assertEqual(list(heads['me/a']), ['main', 'dev'])
+            self.assertEqual(heads['me/a']['dev'], a.head())
+            self.assertEqual(list(heads['me/b']), ['trunk', 'master', 'develope'])  # 기본 브랜치가 맨 앞, main이 없으면 master
+            self.assertIsNone(res['stopped'])
+
+    def test_empty_repo_is_not_failure(self):
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            res = self.extract(d, Listing(owner=[meta('me/empty')]), {'me/empty': bare(d / 'empty.git')})
+            self.assertEqual(res['repos'][0]['error'], '빈 레포')
+            self.assertIsNone(res['stopped'])
+
+    def test_api_error_isolates_one_repo(self):  # 1단계(본인 commit)와 2단계(실행·활용 기록) 모두, 한도 소진도 그 레포만
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            src = source(d / 'src').commit(ME, {'app.py': lines('me', 5)})
+            names = ['me/a', 'me/b', 'me/c', 'me/d']
+            routes = {k: v for full in names for k, v in repo_routes(full).items()}
+            routes['/repos/me/a/commits'] = extract.StopCheck('HTTP 502')
+            routes['/repos/me/c/actions/runs'] = extract.StopCheck('HTTP 502')
+            routes['/repos/me/d/issues'] = extract.RateLimited('한도 소진')
+            res = self.extract(d, Listing(routes, owner=[meta(f) for f in names]), dict.fromkeys(names, bare(d / 'src.git', src.path)))
+            rows = {row['full']: row for row in res['repos']}
+            for full in ('me/a', 'me/c', 'me/d'): self.assertIn('API', rows[full]['error'], full)
+            self.assertNotIn('error', rows['me/b'])
+            self.assertEqual(rows['me/b']['heads'], {'main': src.head()})
+            self.assertEqual(rows['me/b']['activity']['pulls'], 0)
+            self.assertIsNone(res['stopped'])
+
+    def test_account_level_api_failure_stops_the_run(self):  # 사용자·레포 목록·검색은 계정 전체: 한도 소진이면 실행을 멈춘다
+        api = Listing({'/search/commits': extract.RateLimited('API 한도 소진')}, owner=[meta('me/a')])
+        res = extract.extract('me', None, Path('/nonexistent'), api=api, remote_url=lambda full: 'file:///nonexistent')
+        self.assertIn('한도', res['stopped'])
+        self.assertEqual(res['repos'], [])
+
+    def test_no_repo_cap_and_own_first(self):
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            team = source(d / 'team').commit(MATE, {'base.py': lines('mate', 4)}).commit(ME, {'mine.py': lines('me', 6)})
+            owner = [meta(f'me/r{i:02d}') for i in range(35)]
+            remotes = {**dict.fromkeys((m['full_name'] for m in owner), bare(d / 'empty.git')), 'team/proj': bare(d / 'team.git', team.path)}
+            api = Listing(repo_routes('team/proj', [team.head()]), owner=owner, member=[meta('team/proj')], own=['team/proj'])
+            res = self.extract(d, api, remotes)
+            self.assertEqual([row['full'] for row in res['repos']], ['team/proj'] + [m['full_name'] for m in owner])  # 36개 모두, 본인 commit 레포가 먼저
+            self.assertEqual(res['repos'][0]['source'], 'member')
+            self.assertEqual(res['repos'][0]['evals'][team.head()]['own'], 6)
+            self.assertEqual(api.listed, [('owner', None), ('member', None)])  # 레포 목록도 쪽 수 상한 없이 끝까지 읽는다
+            self.assertIsNone(res['stopped'])
+
+    def test_token_never_in_git_config_or_argv(self):
+        token = 'ghp_TESTTOKEN0123456789'
+        basic = base64.b64encode(f'x-access-token:{token}'.encode()).decode()
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            src = source(d / 'src').commit(ME, {'a.py': lines('me', 3)})
+            remote = bare(d / 'src.git', src.path)
+            with mock.patch.object(extract, 'git', wraps=extract.git) as git, mock.patch.object(subprocess, 'run', wraps=subprocess.run) as run:
+                path = extract.sync('o/r', d / 'cache', token, remote.as_uri())  # clone
+                src.commit(ME, {'b.py': lines('me', 2)})
+                src.git('push', '-q', str(remote), 'main')
+                self.assertEqual(extract.sync('o/r', d / 'cache', token, remote.as_uri()), path)  # fetch
+            argv = [str(a) for c in git.call_args_list for a in c.args] + [str(a) for c in run.call_args_list for a in c.args[0]]
+            stored = b''.join(p.read_bytes() for p in (path / '.git').rglob('*') if p.is_file())
+            for secret in (token, basic):
+                self.assertEqual([a for a in argv if secret in a], [], secret)
+                self.assertNotIn(secret.encode(), stored)
+            # 토큰은 환경 변수(GIT_CONFIG_VALUE_n)의 HTTP 헤더로만 갔다: clone과 fetch 둘 다
+            sent = [c.kwargs['env'] for c in run.call_args_list if c.args[0][:1] == ['git'] and c.args[0][3] in ('clone', 'fetch')]
+            self.assertEqual(len(sent), 2)
+            for env in sent: self.assertIn(f'AUTHORIZATION: basic {basic}', env.values())
+            self.assertEqual(extract.ref(path, 'main'), src.head())  # fetch가 새 commit을 받았다
+            self.assertEqual([p.name for p in path.iterdir()], ['.git'])  # checkout 없음(작업 트리·index 없음)
+            self.assertFalse((path / '.git' / 'index').exists())
+
+    def test_sync_refuses_a_cache_entry_with_a_working_tree(self):  # checkout이 있는 옛 캐시는 쓰지도 지우지도 않는다
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            src = source(d / 'src').commit(ME, {'a.py': lines('me', 3)})
+            remote = bare(d / 'src.git', src.path)
+            old = d / 'cache' / 'o__r'
+            subprocess.run([*GIT, 'clone', '-q', remote.as_uri(), str(old)], check=True, capture_output=True)
+            with self.assertRaises(extract.CacheError): extract.sync('o/r', d / 'cache', None, remote.as_uri())
+            self.assertTrue((old / 'a.py').exists())
+            res = self.extract(d, Listing(repo_routes('o/r'), owner=[meta('o/r')]), {'o/r': remote})
+            self.assertIn('checkout', res['repos'][0]['error'])
+
+    def test_size_cap_is_opt_in_and_not_a_failure(self):  # 기본은 크기 제한 없음(부분 clone). 주면 건너뛰되 실패(error)로 세지 않는다
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            src = source(d / 'src').commit(MATE, {'a.py': lines('mate', 3)})
+            remotes, huge = {'me/huge': bare(d / 'src.git', src.path)}, [meta('me/huge', size=2_000_000)]  # 약 1.9GB
+            res = self.extract(d, Listing(repo_routes('me/huge'), owner=huge), remotes)
+            self.assertEqual(res['repos'][0]['heads'], {'main': src.head()})
+            res = self.extract(d, Listing(repo_routes('me/huge'), owner=huge), remotes, cache='capped', max_size_mb=300)
+            row = res['repos'][0]
+            self.assertEqual(row['skipped'], '레포 크기 1953MB > 300MB')
+            self.assertNotIn('error', row)
+            self.assertFalse((d / 'capped').exists())  # clone하지 않았다
+            db = d / 'g.sqlite'
+            store.save(db, res, store.add_account(db, 'me', '본인', '시험', '2026-10-29'))
+            con = sqlite3.connect(db)
+            try: self.assertEqual(con.execute('SELECT error FROM repo').fetchone()[0], '레포 크기 1953MB > 300MB')  # DB에는 이유 칸에 남긴다
+            finally: con.close()
+
+    def test_partial_clone_blames_like_full_clone_without_fetching_big_blobs(self):
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            line = b'z' * 39 + b'\n'
+            n, rest = divmod(paths.MAX_BLOB - 1, len(line))
+            below = line * n + b'z' * (rest - 1) + b'\n'  # 512KiB - 1바이트: 받는다
+            edge = b'y' * (paths.MAX_BLOB - 1) + b'\n'    # 정확히 512KiB: git은 「이 크기 이상」을 받지 않는다
+            big = (b'x' * 39 + b'\n') * 14_000             # 560,000바이트
+            self.assertEqual((len(below), len(edge)), (paths.MAX_BLOB - 1, paths.MAX_BLOB))
+            src = source(d / 'src').commit(ME, {'app.py': lines('me', 10), 'data/below.txt': below, 'data/edge.txt': edge, 'data/big.txt': big})
+            src.commit(MATE, {'app.py': lines('me', 6) + lines('mate', 4)})  # 두 번 바뀐 파일: blame 길
+            path = extract.sync('o/r', d / 'cache', None, bare(d / 'src.git', src.path).as_uri())
+            config = lambda key: subprocess.run(['git', '-C', str(path), 'config', key], capture_output=True, text=True).stdout.strip()
+            self.assertEqual((config('remote.origin.promisor'), config('remote.origin.partialclonefilter')), ('true', f'blob:limit={paths.MAX_BLOB}'))
+            sha = src.head()
+            got, want = extract.blame(path, sha, EMAILS, NAMES), extract.blame(src.path, sha, EMAILS, NAMES)
+            self.assertEqual(got, want)
+            self.assertEqual(got[0]['files'], 2)  # app.py, below.txt(edge·big은 512KiB 이상이라 어느 clone에서도 빠진다)
+            missing = subprocess.run(['git', '-C', str(path), 'rev-list', '--objects', '--missing=print', '--all'], capture_output=True, text=True,
+                                     env={**os.environ, 'GIT_NO_LAZY_FETCH': '1'}).stdout.split()
+            oid = lambda p: src.git('rev-parse', f'{sha}:{p}').stdout.strip()
+            self.assertEqual({m[1:] for m in missing if m.startswith('?')}, {oid('data/edge.txt'), oid('data/big.txt')})  # 크기를 보느라 내려받지 않았다
+
+    def test_lazy_fetch_failure_marks_only_that_repo(self):  # PyDriller가 큰 blob을 내려받다 실패해도(네트워크 끊김) 그 레포만 분석 실패
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            big = source(d / 'big').commit(ME, {'app.py': lines('me', 5), 'data/big.txt': (b'x' * 39 + b'\n') * 14_000})
+            ok = source(d / 'ok').commit(ME, {'ok.py': lines('me', 4)})
+            remotes = {'me/big': bare(d / 'big.git', big.path), 'me/ok': bare(d / 'ok.git', ok.path)}
+            gone = lambda: shutil.move(remotes['me/big'], d / 'gone.git')  # clone한 뒤 원격이 사라진다
+            api = Listing({**repo_routes('me/big'), **repo_routes('me/ok')}, owner=[meta('me/big'), meta('me/ok')], hooks={'/repos/me/big/commits': gone})
+            res = self.extract(d, api, remotes)
+            rows = {row['full']: row for row in res['repos']}
+            self.assertEqual(rows['me/big']['error'], '분석 실패(GitCommandError)')
+            self.assertEqual(rows['me/ok']['evals'][ok.head()]['own'], 4)
+            self.assertIsNone(res['stopped'])
+
+    def test_every_git_call_ignores_the_user_git_config(self):
+        """clone·fetch·rev-parse·log·PyDriller·ls-tree·cat-file·blame·merge-base가 모두 gitenv 환경으로 돈다:
+        사용자 환경에 git을 망가뜨리는 설정(깨진 전역 설정 파일, 잘못된 GIT_CONFIG_PARAMETERS)을 심어도 결과가 같다.
+        한 번 끝까지 분석한 캐시도 checkout이 생기지 않아 다음 실행(fetch)에서 다시 쓴다."""
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            src = source(d / 'src').commit(ME, {'app.py': lines('me', 5)}).commit(MATE, {'app.py': lines('me', 3) + lines('mate', 2)})
+            src.git('checkout', '-q', '-b', 'develop')
+            src.commit(ME, {'dev.py': lines('me', 4)})
+            remotes = {'me/r': bare(d / 'src.git', src.path)}
+            api = lambda: Listing(repo_routes('me/r'), owner=[meta('me/r')])
+            want = self.extract(d, api(), remotes, cache='clean')
+            broken = d / 'broken.gitconfig'
+            broken.write_text('[broken\n')
+            with mock.patch.dict(os.environ, {'GIT_CONFIG_GLOBAL': str(broken), 'GIT_CONFIG_PARAMETERS': 'bogus', 'GIT_ASKPASS': '/bin/false'}):
+                self.assertNotEqual(subprocess.run(['git', '-C', str(src.path), 'log', '-1'], capture_output=True).returncode, 0)  # 이 환경이면 git이 실패한다
+                runs = [self.extract(d, api(), remotes, cache='dirty') for _ in range(2)]  # 처음은 clone, 다음은 fetch
+            keys = ('heads', 'commits', 'evals', 'develop_contains_main')
+            for got in runs:
+                row = got['repos'][0]
+                self.assertNotIn('error', row)
+                self.assertEqual({k: row[k] for k in keys}, {k: want['repos'][0][k] for k in keys})
+                self.assertTrue(row['develop_contains_main'])
+                self.assertEqual(got['evidence'], want['evidence'])
+            self.assertEqual([p.name for p in (d / 'dirty' / 'me__r').iterdir()], ['.git'])
+
+    def test_git_env_copies_only_path_home_lang(self):
+        planted = {'PATH': os.environ['PATH'], 'HOME': '/home/me', 'LANG': 'ko_KR.UTF-8', 'ANTHROPIC_API_KEY': 'sk-ant-x',
+                   'GIT_ASKPASS': '/bin/askpass', 'GIT_CONFIG_PARAMETERS': "'credential.helper'='osxkeychain'"}
+        with mock.patch.dict(os.environ, planted, clear=True):
+            env = gitenv.env('tok', replace_base='refs/career/replace/')
+        self.assertEqual({k: env[k] for k in ('PATH', 'HOME', 'LANG')}, {k: planted[k] for k in ('PATH', 'HOME', 'LANG')})
+        self.assertEqual([k for k in env if k not in ('PATH', 'HOME', 'LANG') and not k.startswith('GIT_')], ['SSH_ASKPASS'])  # 나머지는 git 설정뿐
+        self.assertNotIn('ANTHROPIC_API_KEY', env)
+        self.assertEqual(env['GIT_REPLACE_REF_BASE'], 'refs/career/replace/')
+        self.assertNotIn('GIT_REPLACE_REF_BASE', gitenv.env())
+        with tempfile.TemporaryDirectory() as d:
+            for overlay in (env, {**planted, **env}):  # 그대로 쓰든, os.environ 위에 덮어쓰든(GitPython) 넘긴 설정만 보인다
+                listed = subprocess.run(['git', 'config', '--list', '--show-scope'], env=overlay, cwd=d, capture_output=True, text=True, check=True).stdout
+                rows = [line.split('\t', 1) for line in listed.splitlines()]
+                self.assertEqual({scope for scope, _ in rows}, {'command'})
+                got = [tuple(kv.split('=', 1)) for _, kv in rows]
+                self.assertEqual([v for k, v in got if k == 'credential.helper'], [''])  # 빈 값: osxkeychain 같은 helper를 모두 지운다
+                self.assertIn(('http.https://github.com/.extraheader', 'AUTHORIZATION: basic ' + base64.b64encode(b'x-access-token:tok').decode()), got)
+                self.assertIn(('mailmap.file', ''), got)
+                self.assertIn(('log.mailmap', 'false'), got)
+        self.assertNotIn('AUTHORIZATION', ''.join(gitenv.env().values()))  # 토큰이 없으면 헤더도 없다
+
+    def test_scan_blobs_treats_a_missing_blob_as_skipped(self):  # cat-file의 missing 답은 건너뛴다(ValueError 없이)
+        with tempfile.TemporaryDirectory() as d:
+            r = Repo(d).commit(ME, {'a.py': lines('me', 3)})
+            blob = r.git('rev-parse', 'HEAD:a.py').stdout.strip()
+            self.assertEqual(extract.scan_blobs(r.path, [('a.py', blob), ('gone.py', '0' * 40), ('b.py', blob)]), {'a.py': (3, False), 'b.py': (3, False)})
+
+    def test_etag_304_uses_cache(self):
+        opener = Opener((200, {'ETag': '"a"'}, b'{"n": 1}'), (304, {}, b''))
+        api = extract.Api('tok', opener=opener)
+        first, second = api.get('/repos/o/r'), api.get('/repos/o/r')
+        self.assertIsNone(opener.requests[0].get_header('If-none-match'))
+        self.assertEqual(opener.requests[1].get_header('If-none-match'), '"a"')
+        self.assertEqual((first[0], second[0]), ({'n': 1}, {'n': 1}))
+        self.assertEqual(api.calls, 1)  # 304는 한도에 안 세므로 calls에도 안 센다
+
+    def test_etag_cache_keeps_the_next_page_link(self):  # 304로 받은 쪽도 다음 쪽(Link)을 따라간다. 캐시는 넘겨받은 dict에 둔다
+        cache = {}
+        link = {'Link': '<https://api.github.com/l?page=2>; rel="next"'}
+        first = Opener((200, {'ETag': '"1"', **link}, b'[1]'), (200, {'ETag': '"2"'}, b'[2]'))
+        self.assertEqual(list(extract.Api(None, opener=first, etag_cache=cache).pages('/l', {})), [1, 2])
+        again = Opener((304, {}, b''), (304, {}, b''))
+        api = extract.Api(None, opener=again, etag_cache=cache)
+        self.assertEqual(list(api.pages('/l', {})), [1, 2])
+        self.assertEqual([r.get_header('If-none-match') for r in again.requests], ['"1"', '"2"'])
+        self.assertEqual(api.calls, 0)
+
+    def test_rate_limit_waits_then_gives_up_after_three_tries(self):
+        limit, waits = {'X-RateLimit-Remaining': '0', 'X-RateLimit-Reset': '1010'}, []
+        api = extract.Api(None, opener=Opener((403, limit, b'{}'), (429, {'Retry-After': '7'}, b'{}'), (200, {}, b'{"ok": true}')),
+                          sleep=waits.append, clock=lambda: 1000.0)
+        self.assertEqual(api.get('/x')[0], {'ok': True})
+        self.assertEqual(waits, [11, 7])  # reset까지(+1초), 2차 한도는 Retry-After만큼
+        waits.clear()
+        api = extract.Api(None, opener=Opener(*[(403, limit, b'{}')] * 3), sleep=waits.append, clock=lambda: 1000.0)
+        with self.assertRaises(extract.RateLimited): api.get('/x')
+        self.assertEqual(waits, [11, 11])  # 3번 시도, 그사이 2번 기다림
+        self.assertTrue(issubclass(extract.RateLimited, extract.StopCheck))  # 레포 단위 호출이면 extract가 그 레포만 미확인으로 둔다
+
+    def test_plain_403_is_not_retried_but_5xx_and_network_errors_are(self):
+        waits = []
+        api = extract.Api(None, opener=Opener((403, {'X-RateLimit-Remaining': '12'}, b'{}')), sleep=waits.append)
+        with self.assertRaisesRegex(extract.StopCheck, 'GET https://api.github.com/x → HTTP 403'): api.get('/x')
+        self.assertEqual(waits, [])
+        api = extract.Api(None, opener=Opener((502, {}, b''), urllib.error.URLError('reset'), (200, {}, b'[]')), sleep=waits.append)
+        self.assertEqual(api.get('/x')[0], [])
+        self.assertEqual(waits, [1, 2])
+        waits.clear()
+        api = extract.Api(None, opener=Opener(*[(503, {}, b'')] * 3), sleep=waits.append)
+        with self.assertRaisesRegex(extract.StopCheck, 'GET https://api.github.com/x → HTTP 503') as caught: api.get('/x')
+        self.assertNotIsInstance(caught.exception, extract.RateLimited)
+        self.assertEqual(waits, [1, 2])
+
+    def test_status_allowed_by_ok_returns_no_value(self):  # 진짜 API의 404 본문({"message": ...})을 값으로 돌려주지 않는다(FakeApi와 같게)
+        value, _, status = extract.Api(None, opener=Opener((404, {}, b'{"message": "Not Found"}'))).get('/repos/o/r', ok=(200, 404))
+        self.assertEqual((value, status), (None, 404))
+
+    def test_pages_without_cap_reads_every_page(self):  # max_pages=None이면 끝까지(레포 목록), 기본은 10쪽
+        chain = [(200, {'Link': f'<https://api.github.com/l?page={i + 2}>; rel="next"'} if i < 11 else {}, f'[{i}]'.encode()) for i in range(12)]
+        self.assertEqual(list(extract.Api(None, opener=Opener(*chain)).pages('/l', {}, max_pages=None)), list(range(12)))
+        self.assertEqual(list(extract.Api(None, opener=Opener(*chain)).pages('/l', {})), list(range(10)))
 
 
 if __name__ == '__main__': unittest.main()
