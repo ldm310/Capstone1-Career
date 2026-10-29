@@ -72,6 +72,10 @@ URL 입력(Next.js) ─▶ 분석 서버(FastAPI, 127.0.0.1)에 작업 등록
 1. **기본:** 평가 commit에서 git blame(`-w`)으로 줄마다 마지막 작성자를 본다. 결과가 정해진 파일은 줄 수만 세는 빠른 길을 쓴다(10-28 구현, 실제 레포 128건이 전체 blame과 같음).
 2. **squash 되찾기(확정, 중간발표 범위)**
    - 대상: main·develop의 commit 중 「부모 1개 + GitHub가 만든 commit(committer web-flow) + 어떤 PR의 merge_commit_sha와 일치」인 것만 squash로 본다.
+     - PR과의 일치는 GitHub의 「commit에 연결된 PR」 API로 확인한다.
+     - 웹 화면에서 직접 고치거나 올린 commit(「Create …」「Update …」「Add files via upload」 등, 연결된 PR 없음)은 squash가 아니라 작성자 그대로인 직접 commit으로 본다.
+     - fail closed는 두 경우에만 한다. 제목에 「(#번호)」가 있는데 PR 기록을 못 찾은 경우, 그리고 PR 조회 API가 실패한 경우다.
+     - 이유: 10명의 본인 commit 2,587개 중 부모 1개·web-flow가 715개였고, 그중 「(#번호)」 squash 제목은 70개, 웹 편집·업로드형은 578개였다(제목 패턴으로 센 값). 웹 편집까지 막으면 8명의 줄 약 3.2만이 빠진다. **(Claude 판단, 빌더 검토 반영)**
    - 방법: 그 PR의 원본(`refs/pull/N/head`)을 받아, 로컬에서만 squash commit에 PR 머리를 부모로 이어 붙인다(`git replace --graft`). 그 뒤 blame하면 줄마다 PR 안의 원래 작성자가 나온다. 여러 번 squash된 것(develop → main)도 끝까지 잇고, 순환은 막는다.
    - rebase 판별: patch-id만으로 정하지 않고, 작성자·작성 시각까지 맞을 때만 rebase로 본다.
    - **빠른 길(history)을 포함한 모든 git 호출이 같은 graft를 본다.** 안 그러면 squash로 들어온 파일이 PR 연 사람에게 통째로 간다(합성 시험에서 정답 10줄이 20줄로 잡힘).
@@ -79,6 +83,7 @@ URL 입력(Next.js) ─▶ 분석 서버(FastAPI, 127.0.0.1)에 작업 등록
    - GitHub가 squash commit에 넣는 공동 작성자(`Co-authored-by`)는 「참여 신호」로만 보여 준다. 어느 줄인지는 알 수 없어서 줄 귀속에는 쓰지 않는다.
    - PR 조회는 내 commit이나 내가 연 PR이 있는 레포에서만 하고, 필요한 PR ref만 받는다.
 3. **같은 레포 안 복사(확정, 중간발표 범위):** git blame의 복사 추적(`-C`)으로 다른 파일에서 옮겨 온 줄을 원래 작성자에게 돌린다. 전체에 쓰면 6.5배 느려져서 의심 파일에만 쓴다. 의심 파일은 같은 commit에서 다른 파일이 크게 줄어든 경우 등이다(빌더 판단).
+   - 범위: main·develop 이력 안(graft로 이은 PR 포함)에서 다른 파일로 옮긴 코드만 잡는다. 팀원이 **병합되지 않은 내 브랜치**에서 복사해 새 commit으로 올린 코드는 `-C`로 잡히지 않는다. 중간발표에서는 놓침으로 두고, 발표에서도 그렇게 말한다. 「본인이 출처 지정 → 기계 검증」(다음 단계)이 이 경우를 다룬다(사용자 결정 2026-10-29에 따름).
 4. **대량 업로드(확정)**
    - **뺌:** 한 commit에 코드 파일 1,000개 이상 추가, 또는 남의 표지가 있는 파일. 표지는 SPDX, Copyright(남의 이름), 「Licensing Information」, 「Permission is hereby granted」, 「Licensed under」, 「All rights reserved」, @generated, 의존성 폴더(site-packages, _vendor, Windows 가상환경 Lib/·Scripts/, pyvenv.cfg)다. 그 commit이 들여온 줄만 빼고, 뒤에 본인이 고친 줄은 그대로 둔다.
    - **보류(「확인 필요」):** 한 commit에 코드 파일 200개 이상을 처음 올린 경우, 그리고 수업 틀 신호가 있는 경우. 신호는 starter·skeleton·template 같은 이름, 「Initial commit」「upload project」 같은 commit 메시지다.
