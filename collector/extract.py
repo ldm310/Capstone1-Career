@@ -30,6 +30,8 @@ CLONE_FILTER = 'blob:limit=512k'  # 이 크기 이상인 blob은 받지 않는�
 BRANCHES = ('main', 'master', 'develop', 'dev', 'develope')  # 기본 브랜치와 함께 보는 브랜치(결정 9번, dev·develope는 2026-10-29 결정)
 SEARCH_PAGES = 10  # 검색 API가 주는 최대: 100개씩 10쪽 = 1,000개(그 뒤 쪽은 422)
 ENV = gitenv.env()  # 읽기용 git 환경(토큰 없음)
+SHA = re.compile(r'[0-9a-f]{40}|[0-9a-f]{64}')  # commit SHA(SHA-1·SHA-256)
+STATUS = re.compile(r'[A-Z]+[0-9]*')  # --name-status의 상태: A·D·M·T, R100·C075(경로 둘), merge의 합친 diff는 부모마다 한 글자(MM·RM, 경로 하나)
 SYNCED = 'career-synced'  # clone·fetch가 끝까지 성공한 캐시에만 .git 안에 남기는 완료 표지(끊긴 clone을 가려낸다)
 # github.com/<이 이름>은 계정이 아니라 GitHub 화면 주소다. 같은 이름의 다른 계정을 분석하지 않도록 막는다.
 RESERVED = {'dashboard', 'settings', 'notifications', 'explore', 'orgs', 'organizations', 'marketplace', 'pulls', 'issues',
@@ -53,6 +55,10 @@ class BlameError(RuntimeError):
     def __init__(self, path):
         super().__init__(path)
         self.path = path
+
+
+class LogFormatError(ValueError):
+    """git log 출력이 기대한 모양(-z, NUL 구분)이 아님. 어림잡아 읽지 않고 그 레포만 실패로 둔다(extract 2단계)."""
 
 
 class Api:
@@ -132,7 +138,7 @@ def parse_login(url):
 def git(path, *args, timeout=120, env=None):
     """git 명령 하나(출력은 글자로). env를 주지 않으면 읽기용 ENV로 돈다."""
     return subprocess.run(['git', '-C', str(path), *args], capture_output=True, encoding='utf-8', errors='replace',
-                          env=env or ENV, timeout=timeout, check=True).stdout
+                          env=ENV if env is None else env, timeout=timeout, check=True).stdout
 
 
 def sync(full, cache, token, url=None):
@@ -190,13 +196,43 @@ def ranges(lines):
     return out
 
 
+def log_commits(path, revs, env=None, changes=False):
+    """git log를 NUL 구분(-z)으로 한 번 읽어 commit마다 (SHA, 메일(소문자), 이름, [(상태, [경로…])])를 log 순서로 돌려준다.
+    작성자는 commit에 적힌 값(%ae·%an)이다(.mailmap 미적용). 머리 세 칸(%H·%ae·%an)과 경로는 자리로만 읽는다:
+    NUL은 commit 머리에도 경로에도 들어갈 수 없으므로, 이름·메일·경로에 \\x01·\\x02·줄바꿈 같은 어떤 바이트가 있어도 새 기록을 열지 못한다.
+    changes면 바뀐 경로도 읽는다(-M --name-status --diff-merges=dense-combined): 보통 commit은 첫 상태 앞에 \\n이 붙고,
+    merge는 머리 뒤에 빈 칸이 하나 온다(바뀐 경로가 없어도). 모양이 다르면 LogFormatError를 던진다(어림잡아 읽지 않는다)."""
+    diff = ('-M', '--name-status', '--diff-merges=dense-combined') if changes else ()
+    tokens = git(path, 'log', '-z', '--format=%H%x00%ae%x00%an', *diff, *revs, timeout=600, env=env).split('\0')
+    if tokens.pop() != '': raise LogFormatError('git log 출력이 NUL로 끝나지 않음')
+    out, i, n = [], 0, len(tokens)
+    while i < n:
+        if i + 2 >= n or not SHA.fullmatch(tokens[i]): raise LogFormatError(f'git log 출력의 {i}번째 칸에 commit 머리가 없음')
+        sha, mail, name, entries, i = tokens[i], tokens[i + 1].lower(), tokens[i + 2], [], i + 3
+        if changes and i < n:
+            if tokens[i] == '': i += 1                                 # merge: 합친 diff 앞의 빈 칸
+            elif tokens[i][:1] == '\n': tokens[i] = tokens[i][1:]      # 보통 commit: 첫 상태 앞의 \n
+            while i < n and STATUS.fullmatch(tokens[i]):
+                k = 2 if re.fullmatch(r'[RC][0-9]+', tokens[i]) else 1  # 이름 바꾸기·복사는 옛 경로와 새 경로
+                if i + k >= n or not all(tokens[i + 1:i + 1 + k]): raise LogFormatError(f'git log 출력의 {i}번째 상태 뒤에 경로가 없음')
+                entries.append((tokens[i], tokens[i + 1:i + 1 + k]))
+                i += 1 + k
+        out.append((sha, mail, name, entries))
+    return out
+
+
+def kind_of(mail, name, emails, names):
+    """작성자 구분: 메일(소문자)이 본인 메일이면 own, 이름만 같으면 name_only(추정), 아니면 other."""
+    return 'own' if mail in emails else 'name_only' if name in names else 'other'
+
+
 def own_commits(path, revs, api_shas, emails, names):
-    """main·develop에서 닿는 commit을 SHA 기준으로 한 번만 세고, 본인 여부를 근거별로 나눈다."""
-    rows = [r.split('\0') for r in git(path, 'log', '--format=%H%x00%ae%x00%an', *revs).splitlines()]
+    """main·develop에서 닿는 commit을 SHA 기준으로 한 번만 세고, 본인 여부를 근거별로 나눈다(작성자는 log_commits로 읽은 commit 원본)."""
+    rows = log_commits(path, revs)
     kinds = {}
-    for sha, mail, name in rows:
+    for sha, mail, name, _ in rows:
         if sha in api_shas: kinds[sha] = 'api'
-        elif mail.lower() in emails: kinds[sha] = 'email'
+        elif mail in emails: kinds[sha] = 'email'
         elif name in names: kinds[sha] = 'name_only'
     return kinds, len(rows)
 
@@ -224,18 +260,19 @@ def history(path, sha, emails, names, env=None):
     돌려주는 것: 경로별 바뀐 횟수, 한 번 추가되고 끝난 경로의 작성자 구분(own·name_only·other),
     본인·이름 일치 commit이 닿았을 수 있는 경로(이름 바꾸기를 따라가고, 같은 commit의 삭제+추가도 이름 바꾸기로 넉넉히 본다).
     작성자는 commit에 적힌 값(%ae·%an)이다: .mailmap을 적용하지 않으므로 레포에 심은 .mailmap이 팀원 commit을 본인 commit으로 바꾸지 못한다.
+    출력은 NUL 구분으로 자리대로 읽는다(log_commits): 이름·메일·경로 안의 바이트가 새 기록을 열지 못한다.
     merge commit은 어느 부모와도 다른 경로(충돌 해결)만 나온다. env(None이면 ENV)는 git log에 넘긴다."""
-    out = git(path, 'log', '--format=%x01%ae%x02%an', '-M', '--name-status', '-z', '--diff-merges=dense-combined', sha, timeout=600, env=env)
+    return changed_paths(log_commits(path, [sha], env, changes=True), emails, names)
+
+
+def changed_paths(commits, emails, names):
+    """log_commits(changes=True)가 읽은 commit들로 history의 결과(바뀐 횟수, 한 번 추가된 경로의 작성자, 본인이 닿은 경로)를 만든다."""
     touches, added, reach, moves = {}, {}, set(), []
-    for rec in out.split('\x01')[1:]:
-        head, _, body = rec.partition('\0')
-        mail, _, name = head.partition('\x02')
-        kind = 'own' if mail.lower() in emails else 'name_only' if name in names else 'other'
-        tokens, i, gone, new = body.lstrip('\0\n').split('\0'), 0, [], []
-        while i < len(tokens) and tokens[i]:
-            status = tokens[i]
-            if re.fullmatch(r'[RC]\d+', status): old, p, i = tokens[i + 1], tokens[i + 2], i + 3; moves.append(([old], [p]))
-            else: p, i = tokens[i + 1], i + 2
+    for _, mail, name, entries in commits:
+        kind, gone, new = kind_of(mail, name, emails, names), [], []
+        for status, ps in entries:
+            p = ps[-1]
+            if len(ps) == 2: moves.append(([ps[0]], [p]))  # 이름 바꾸기·복사: 옛 경로 → 새 경로
             touches[p] = touches.get(p, 0) + 1
             if status == 'D': gone.append(p)
             elif status == 'A': new.append(p)
@@ -280,9 +317,11 @@ def blame(path, sha, emails, names, env=None):
     나머지는 모든 파일을 blame한 결과와 같되, 결과가 정해진 파일은 줄 수만 센다: 본인·이름 일치 commit이 닿지 않은 파일(전부 다른 사람),
     한 번 추가되고 바뀐 적 없는 파일(전부 그 commit 작성자). 커널 소스처럼 한 번에 올린 파일 수만 개도 몇 초 안에 끝난다.
     blame이 실패하면(부분 clone이 받지 않은 옛 blob을 내려받지 못함, 시간 초과) 처음 실패한 파일로 BlameError를 던진다.
-    작성자는 blame의 author-mail·author다. blame에는 .mailmap을 끄는 옵션이 없고 작업 트리의 .mailmap은 어떤 설정으로도 끌 수 없다(git 2.55 실측).
-    그래서 checkout 없는 clone(sync)에서, mailmap 설정(mailmap.file·mailmap.blob)을 끈 gitenv 환경으로만 돌린다: 그러면 history의 %ae·%an과 같은 값이다.
-    env(None이면 ENV)는 이 함수가 돌리는 모든 git(ls-tree·log·cat-file·blame)에 넘긴다. gitenv.env(...)로 만든 환경이어야 한다(graft 이름공간 등)."""
+    줄마다 작성자는 blame이 준 commit의 원래 작성자다: git log -z(log_commits)를 한 번 읽어 빠른 길(history)과 함께 쓰고, 지도에 없는 commit은 other다.
+    porcelain의 author-mail·author는 쓰지 않는다: .mailmap을 따르는데 blame에는 끄는 옵션이 없고 작업 트리의 .mailmap은 설정으로 끌 수 없다(git 2.55 실측).
+    그래도 분석은 checkout 없는 clone(sync)에서 mailmap 설정을 끈 gitenv 환경으로 한다(겹친 방어).
+    env(None이면 ENV)는 이 함수가 돌리는 모든 git(ls-tree·log·cat-file·blame)에 넘긴다: log와 blame이 같은 graft(replace ref)를 본다.
+    gitenv.env(...)로 만든 환경이어야 한다."""
     env = ENV if env is None else env
     count, units = dict(own=0, name_only=0, other=0, files=0), []
     entries = []
@@ -293,7 +332,9 @@ def blame(path, sha, emails, names, env=None):
         _, kind, blob, size = meta.split()
         # 부분 clone이 받지 않은 blob은 크기가 BAD로 나온다: 숫자와 상관없이 건너뛴다(512KiB 이상이라 paths.skipped와 같은 파일)
         if kind == 'blob' and size != 'BAD' and not skipped(p, int(size)): entries.append((p, blob))
-    touches, added, reach = history(path, sha, emails, names, env=env)
+    commits = log_commits(path, [sha], env, changes=True)  # 한 번 읽어 빠른 길과 blame 줄의 작성자에 함께 쓴다
+    touches, added, reach = changed_paths(commits, emails, names)
+    author = {c: kind_of(mail, name, emails, names) for c, mail, name, _ in commits}  # commit → 원래 작성자의 구분
     known = lambda p: p not in reach or (touches.get(p) == 1 and p in added)
     scanned = scan_blobs(path, entries, env=env)  # 후보 blob을 한 번씩만 읽는다: 줄 수(빠른 길 파일)와 생성 파일 여부(모든 파일)
     for p, _ in entries:
@@ -312,15 +353,15 @@ def blame(path, sha, emails, names, env=None):
         except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:  # 파일 하나를 조용히 빼면 덜 센 결과가 성공처럼 남는다
             raise BlameError(p) from e
         count['files'] += 1
-        mine, line, mail, author = [], None, None, None
+        mine, line, commit = [], None, None
         for row in out.split(b'\n'):
-            if row.startswith(b'\t'):
-                if mail in emails: count['own'] += 1; mine.append(line)
-                elif author in names: count['name_only'] += 1
-                else: count['other'] += 1
-            elif row.startswith(b'author-mail '): mail = row[13:-1].decode('utf-8', 'replace').lower()
-            elif row.startswith(b'author '): author = row[7:].decode('utf-8', 'replace')
-            elif re.match(rb'[0-9a-f]{40,64} \d+ \d+', row): line = int(row.split()[2])
+            if row.startswith(b'\t'):  # 줄 내용: 바로 앞 머리 줄의 commit이 쓴 줄
+                who = author.get(commit, 'other')
+                count[who] += 1
+                if who == 'own': mine.append(line)
+            elif re.match(rb'[0-9a-f]{40,64} \d+ \d+', row):  # 머리 줄: <commit> <원래 줄> <지금 줄> [<묶음 줄 수>]
+                fields = row.split()
+                commit, line = fields[0].decode(), int(fields[2])
         if mine: units.append(dict(sha=sha, path=p, lines=ranges(mine)))
     return count, units
 
@@ -436,6 +477,7 @@ def extract(login, token, cache, max_size_mb=None, *, api=None, remote_url=lambd
         for row, path, api_shas in work:
             try: local, units = analyze_repo(path, row['heads'], api_shas, emails, names)
             except BlameError as e: row['error'] = f'blame 실패: {e.path}'; continue  # 파일 하나가 빠진 결과로 판정하지 않는다(다시 수집할 때까지 제외)
+            except ValueError as e: row['error'] = f'git 출력 해석 실패: {e}'; continue  # LogFormatError·UnicodeDecodeError도 ValueError다: 어림잡아 세지 않는다
             except (subprocess.CalledProcessError, subprocess.TimeoutExpired, GitError) as e:  # 레포 하나가 실패해도 나머지는 계속한다
                 row['error'] = f'분석 실패({type(e).__name__})'; continue
             row.update(local)

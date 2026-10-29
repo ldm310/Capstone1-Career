@@ -767,6 +767,25 @@ class Collect(unittest.TestCase):
             self.assertEqual([u['repo'] for u in res['evidence']], ['me/ok'])  # 일부 파일만 빠진 결과를 남기지 않는다
             self.assertIsNone(res['stopped'])
 
+    def test_unexpected_git_output_marks_only_that_repo(self):  # 2단계 분석의 해석 실패(ValueError·UnicodeDecodeError)는 그 레포만 실패로 두고 계속한다
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            src = source(d / 'src').commit(ME, {'app.py': lines('me', 5)})
+            names = ['me/a', 'me/b', 'me/c']
+            real = extract.git
+            def git(path, *args, **kw):
+                if args[0] == 'log' and Path(path).name == 'me__a': return 'not-a-commit\0x\0y\0'  # 기대한 모양(-z, NUL 구분)이 아닌 출력
+                if args[0] == 'log' and Path(path).name == 'me__b': raise UnicodeDecodeError('utf-8', b'\xff', 0, 1, 'invalid start byte')
+                return real(path, *args, **kw)
+            api = Listing({k: v for full in names for k, v in repo_routes(full).items()}, owner=[meta(f) for f in names])
+            with mock.patch.object(extract, 'git', side_effect=git):
+                res = self.extract(d, api, dict.fromkeys(names, bare(d / 'src.git', src.path)))
+            rows = {row['full']: row for row in res['repos']}
+            for full in ('me/a', 'me/b'): self.assertTrue(rows[full].get('error', '').startswith('git 출력 해석 실패: '), rows[full].get('error'))
+            self.assertNotIn('error', rows['me/c'])
+            self.assertEqual(rows['me/c']['evals'][src.head()]['own'], 5)
+            self.assertIsNone(res['stopped'])
+
     def test_renamed_repo_found_under_its_old_name_is_one_row(self):  # F4: 옛 이름 조회가 새 이름(이미 소유 목록에 있음)으로 오면 한 번만 처리한다
         with tempfile.TemporaryDirectory() as d:
             d = Path(d)
@@ -841,10 +860,10 @@ MAILMAP = 'Me <me@example.com> <mate@example.com>\n'  # 팀원 메일(mate@)의 
 
 
 class Identity(unittest.TestCase):
-    """레포가 귀속을 바꾸지 못한다: 팀원이 레포에 심은 .mailmap(팀원 메일 → 나)이 팀원 줄을 내 줄로 바꾸면 안 된다.
-    git blame에는 .mailmap을 끄는 옵션이 없고, 작업 트리의 .mailmap은 어떤 설정으로도 끌 수 없다(git 2.55 실측). 그래서
-    분석은 checkout 없는 clone(extract.sync)에서만 하고, git은 mailmap 설정(mailmap.file·mailmap.blob)을 끈 환경(gitenv.env)으로 돌며,
-    history는 commit에 적힌 작성자(%ae·%an)를 그대로 읽는다. checkout clone이 안전하다고 보는 시험은 두지 않는다."""
+    """레포가 귀속을 바꾸지 못한다: 팀원이 레포에 심은 .mailmap(팀원 메일 → 나)이나, 이름·메일·파일 이름에 넣은 구분 바이트가
+    팀원 줄을 내 줄로 바꾸면 안 된다. 방어는 겹쳐 있다. 작성자는 history도 blame도 commit 원본(git log -z의 %ae·%an, NUL 구분)으로만 읽고,
+    분석은 checkout 없는 clone(extract.sync)에서 mailmap 설정을 끈 환경(gitenv.env)으로 한다.
+    blame에는 .mailmap을 끄는 옵션이 없고 작업 트리의 .mailmap은 설정으로 끌 수 없어서(git 2.55 실측), porcelain의 author-mail은 쓰지 않는다."""
 
     def planted(self, d, mine_first=False):
         """팀원(MATE)이 app.py에 10줄을 쓰고, 다른 commit에서 .mailmap을 심은 레포를 원격으로 두고 sync로 받는다 → (캐시 경로, 끝 commit).
@@ -856,7 +875,7 @@ class Identity(unittest.TestCase):
         return extract.sync('o/r', d / 'cache', None, bare(d / 'src.git', src.path).as_uri()), src.head()
 
     def test_planted_mailmap_cannot_claim_lines(self):
-        """빠른 길(한 번 추가된 파일: history의 작성자)과 blame 길(내 commit이 닿은 파일: blame의 author-mail) 모두 팀원 줄로 센다.
+        """빠른 길(한 번 추가된 파일: history의 작성자)과 blame 길(내 commit이 닿은 파일: blame이 준 commit의 원래 작성자) 모두 팀원 줄로 센다.
         대조 기준(blame_reference)도 같은 환경으로 돌아 같은 값을 낸다. history도 팀원 commit을 내 commit으로 보지 않는다."""
         for mine_first in (False, True):
             with self.subTest(blame_path=mine_first), tempfile.TemporaryDirectory() as d:
@@ -920,6 +939,73 @@ class Identity(unittest.TestCase):
             self.assertEqual(res['evidence'], [])
             self.assertEqual(tree(old), before)  # 쓰지도 옮기지도 지우지도 않았다
             self.assertFalse((d / 'old' / '.broken').exists())
+
+    def test_separator_bytes_in_name_email_or_path_cannot_claim_lines(self):
+        """git은 작성자 이름·메일과 경로에 \\x01·\\x02를 허용한다(git fsck --strict도 통과). 이름·메일·파일 이름에 '\\x01<내 메일>\\x02'를 넣어도
+        새 기록이 열리지 않는다: 빠른 길(팀원이 한 번 추가한 파일)과 blame 길(내가 만든 파일을 팀원이 모두 바꿈) 모두 팀원 줄이고 blame_reference와 같다."""
+        evil = '\x01me@example.com\x02Me'
+        cases = {'name': (('Mate' + evil, MATE[1]), {}), 'email': (('Mate', 'me@example.com\x02x'), {}),
+                 'path': (MATE, {'a' + evil: 'x\n', '\nA': 'y\n', 'f' * 40: 'z\n'})}  # 상태 칸·commit SHA처럼 보이는 파일 이름도 함께
+        for case, (who, extra) in cases.items():
+            for mine_first in (False, True):
+                with self.subTest(case=case, blame_path=mine_first), tempfile.TemporaryDirectory() as d:
+                    d = Path(d)
+                    src = source(d / 'src').commit(MATE, {'base.py': lines('mate', 2)})
+                    if mine_first: src.commit(ME, {'evil.py': lines('me', 3)})
+                    src.commit(who, {'evil.py': lines('mate', 10), **extra})
+                    path, sha = extract.sync('o/r', d / 'cache', None, bare(d / 'src.git', src.path).as_uri()), src.head()
+                    count, units = extract.blame(path, sha, EMAILS, NAMES)
+                    self.assertEqual((count, units), (dict(own=0, name_only=0, other=2 + 10 + len(extra), files=2 + len(extra)), []))
+                    self.assertEqual((count, units), blame_reference(path, sha, EMAILS, NAMES))
+                    touches, added, reach = extract.history(path, sha, EMAILS, NAMES)
+                    mine = {'evil.py'} if mine_first else set()  # 본인 commit이 닿은 경로는 내가 만든 evil.py뿐이다
+                    self.assertEqual(({p for p, k in added.items() if k == 'own'}, reach), (mine, mine))
+                    kinds, _ = extract.own_commits(path, ['refs/remotes/origin/main'], set(), EMAILS, NAMES)
+                    self.assertNotIn(sha, kinds)
+
+    def test_blame_reads_the_commit_author_even_in_a_checkout(self):
+        """줄마다 작성자는 blame이 준 commit의 원래 작성자(git log -z의 %ae·%an)다. porcelain의 author-mail은 작업 트리의 .mailmap을 따르므로 쓰지 않는다.
+        그래서 .mailmap이 꺼내진 checkout clone에서도 팀원 줄은 팀원 것이다(분석은 그래도 checkout 없는 clone에서 한다: 겹친 방어).
+        정답은 mailmap이 꺼진 곳(sync가 만든 checkout 없는 clone)에서 돈 blame_reference다."""
+        for mine_first in (False, True):
+            with self.subTest(blame_path=mine_first), tempfile.TemporaryDirectory() as d:
+                d = Path(d)
+                nocheckout, sha = self.planted(d, mine_first)
+                checkout = d / 'checkout'
+                subprocess.run([*GIT, 'clone', '-q', (d / 'src.git').as_uri(), str(checkout)], check=True, capture_output=True)
+                self.assertTrue((checkout / '.mailmap').exists())
+                self.assertEqual(blame_reference(checkout, sha, EMAILS, NAMES)[0]['own'], 11)  # 이 clone에서는 porcelain author-mail이 실제로 나로 바뀐다
+                got = extract.blame(checkout, sha, EMAILS, NAMES)
+                self.assertEqual(got, (dict(own=0, name_only=0, other=11, files=2), []))
+                self.assertEqual(got, blame_reference(nocheckout, sha, EMAILS, NAMES))
+
+    def test_blamed_commit_missing_from_the_author_map_counts_as_other(self):  # 지도에 없는 commit의 줄은 내 줄로 세지 않는다
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            src = source(d / 'src').commit(ME, {'app.py': lines('me', 6)}).commit(MATE, {'app.py': lines('me', 4) + lines('mate', 2)})
+            path, sha = extract.sync('o/r', d / 'cache', None, bare(d / 'src.git', src.path).as_uri()), src.head()
+            self.assertEqual(extract.blame(path, sha, EMAILS, NAMES)[0]['own'], 4)  # 지도가 온전하면 내 줄 4
+            mine, real = src.git('rev-parse', 'HEAD~1').stdout.strip(), extract.log_commits
+            hide = lambda *a, **kw: [('0' * 40 if c == mine else c, *rest) for c, *rest in real(*a, **kw)]  # 경로 변화는 두고 내 commit만 지도에서 뺀다
+            with mock.patch.object(extract, 'log_commits', side_effect=hide):
+                count, units = extract.blame(path, sha, EMAILS, NAMES)
+            self.assertEqual((count['own'], count['other'], units), (0, 6, []))  # blame 길은 탔지만(app.py) 내 commit을 지도에서 못 찾아 other
+
+    def test_line_break_like_characters_in_author_names_do_not_break_the_run(self):
+        """str.splitlines가 줄바꿈으로 보는 글자(\\x0b·\\x0c·\\x1c~\\x1e·\\x85·U+2028·U+2029)가 작성자 이름에 있어도 실행이 멈추지 않고,
+        팀원 commit은 팀원 것으로 남는다(git 출력은 NUL로만 나눈다)."""
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            src = source(d / 'src').commit(ME, {'a.py': lines('me', 3)})
+            for i, ch in enumerate('\x0b\x0c\x1c\x1d\x1e\x85  '):
+                src.commit((f'Mate{ch}x', MATE[1]), {f'b{i}.py': lines('mate', 2)})
+            remote = bare(d / 'src.git', src.path)
+            res = extract.extract('me', None, d / 'cache', api=Listing(repo_routes('o/r'), owner=[meta('o/r')]), remote_url=lambda full: remote.as_uri())
+            row = res['repos'][0]
+            self.assertIsNone(res['stopped'])
+            self.assertNotIn('error', row)
+            self.assertEqual(([c['kind'] for c in row['commits']], row['reachable']), (['email'], 9))  # 본인 commit은 내 것 하나뿐
+            self.assertEqual({k: row['evals'][src.head()][k] for k in ('own', 'name_only', 'other')}, dict(own=3, name_only=0, other=16))
 
 
 def isolated(env):
