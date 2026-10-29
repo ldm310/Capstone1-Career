@@ -72,6 +72,17 @@ class Paths(unittest.TestCase):
         for name in ('data.json', 'page.html', 'README'):
             self.assertTrue(paths.generated(name, b'x' * 5000 + b'\n'), name)
 
+    def test_long_line_rule_counts_characters_not_bytes(self):  # 한글은 3바이트라 바이트로 재면 손으로 쓴 한글 HTML이 길어 보인다
+        korean = ('가' * 130).encode() + b'\n'  # 130글자, 391바이트
+        self.assertFalse(paths.generated('page.html', korean * 30))
+        self.assertTrue(paths.generated('page.html', ('가' * 301).encode() + b'\n'))  # 글자 301개 -> 생성 파일
+
+    def test_nul_byte_in_first_8000_bytes_means_binary(self):  # git의 바이너리 판별과 같다. 확장자와 상관없이 적용
+        self.assertTrue(paths.generated('model.tflite', b'\x00abc\n' * 3))
+        self.assertTrue(paths.generated('out.txt', 'hello\nworld\n'.encode('utf-16')))  # UTF-16 텍스트
+        self.assertTrue(paths.generated('a.py', b'a\n' * 3999 + b'\x00'))  # 인덱스 7999
+        self.assertFalse(paths.generated('a.txt', b'a\n' * 4000 + b'\x00\n'))  # 인덱스 8000은 이 규칙이 아니다
+
     def test_line_count_helper_and_passed_in_count(self):  # 줄 수 = 줄바꿈 수 + 줄바꿈 없이 끝나는 마지막 줄. 센 값을 넘기면 다시 세지 않는다
         for body, want in ((b'', 0), (b'\n', 1), (b'a', 1), (b'a\n', 1), (b'a\nb', 2), (b'a\n\nb\n', 3), (b'a\r\tb\n', 1)):
             self.assertEqual(paths.line_count(body), want, body)
@@ -197,6 +208,14 @@ class FastBlame(unittest.TestCase):
             count, units = self.check(r)
             self.assertEqual((count['own'], count['files']), (5, 1))
             self.assertEqual([u['path'] for u in units], ['app.py'])
+
+    def test_binary_file_with_nul_is_not_counted_as_lines(self):  # blame 길(두 번 바뀐 파일)과 빠른 길 모두
+        with tempfile.TemporaryDirectory() as d:
+            r = Repo(d)
+            r.commit(ME, {'out.txt': 'hello\nworld\n'.encode('utf-16'), 'v.dat': b'\x00\x01\nab\n', 'app.py': lines('me', 5)})
+            r.commit(ME, {'v.dat': b'\x00\x02\nab\n'})
+            count, _ = self.check(r)
+            self.assertEqual((count['own'], count['files']), (5, 1))
 
     def test_every_candidate_blob_is_read_exactly_once(self):  # 줄 수와 생성 파일 판정을 같은 cat-file 묶음 한 번으로 한다
         with tempfile.TemporaryDirectory() as d:
