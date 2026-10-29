@@ -110,16 +110,48 @@ class Paths(unittest.TestCase):
         self.assertTrue(paths.generated('a.js', b'x' * 301, 1))
         self.assertFalse(paths.generated('a.js', b'x' * 301, 2))  # 넘긴 값을 그대로 쓴다(2줄이면 평균 150)
 
-    def test_insert_rule_uses_first_50_lines_and_60_percent(self):
-        ins, other = b'INSERT INTO t VALUES (1);\n', b'-- comment\n'
-        self.assertTrue(paths.generated('a.sql', ins * 6 + other * 4))  # 6/10 = 60%
-        self.assertFalse(paths.generated('a.sql', ins * 5 + other * 5))
-        self.assertTrue(paths.generated('a.sql', ins))  # 크기 하한 없음
+    def test_sql_dump_heidisql_export_with_values_rows(self):  # INSERT INTO 한 줄 뒤에 탭으로 들여쓴 (..), 행이 이어지는 내보내기
+        header = (b'-- --------------------------------------------------------\n-- Host:                         127.0.0.1\n'
+                  b'-- Server version:               8.0.33\n-- Server OS:                    Win64\n-- HeidiSQL Version:             12.5.0.6677\n')
+        heidi = header + b'INSERT INTO `t` (`a`, `b`) VALUES\n' + b"\t(1, 'x'),\n" * 200 + b"\t(2, 'y');\n"
+        self.assertTrue(paths.generated('export.sql', heidi))
+        crlf = b'INSERT INTO t (a) VALUES\r\n' + b'\t(1),   \r\n' * 50 + b'\t(2);\r\n'  # 끝의 공백·탭과 \r까지 허용
+        self.assertTrue(paths.generated('export.sql', crlf))
+        self.assertFalse(paths.generated('export.sql', heidi.replace(b'INSERT INTO', b'SELECT * FROM')))  # insert into가 없으면 이 규칙은 보지 않는다
+        self.assertTrue(paths.generated('export.sql', b'INSERT INTO t (a) VALUES\n\t(1);\n' * 40))  # (..); 로 끝나는 행도 센다: 80줄 중 80줄(이 행을 안 세면 50%)
+
+    def test_sql_dump_with_ddl_needs_50_data_lines(self):  # 테이블 정의가 있으면 데이터 줄이 50줄 이상일 때만 덤프로 본다
+        ins, sel = b'INSERT INTO t VALUES (1);\n', b'SELECT * FROM t;\n'
+        ddl60 = b'CREATE TABLE t (\n' + b'  col INT,\n' * 58 + b');\n'  # 60줄
+        self.assertTrue(paths.generated('db/init.sql', ddl60 + ins * 300))  # 정의 60줄 + 한 줄짜리 INSERT 300줄
+        schema = b''.join(b'CREATE TABLE a%d (\n  id int,\n  name text,\n  PRIMARY KEY (id)\n);\n' % k for k in range(3))  # 3개 x 5줄
+        self.assertFalse(paths.generated('schema.sql', schema + ins * 23))  # 23/38 = 60.5%여도 49줄 이하라 직접 쓴 schema.sql
+        self.assertFalse(paths.generated('schema.sql', schema + ins * 49))  # 49/64 = 76%
+        self.assertTrue(paths.generated('schema.sql', schema + ins * 50))  # 50/65 = 77%
+        self.assertFalse(paths.generated('schema.sql', schema + ins * 50 + sel * 40))  # 50줄이어도 50/105 = 48%
+        for line in (b'CREATE TABLE a (id int);\n', b'  create\ttable a (id int);\n', b'ALTER TABLE a ADD b int;\n'):
+            self.assertFalse(paths.generated('x.sql', line + ins * 40), line)
+            self.assertTrue(paths.generated('x.sql', line + ins * 50), line)
+
+    def test_sql_dump_without_ddl_has_no_size_floor_and_needs_60_percent(self):
+        ins, sel = b'INSERT INTO t VALUES (1);\n', b'SELECT * FROM t;\n'
+        self.assertTrue(paths.generated('seed.sql', ins))  # 크기 하한 없음
+        self.assertTrue(paths.generated('seed.sql', ins * 10))
+        self.assertTrue(paths.generated('seed.sql', ins * 6 + sel * 4))  # 6/10 = 60%
+        self.assertFalse(paths.generated('seed.sql', ins * 5 + sel * 5))
+        self.assertTrue(paths.generated('seed.sql', ins * 30 + sel * 20))  # 30/50
+        self.assertFalse(paths.generated('seed.sql', ins * 29 + sel * 21))  # 29/50 = 58%
+        self.assertTrue(paths.generated('seed.sql', ins * 6 + sel * 4 + b'\n' * 30 + b' \t\r\n' * 5))  # 빈 줄·공백뿐인 줄은 세지 않는다
         self.assertTrue(paths.generated('a.sql', b'  insert into t values (1);\n' * 5))  # 앞 공백·소문자
+        self.assertTrue(paths.generated('a.sql', b'Insert\t Into t VALUES (1);\n' * 3))  # 대소문자가 섞이고 사이에 공백·탭
         self.assertTrue(paths.generated('a.sql', b'INSERT INTO a\nINSERT INTO b\nfoo'))  # 줄바꿈 없는 마지막 줄도 한 줄: 2/3
-        self.assertTrue(paths.generated('a.sql', other * 20 + ins * 30 + other * 200))  # 앞 50줄 안에서 30/50 = 60%
-        self.assertFalse(paths.generated('a.sql', other * 21 + ins * 200))  # 앞 50줄은 29/50 = 58%, 뒤쪽 INSERT는 세지 않는다
+        self.assertFalse(paths.generated('a.sql', b'INSERT INTOx t\n' * 10))  # INTO 뒤는 단어 경계
         self.assertTrue(paths.generated('dump.txt', ins * 60))  # 긴 줄 규칙에서 빠지는 확장자라도 이 규칙은 적용한다
+
+    def test_sql_dump_rule_is_skipped_without_insert_into(self):  # 사전 검사: insert into가 앞 64KB에 한 번도 없으면 튜플 줄 모양만으로는 안 본다
+        self.assertFalse(paths.generated('data.py', b'    (1, 2),\n' * 100))
+        self.assertFalse(paths.generated('data.py', b'    (1, 2);\n' * 100))
+        self.assertFalse(paths.generated('data.py', b'insert\n(1, 2),\n' * 100))  # insert만 있고 into가 없다
 
     def test_marker_rule_looks_only_at_first_5_lines_and_is_case_sensitive(self):
         self.assertTrue(paths.generated('a.py', b'x\n' * 4 + b'# @generated\n'))  # 5번째 줄
@@ -235,6 +267,15 @@ class FastBlame(unittest.TestCase):
             r.commit(ME, {'v.dat': b'\x00\x02\nab\n'})
             count, _ = self.check(r)
             self.assertEqual((count['own'], count['files']), (5, 1))
+
+    def test_ddl_plus_many_inserts_file_is_not_counted(self):  # 테이블 정의 60줄 + 한 줄짜리 INSERT 300줄(init.sql)
+        with tempfile.TemporaryDirectory() as d:
+            r = Repo(d)
+            sql = b'CREATE TABLE t (\n' + b'  col INT,\n' * 58 + b');\n' + b'INSERT INTO t VALUES (1);\n' * 300
+            r.commit(ME, {'db/init.sql': sql, 'app.py': lines('me', 5)})
+            count, units = self.check(r)
+            self.assertEqual((count['own'], count['files']), (5, 1))
+            self.assertEqual([u['path'] for u in units], ['app.py'])
 
     def test_every_candidate_blob_is_read_exactly_once(self):  # 줄 수와 생성 파일 판정을 같은 cat-file 묶음 한 번으로 한다
         with tempfile.TemporaryDirectory() as d:

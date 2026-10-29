@@ -17,7 +17,11 @@ LONG_LINE_EXT = ('.ipynb', '.md', '.markdown', '.rst', '.txt')
 BINARY_SCAN = 8000  # 이 앞에 NUL 바이트가 있으면 바이너리(git과 같은 기준)
 # 앞 5줄 안에 있으면 생성 파일인 표지(대소문자 구분): 생성 코드 표지와 SQL 덤프 도구가 머리말에 남기는 글귀
 MARKERS = (b'@generated', b'DO NOT EDIT', b'-- MySQL dump', b'-- MariaDB dump', b'-- PostgreSQL database dump', b'-- phpMyAdmin SQL Dump')
-INSERT = re.compile(rb'\s*INSERT INTO', re.I)
+# SQL 덤프 판별(규칙 ②): 아래 정규식은 모두 앞 64KB를 소문자로 바꾼 글에 쓴다(re.I보다 훨씬 빠르다)
+SQL_INTO = re.compile(rb'insert[ \t]+into')  # 사전 검사: 이 글귀가 한 번도 없으면 ②는 보지 않는다
+SQL_ROW = re.compile(rb'^[ \t]*(?:insert[ \t]+into\b|\(.*\)[,;][ \t]*\r?$)', re.M)  # INSERT INTO 줄, 또는 VALUES 튜플 줄 (..), (..);
+SQL_FILLED = re.compile(rb'^[^\S\n]*\S', re.M)  # 비어 있지 않은 줄(공백·탭·\r뿐인 줄은 아니다)
+SQL_DDL = re.compile(rb'^[ \t]*(?:create|alter)[ \t]+table\b', re.M)  # 테이블 정의
 
 
 def skipped(p, size):
@@ -32,20 +36,27 @@ def line_count(data):
     return data.count(b'\n') + (1 if data and not data.endswith(b'\n') else 0)
 
 
+def sql_dump(head):
+    """SQL 덤프인가: 앞 64KB에서 INSERT INTO 줄과 VALUES 튜플 줄이 비어 있지 않은 줄의 60% 이상이다.
+    CREATE TABLE·ALTER TABLE이 있으면 그런 줄이 50줄 이상일 때만 덤프로 본다(짧은 schema.sql·시드는 직접 쓴 파일이라 남긴다).
+    줄을 파이썬으로 돌지 않고 정규식이 C에서 센다. insert into가 한 번도 안 나오면 세지 않는다."""
+    low = head.lower()
+    if not SQL_INTO.search(low): return False
+    rows, filled = len(SQL_ROW.findall(low)), len(SQL_FILLED.findall(low))
+    return filled > 0 and 10 * rows >= 6 * filled and (rows >= 50 or not SQL_DDL.search(low))
+
+
 def generated(path, head, lines=None):
     """내용으로 빼는 데이터·생성 파일. head = blob 앞 64KB(바이트). 아래 중 하나면 True다.
     ⓪ 앞 8000바이트 안에 NUL 바이트(바이너리·UTF-16 텍스트. 확장자와 상관없이 적용)
     ① 줄 평균 길이 > 300바이트(minified. 노트북·문서는 이 규칙에서 뺀다)
-    ② 앞 50줄의 60% 이상이 INSERT INTO(SQL 덤프. 직접 쓴 schema.sql은 남는다)
+    ② SQL 덤프(sql_dump): 앞 64KB 전체에서 INSERT INTO 줄·VALUES 튜플 줄이 60% 이상이고, 테이블 정의가 있으면 50줄 이상일 때만
     ③ 앞 5줄 안에 MARKERS의 글귀(@generated, DO NOT EDIT, mysqldump·pg_dump·phpMyAdmin 머리말. 대소문자 구분)
     lines = head의 줄 수. 호출하는 쪽이 이미 셌으면 넘겨서 다시 세지 않는다."""
     if not head: return False
     if b'\x00' in head[:BINARY_SCAN]: return True
-    rows = head.split(b'\n', 50)
-    if rows[-1] == b'': rows.pop()  # 마지막 줄바꿈 뒤의 빈 조각은 줄이 아니다
-    rows = rows[:50]
-    top = b'\n'.join(rows[:5])
+    top = b'\n'.join(head.split(b'\n', 5)[:5])
     if any(m in top for m in MARKERS): return True
-    if 10 * sum(bool(INSERT.match(r)) for r in rows) >= 6 * len(rows): return True
+    if sql_dump(head): return True
     if path.lower().endswith(LONG_LINE_EXT): return False
     return len(head) > 300 * (line_count(head) if lines is None else lines)
