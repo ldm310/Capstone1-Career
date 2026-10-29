@@ -1,0 +1,451 @@
+.feature-site {
+  --study-ink: #26475f;
+  --study-muted: #50697d;
+  --study-line: #d8e4ef;
+  --study-blue: #305e80;
+}
+.study-primary,
+.study-empty a,
+.study-section-heading > a,
+.study-back,
+.study-job-heading > a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.study-primary {
+  background: #305e80;
+  color: white;
+  border: 1px solid #305e80;
+  border-radius: 10px;
+  padding: 12px 18px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 650;
+  min-height: 44px;
+  text-align: center;
+  cursor: pointer;
+}
+.study-primary:hover:not(:disabled) {
+  background: #234963;
+}
+.study-primary:disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
+}
+.feature-site button:focus-visible,
+.feature-site summary:focus-visible {
+  outline: 3px solid #5a94bb;
+  outline-offset: 3px;
+}
+.study-muted {
+  color: #50697d;
+  font-size: 13px;
+  line-height: 1.8;
+  margin: 14px 0;
+}
+.recruit-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin: 24px 0 18px;
+  position: relative;
+  z-index: 2;
+}
+.recruit-sort select,
+.recruit-filter-popover summary {
+  min-height: 48px;
+  border: 1px solid #d4e1ea;
+  border-radius: 10px;
+  background: #fff;
+  color: #2b4c65;
+  padding: 12px 18px;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.recruit-sort select {
+  padding-right: 42px;
+}
+.recruit-filter-popover {
+  position: relative;
+}
+.recruit-filter-popover summary {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  list-style: none;
+}
+.recruit-filter-popover summary::-webkit-details-marker {
+  display: none;
+}
+.recruit-filter-popover[open] summary {
+  background: #edf5fc;
+  border-color: #719abd;
+}
+.recruit-filter-popover[open] summary > svg:last-child {
+  transform: rotate(180deg);
+}
+.recruit-filter-popover > fieldset,
+.recruit-filter-fields {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  width: 254px;
+  max-width: 85vw;
+  background: white;
+  border: 1px solid #d5e1ea;
+  border-radius: 12px;
+  padding: 12px;
+  box-shadow: 0 12px 28px #29445b14;
+}
+.recruit-filter-popover fieldset label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 12px;
+  font-size: 15px;
+  cursor: pointer;
+}
+.recruit-filter-popover input[type="checkbox"] {
+  width: 19px;
+  height: 19px;
+  accent-color: #305e80;
+}
+.recruit-filter-popover fieldset p {
+  color: #50697d;
+  font-size: 12px;
+  line-height: 1.6;
+  padding: 8px 12px;
+}
+.recruit-filter-fields label {
+  display: grid;
+  gap: 8px;
+  padding: 8px;
+  font-size: 13px;
+}
+.recruit-filter-fields input,
+.recruit-filter-fields select {
+  width: 100%;
+  min-height: 40px;
+  border: 1px solid #d5e1ea;
+  border-radius: 8px;
+  padding: 8px;
+  background: white;
+}
+.recruit-reset {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 12px;
+  font-size: 13px;
+  color: #50697d;
+}
+.study-preview-invite,
+.study-example-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+  justify-content: space-between;
+  background: #edf4fa;
+  border: 1px solid #d9e6f1;
+  border-radius: 14px;
+  padding: 20px 24px;
+  margin-bottom: 24px;
+}
+.study-preview-invite p,
+.study-example-banner p {
+  margin: 5px 0 0;
+  font-size: 13px;
+  color: #536f86;
+  line-height: 1.7;
+}
+.study-preview-invite > div,
+.study-example-banner > div {
+  flex: 1;
+  min-width: min(100%, 240px);
+}
+.study-preview-invite > a,
+.study-example-exit {
+  font-size: 13px;
+  font-weight: 650;
+  color: #305e80;
+}
+.study-example-banner {
+  border-color: #e1d7bb;
+  background: #faf7ed;
+}
+.study-example-banner nav {
+  display: flex;
+  gap: 4px;
+  background: #ffffffa6;
+  border: 1px solid #e8dfc8;
+  border-radius: 9px;
+  padding: 4px;
+}
+.study-example-banner nav a {
+  padding: 7px 12px;
+  font-size: 13px;
+  border-radius: 6px;
+}
+.study-example-banner nav a[aria-current="page"] {
+  background: #305e80;
+  color: white;
+}
+.qualification-summary {
+  padding: 22px 24px;
+  background: #edf3f8;
+  border: 1px solid #dce6ee;
+  border-radius: 12px;
+}
+.jobs-catalog .public-job-card > .qualification-summary {
+  margin: -20px -20px 22px;
+  border: 0;
+  border-bottom: 1px solid #d8e5ef;
+  border-radius: 0;
+  min-height: 156px;
+}
+.qualification-summary.satisfied {
+  background: #eaf5f0;
+}
+.qualification-summary.unsatisfied {
+  background: #fbf1ec;
+}
+.qualification-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 17px;
+}
+.satisfied .qualification-heading {
+  color: #29624f;
+}
+.unsatisfied .qualification-heading {
+  color: #915039;
+}
+.qualification-heading small {
+  font-size: 11px;
+  font-weight: 500;
+  margin-left: auto;
+  padding: 3px 7px;
+  border-radius: 5px;
+  background: #ffffffb3;
+}
+.qualification-summary p {
+  font-size: 13px;
+  margin: 12px 0 9px;
+  color: #526d80;
+}
+.qualification-skills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.qualification-skills span {
+  background: #ffffffba;
+  padding: 4px 8px;
+  border-radius: 5px;
+  font-size: 12px;
+  color: #35526a;
+}
+.qualification-skills b {
+  color: #305e80;
+  margin-left: 3px;
+}
+.study-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 28px 0 20px;
+}
+.study-section-heading h2,
+.study-job-heading h2 {
+  font-size: clamp(21px, 2.4vw, 28px);
+  font-weight: 720;
+  line-height: 1.5;
+  margin: 6px 0 8px;
+}
+.study-section-heading h2 > span {
+  color: #57809d;
+  margin-left: 6px;
+}
+.study-section-heading p,
+.study-job-heading p {
+  color: #50697d;
+  font-size: 14px;
+  line-height: 1.7;
+}
+.study-section-heading > a {
+  white-space: nowrap;
+  font-size: 14px;
+}
+.study-back {
+  color: #50697d;
+  font-size: 13px;
+  margin-bottom: 20px;
+}
+.study-job-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 24px;
+}
+.study-job-heading p {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.study-job-heading > a {
+  font-size: 13px;
+  white-space: nowrap;
+}
+.study-detail-tabs {
+  display: flex;
+  gap: 22px;
+  border-bottom: 1px solid #d9e4ee;
+  margin: 28px 0 22px;
+  overflow-x: auto;
+}
+.study-detail-tabs a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 13px 3px;
+  border-bottom: 3px solid transparent;
+  white-space: nowrap;
+  font-size: 14px;
+  color: #5b7487;
+}
+.study-detail-tabs a[aria-current="page"] {
+  color: #2c5879;
+  border-color: #315e7e;
+  font-weight: 700;
+}
+.study-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 44px 24px;
+  text-align: center;
+  background: white;
+  border: 1px solid #dbe5ed;
+  border-radius: 14px;
+  margin: 20px 0;
+}
+.study-empty h2,
+.study-empty h3 {
+  font-size: 20px;
+  font-weight: 700;
+}
+.study-empty p {
+  color: #50697d;
+  font-size: 14px;
+  line-height: 1.8;
+  max-width: 620px;
+}
+.study-requirements {
+  background: #fff;
+  border: 1px solid #dce6ee;
+  padding: 24px;
+  border-radius: 14px;
+  margin-bottom: 18px;
+}
+.study-requirements h3 {
+  font-size: 19px;
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+.study-requirement-row {
+  display: flex;
+  align-items: start;
+  gap: 12px;
+  padding: 18px 0;
+  border-bottom: 1px solid #edf1f5;
+}
+.study-requirement-row:last-child {
+  border-bottom: 0;
+  padding-bottom: 4px;
+}
+.study-requirement-row > svg {
+  flex: none;
+  margin-top: 2px;
+}
+.study-requirement-row > div {
+  flex: 1;
+}
+.study-requirement-row strong {
+  font-size: 14px;
+}
+.study-requirement-row p {
+  font-size: 13px;
+  color: #50697d;
+  margin-top: 6px;
+  line-height: 1.7;
+}
+.study-requirement-row > span {
+  font-size: 13px;
+  text-align: right;
+}
+.study-requirement-row small {
+  display: block;
+  font-size: 11px;
+  margin-top: 6px;
+}
+.study-positive {
+  color: #2d6954;
+}
+.study-negative {
+  color: #985439;
+}
+@media (max-width: 850px) {
+  .study-job-heading {
+    align-items: start;
+    flex-direction: column;
+    gap: 12px;
+  }
+}
+@media (max-width: 520px) {
+  .study-preview-invite,
+  .study-example-banner,
+  .study-requirements {
+    padding: 18px;
+  }
+  .study-section-heading {
+    align-items: start;
+    flex-direction: column;
+  }
+  .recruit-filter-bar {
+    gap: 7px;
+  }
+  .recruit-filter-popover summary,
+  .recruit-sort select {
+    font-size: 13px;
+    padding: 10px;
+  }
+  .recruit-sort select {
+    padding-right: 28px;
+  }
+  .recruit-detail-filter > .recruit-filter-fields {
+    left: auto;
+    right: 0;
+  }
+  .study-requirement-row {
+    gap: 8px;
+  }
+  .study-requirement-row > svg {
+    width: 16px;
+  }
+}
+.applicant-radar {
+  margin: 8px 0 18px;
+}

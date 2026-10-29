@@ -1,0 +1,265 @@
+/* Home dashboard: greeting, stat tiles, skill radar and recommended jobs. */
+.home-greeting.sky-hero {
+  min-height: 0;
+  padding: 44px 0 92px;
+}
+.home-greeting-copy h1 {
+  margin: 12px 0 8px;
+}
+.home-greeting-copy p {
+  font-size: 15px;
+  color: #456078;
+}
+.home-dashboard {
+  position: relative;
+  margin-top: -56px;
+  padding-bottom: 56px;
+}
+.home-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 20px;
+  margin: 0 0 24px;
+  padding: 0;
+  list-style: none;
+}
+.home-stats a {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 22px 24px;
+  background: #fff;
+  border: 1px solid #dce5ed;
+  border-radius: 16px;
+  color: #21384b;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s;
+}
+.home-stats a:hover {
+  border-color: #9bb8d1;
+  box-shadow: 0 8px 24px #2f537512;
+}
+.home-stat-icon {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 12px;
+  background: #edf4fa;
+  color: #315d80;
+  flex-shrink: 0;
+}
+.home-stats small {
+  display: block;
+  font-size: 13px;
+  color: #5a6f80;
+}
+.home-stats strong {
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+.home-stats em {
+  font-style: normal;
+  font-size: 13px;
+  font-weight: 500;
+  margin-left: 3px;
+  color: #5a6f80;
+}
+.home-panels {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+.home-panel {
+  background: #fff;
+  border: 1px solid #dce5ed;
+  border-radius: 18px;
+  padding: 28px;
+}
+.home-panel > header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+.home-panel > header a {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 14px;
+  font-weight: 650;
+  color: #315d80;
+  white-space: nowrap;
+}
+.home-panel-eyebrow {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #566d82;
+}
+.home-panel h2 {
+  font-size: 22px;
+  font-weight: 700;
+  margin: 4px 0;
+  color: #1f3445;
+}
+.home-panel header p {
+  font-size: 14px;
+  color: #4a6072;
+}
+.home-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 48px 0;
+  color: #4a6072;
+}
+.home-jobs {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.home-jobs li {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr) auto;
+  gap: 16px;
+  padding: 18px 0;
+  border-top: 1px solid #e8eef3;
+}
+.home-job-mark {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: #edf4fa;
+  border: 1px solid #dbe7f1;
+  color: #315d80;
+  font-weight: 700;
+  font-size: 18px;
+}
+.home-job-main small {
+  font-size: 13px;
+  color: #5a6f80;
+}
+.home-job-main h3 {
+  font-size: 17px;
+  font-weight: 700;
+  margin: 2px 0;
+}
+.home-job-main h3 a {
+  color: #1f3445;
+}
+.home-job-main p {
+  font-size: 13px;
+  color: #5a6f80;
+}
+.home-job-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.home-job-tags span {
+  font-size: 12px;
+  padding: 3px 9px;
+  border-radius: 6px;
+  border: 1px solid #dfe7ee;
+  background: #f7fafc;
+  color: #4a6072;
+}
+.home-job-tags span.is-mine {
+  border-color: #b9d3ea;
+  background: #edf4fa;
+  color: #234e72;
+  font-weight: 600;
+}
+.home-job-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+.home-job-dday {
+  font-size: 13px;
+  color: #b15d2a;
+}
+.home-job-counts {
+  display: flex;
+  gap: 14px;
+}
+.home-job-counts span {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.home-job-counts strong {
+  font-size: 20px;
+  color: #234e72;
+}
+.home-job-counts .is-need strong {
+  color: #b15d2a;
+}
+.home-job-counts small {
+  font-size: 12px;
+  color: #5a6f80;
+}
+.home-job-more {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 13px;
+  font-weight: 650;
+  color: #315d80;
+}
+.home-panel-note {
+  margin-top: 12px;
+  font-size: 12px;
+  color: #566d82;
+}
+@media (max-width: 1000px) {
+  .home-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .home-panels {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 520px) {
+  .home-stats {
+    gap: 12px;
+  }
+  .home-stats a {
+    padding: 16px;
+    gap: 10px;
+  }
+  .home-stat-icon {
+    width: 38px;
+    height: 38px;
+  }
+  .home-panel {
+    padding: 20px;
+  }
+  .home-jobs li {
+    grid-template-columns: 40px minmax(0, 1fr);
+  }
+  .home-job-mark {
+    width: 40px;
+    height: 40px;
+  }
+  .home-job-side {
+    grid-column: 2;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+}
+.home-greeting .sky-playback {
+  top: 16px;
+  bottom: auto;
+}

@@ -1,0 +1,307 @@
+/* Korean reading rhythm and the official public jobs feed. */
+body {
+  font-family:
+    var(--font-career-ui), "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+.eyebrow {
+  letter-spacing: var(--tracking-label);
+}
+.cta {
+  white-space: normal;
+  text-align: center;
+}
+.public-jobs {
+  padding-block: 86px;
+  scroll-margin-top: 90px;
+}
+.public-jobs-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  gap: 24px;
+  margin-bottom: 32px;
+}
+.public-jobs-heading h2 {
+  margin: 18px 0 12px;
+  font-size: clamp(28px, 3vw, 42px);
+  font-weight: 750;
+  letter-spacing: var(--tracking-heading);
+  line-height: 1.4;
+}
+.public-jobs-heading p {
+  color: #596660;
+  font-size: 16px;
+  line-height: 1.8;
+}
+.public-source-note {
+  color: #64716a;
+  font-size: 12px;
+  padding-bottom: 4px;
+}
+.public-jobs-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+  border-bottom: 1px solid #dfe7e2;
+  padding-bottom: 16px;
+}
+.public-job-filters {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+.public-job-filters select,
+.public-job-filters label {
+  border: 1px solid #dce4df;
+  border-radius: 9px;
+  background: white;
+  padding: 11px 12px;
+  font-size: 13px;
+}
+.public-job-filters label {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: #607168;
+}
+.public-job-filters input {
+  outline: none;
+  min-width: 0;
+  width: 140px;
+}
+.public-feed-count {
+  font-size: 12px;
+  color: #65736b;
+  margin: 19px 0;
+  line-height: 1.8;
+}
+.public-job-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 18px;
+}
+.public-job-card {
+  border: 1px solid #d6e4db;
+  border-radius: 18px;
+  padding: 24px 21px 19px;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  min-height: 320px;
+  transition:
+    transform 0.2s,
+    box-shadow 0.2s,
+    border-color 0.2s;
+}
+.public-job-card:hover,
+.public-job-card:focus-within {
+  transform: translateY(-4px);
+  border-color: #4da475;
+  box-shadow: 0 12px 28px #1a59320c;
+}
+.public-company {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  font-size: 13px;
+  flex-wrap: wrap;
+}
+.public-company-mark {
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  background: #f0f8f3;
+  color: #15803d;
+  width: 34px;
+  height: 34px;
+  font-size: 17px;
+  font-weight: 800;
+}
+.public-job-category {
+  font-size: 12px;
+  color: #337e54;
+  margin-top: 24px;
+}
+.public-job-card h3 {
+  font-size: 18px;
+  line-height: 1.6;
+  letter-spacing: var(--tracking-heading);
+  font-weight: 700;
+  margin: 6px 0 16px;
+  word-break: normal;
+}
+.public-job-card h3 a:hover {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.public-job-meta {
+  display: flex;
+  gap: 8px 10px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: #65736b;
+  margin-bottom: 24px;
+}
+.public-job-meta span {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+.public-job-bottom {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  color: #69786f;
+}
+.public-job-bottom button[aria-pressed="true"] {
+  color: #15803d;
+}
+.public-job-source {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-top: 1px solid #edf1ee;
+  padding-top: 14px;
+  margin-top: 10px;
+  font-size: 12px;
+  color: #267347;
+}
+.public-job-more {
+  text-align: center;
+  margin: 34px 0;
+}
+.public-job-more button,
+.public-job-empty button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border: 1px solid #869a8f;
+  border-radius: 40px;
+  padding: 14px 30px;
+  color: #314e3f;
+  font-size: 15px;
+  background: white;
+}
+.public-job-more button:hover,
+.public-job-empty button:hover {
+  background: #f1f8f4;
+}
+.public-job-more button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+.public-job-more p {
+  color: #65736b;
+  font-size: 13px;
+  margin-bottom: 14px;
+}
+.public-jobs-disclosure {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: #65736b;
+  font-size: 12px;
+  line-height: 1.8;
+}
+.public-job-empty {
+  text-align: center;
+  background: #f7faf8;
+  padding: 32px;
+  border-radius: 14px;
+  margin-top: 20px;
+}
+.public-job-empty p {
+  margin: 10px auto 20px;
+  max-width: 560px;
+  color: #637168;
+  font-size: 14px;
+  line-height: 1.8;
+}
+@media (max-width: 1100px) {
+  .public-job-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .public-jobs-heading {
+    align-items: start;
+    flex-direction: column;
+  }
+  .public-company {
+    font-size: 14px;
+  }
+}
+@media (max-width: 640px) {
+  .public-jobs {
+    padding-block: 48px;
+  }
+  .public-job-grid {
+    grid-template-columns: 1fr;
+  }
+  .public-job-card {
+    min-height: 290px;
+  }
+  .public-job-filters {
+    width: 100%;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .public-job-filters label {
+    flex: 1;
+  }
+  .public-job-filters input {
+    width: 100%;
+  }
+  .public-job-filters select {
+    max-width: 100%;
+  }
+  .public-job-more button {
+    max-width: 100%;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .public-job-card {
+    transition: none;
+  }
+  .public-job-card:hover {
+    transform: none;
+  }
+}
+
+.public-job-filters select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 42px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23526678' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-position: right 14px center;
+  background-size: 16px 16px;
+  background-repeat: no-repeat;
+  line-height: 1.5;
+}
+.icon-button {
+  display: inline-flex;
+}
+/* Prevent arrow distortion in narrow buttons and center inline SVGs. */
+svg:is(
+  [class*="lucide-arrow"],
+  [class*="lucide-chevron"],
+  .lucide-external-link
+) {
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+.cta > svg {
+  display: block;
+  flex-shrink: 0;
+}
+@media (forced-colors: active) {
+  .public-job-filters select {
+    appearance: auto;
+    background-image: none;
+  }
+}
