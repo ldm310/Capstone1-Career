@@ -80,7 +80,17 @@ test("job detail has no study tab and compares portfolio with applicants", async
   ]);
   // The applicant comparison sits above the tabs on every job.
   await expect(page.locator(".applicant-radar .recharts-radar-polygon")).toHaveCount(3);
-  await expect(page.locator(".applicant-stats li")).toHaveCount(10);
+  // Axes are the job's skills, padded with role skills to five, scored as LV.
+  await expect(page.locator(".applicant-stats li span")).toHaveText([
+    "SQL",
+    "REST API",
+    "Docker",
+    "PostgreSQL",
+    "Java",
+  ]);
+  await expect(page.locator(".applicant-stats li strong").first()).toHaveText(
+    /^LV \d+$/,
+  );
   for (const width of [390, 320]) {
     await page.setViewportSize({ width, height: 900 });
     // The chart re-measures after a resize, so wait for it to settle.
@@ -137,6 +147,31 @@ test("dummy job shows its posting first and compares skills without a click", as
   await page.getByRole("link", { name: "역량 비교", exact: true }).click();
   await expect(page.locator(".job-compare-group").first()).toContainText(
     "Spring Boot",
+  );
+});
+
+test("job detail shows how many passed applicants meet each preferred item", async ({
+  page,
+}) => {
+  await page.goto("/jobs?job=dummy%3Abackend-platform");
+  const section = page.locator(".passed-preferred");
+  await expect(section.locator("li > div span")).toHaveText([
+    "컴퓨터공학, 소프트웨어공학 등 관련 전공",
+    "개발 관련 프로젝트 또는 실무 경험",
+    "Docker 기반 배포 경험",
+    "Kubernetes 운영 경험",
+    "결제 도메인 경험",
+  ]);
+  await expect(section.locator("li > div b").first()).toHaveText(
+    /^\d+ \/ \d+명, \d+%$/,
+  );
+  // Skill items compare the passed average LV with mine.
+  await expect(section.locator("li").nth(2).locator("small")).toContainText(
+    "Docker 합격자 평균 LV",
+  );
+  await page.goto("/jobs");
+  await expect(page.locator(".public-job-card .passed-gap").first()).toContainText(
+    /합격자 평균 LV \d+/,
   );
 });
 

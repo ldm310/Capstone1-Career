@@ -20,6 +20,7 @@ import { isSupportedRole } from "@/lib/roles";
 import { roleLabels } from "@/lib/korean";
 import { LoadingSpinner } from "@/components/shared/loading-spinner";
 import { OriginalLink } from "@/components/jobs/original-link";
+import { PassedGap } from "@/components/jobs/passed-gap";
 import { useSavedJobs } from "@/lib/saved-jobs";
 export function LiveJobsSection({
   mode = "preview",
@@ -220,6 +221,7 @@ export function LiveJobsSection({
               </span>
               {job.workplace && <span>{job.workplace}</span>}
             </div>
+            <PassedGap job={job} />
             <div className="public-job-bottom">
               <span>
                 {job.closesAt

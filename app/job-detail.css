@@ -586,3 +586,82 @@
     transform: none;
   }
 }
+
+/* 합격자의 우대사항 충족 현황 */
+.passed-preferred > ul {
+  display: grid;
+  gap: 18px;
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.passed-preferred li {
+  display: grid;
+  gap: 8px;
+}
+.passed-preferred-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  font-size: 15px;
+  color: #1f3445;
+}
+.passed-preferred-head b {
+  flex-shrink: 0;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.passed-preferred-bar {
+  display: block;
+  height: 12px;
+  border-radius: 99px;
+  background: #e6eaee;
+  overflow: hidden;
+}
+.passed-preferred-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #2f6bc4;
+}
+.passed-preferred li > small {
+  font-size: 13px;
+  color: #4a6072;
+}
+.passed-preferred li > small.is-behind {
+  color: #c23a52;
+}
+
+/* 공고 카드의 한 줄 합격자 비교 */
+.passed-gap {
+  margin: 8px 0 0;
+  line-height: 1.8;
+  font-size: 13px;
+  color: #4a6072;
+}
+.passed-gap b {
+  color: #2366ad;
+}
+.passed-gap b.is-me {
+  color: #1f3445;
+}
+.passed-gap.is-behind b.is-me {
+  color: #c23a52;
+}
+.passed-gap span {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 7px;
+  line-height: 1.6;
+  border-radius: 6px;
+  background: #fbeef0;
+  color: #a3324a;
+  font-size: 12px;
+}
+@media (max-width: 560px) {
+  .passed-preferred-head {
+    flex-direction: column;
+    gap: 2px;
+  }
+}

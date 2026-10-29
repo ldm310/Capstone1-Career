@@ -11,7 +11,9 @@ import {
 } from "recharts";
 import { useEffect, useState } from "react";
 import { useReducedMotion } from "motion/react";
-import { applicantBenchmark } from "@/lib/applicant-benchmark";
+import { applicantBenchmark, benchmarkSkills } from "@/lib/applicant-benchmark";
+import { useMyLevels } from "@/lib/my-levels";
+import type { PublicJob } from "@/types/public-job";
 
 const series = [
   { key: "passed", name: "합격자 평균", color: "#3b8fe0" },
@@ -19,8 +21,9 @@ const series = [
   { key: "me", name: "나", color: "#e8677a" },
 ] as const;
 
-// 공고 상세 맨 위에 보여주는 지원자 비교. 수치는 공고 ID로 만든 예시 값이다.
-export function ApplicantComparison({ jobId }: { jobId: string }) {
+// 공고 상세 맨 위에 보여주는 지원자 비교. 축은 공고 기술, 값은 LV(1~100)다.
+// 지원자, 합격자 평균은 공고 ID로 만든 예시 값이고, 나는 내 역량의 LV를 쓴다.
+export function ApplicantComparison({ job }: { job: PublicJob }) {
   const reduced = useReducedMotion();
   // 좁은 화면에서는 축 이름이 잘리지 않게 차트를 줄인다.
   const [narrow, setNarrow] = useState(false);
@@ -31,19 +34,26 @@ export function ApplicantComparison({ jobId }: { jobId: string }) {
     query.addEventListener("change", update);
     return () => query.removeEventListener("change", update);
   }, []);
-  const { rows, applicantCount, passedCount } = applicantBenchmark(jobId);
+  const skills = benchmarkSkills(job);
+  const myLevels = useMyLevels(skills);
+  const { rows, applicantCount, passedCount } = applicantBenchmark(
+    job.id,
+    skills,
+    myLevels ?? undefined,
+  );
   const average = (key: "me" | "applicants" | "passed") =>
     Math.round(rows.reduce((sum, r) => sum + r[key], 0) / rows.length);
   return (
     <section className="study-requirements applicant-comparison">
-      <h3>프로젝트, 포트폴리오 역량 비교</h3>
+      <h3>기술별 역량 비교</h3>
       <p className="applicant-headline">
-        합격자 평균 <b className="is-passed">{average("passed")}점</b>, 전체
-        지원자 평균 <b>{average("applicants")}점</b>, 나{" "}
-        <b className="is-me">{average("me")}점</b>
+        합격자 평균 <b className="is-passed">LV {average("passed")}</b>, 전체
+        지원자 평균 <b>LV {average("applicants")}</b>, 나{" "}
+        <b className="is-me">LV {average("me")}</b>
       </p>
       <p className="study-muted">
         지원자 {applicantCount}명, 합격자 {passedCount}명 (예시)
+        {!myLevels && ", 내 자료가 없어 내 LV도 예시예요"}
       </p>
       <div
         className="applicant-radar"
@@ -51,7 +61,7 @@ export function ApplicantComparison({ jobId }: { jobId: string }) {
         aria-label={rows
           .map(
             (r) =>
-              `${r.axis}: 나 ${r.me}, 지원자 평균 ${r.applicants}, 합격자 평균 ${r.passed}`,
+              `${r.axis}: 나 LV ${r.me}, 지원자 평균 LV ${r.applicants}, 합격자 평균 LV ${r.passed}`,
           )
           .join(". ")}
       >
@@ -80,7 +90,7 @@ export function ApplicantComparison({ jobId }: { jobId: string }) {
                 isAnimationActive={!reduced}
               />
             ))}
-            <Tooltip formatter={(v) => `${v}점`} />
+            <Tooltip formatter={(v) => `LV ${v}`} />
             <Legend wrapperStyle={{ fontSize: 13 }} />
           </RadarChart>
         </ResponsiveContainer>
@@ -88,10 +98,10 @@ export function ApplicantComparison({ jobId }: { jobId: string }) {
       <ul className="applicant-stats">
         {rows.map((r) => (
           <li key={r.axis} className={r.me < r.passed ? "is-behind" : ""}>
-            <strong>{r.me}점</strong>
+            <strong>LV {r.me}</strong>
             <span>{r.axis}</span>
             <small>
-              합격자 {r.passed}, 평균 {r.applicants}
+              합격자 LV {r.passed}, 평균 LV {r.applicants}
             </small>
           </li>
         ))}

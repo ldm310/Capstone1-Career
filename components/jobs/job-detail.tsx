@@ -16,6 +16,7 @@ import { ExampleSwitcher } from "./example-switcher";
 import { JobSkillComparison } from "./job-skill-comparison";
 import { JobPosting } from "./job-posting";
 import { ApplicantComparison } from "./applicant-comparison";
+import { PassedPreferred } from "./passed-preferred";
 import { LoadingSpinner } from "@/components/shared/loading-spinner";
 import { JobExtras, JobSummary } from "./job-summary";
 
@@ -96,7 +97,11 @@ export function JobDetail({ id }: { id: string }) {
         공고 목록
       </Link>
       <JobSummary job={job} />
-      <ApplicantComparison jobId={job.id} />
+      <ApplicantComparison job={job} />
+      <PassedPreferred
+        job={job}
+        posting={tier ? examplePosting(job) : undefined}
+      />
       <nav className="study-detail-tabs" aria-label="공고 상세 메뉴">
         <Link
           href={base}

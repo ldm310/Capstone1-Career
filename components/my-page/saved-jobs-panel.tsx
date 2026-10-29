@@ -6,6 +6,7 @@ import { useSavedJobs } from "@/lib/saved-jobs";
 import { LoadingSpinner } from "@/components/shared/loading-spinner";
 import { roleLabels } from "@/lib/korean";
 import { dDay } from "@/components/jobs/job-summary";
+import { PassedGap } from "@/components/jobs/passed-gap";
 
 // 저장한 공고 목록. 카드를 누르면 공고 상세로, 책갈피를 누르면 저장을 취소한다.
 export function SavedJobsPanel() {
@@ -65,6 +66,7 @@ export function SavedJobsPanel() {
                     저장
                   </span>
                 </p>
+                <PassedGap job={job} />
               </div>
               <div className="mypage-job-side">
                 {left && (

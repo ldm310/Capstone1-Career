@@ -16,6 +16,10 @@ test("demo account sees saved jobs and its profile on my page", async ({
   await page.locator(".header-user").click();
   await expect(page).toHaveURL(/\/my-page$/);
   await expect(page.locator(".mypage-jobs li").first()).toBeVisible();
+  // Demo data exists, so saved cards compare the passed average with my LV.
+  await expect(page.locator(".mypage-jobs .passed-gap").first()).toContainText(
+    /합격자 평균 LV \d+, 나 LV \d+/,
+  );
   const before = await page.locator(".mypage-jobs li").count();
   expect(before).toBeGreaterThanOrEqual(1);
   await page.goto("/my-page?tab=profile");
