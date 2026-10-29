@@ -1,4 +1,4 @@
-# 물리 설계 (PostgreSQL 17)
+# 물리 설계 (PostgreSQL 17 로컬 · 18 AWS RDS)
 
 논리 설계([ERD](erd.png))를 실제 DB에 만들 수 있게 옮겼다.
 
@@ -6,6 +6,8 @@
 
 - DDL: [`db/schema.sql`](../db/schema.sql)
 - 시험: 2026-10-27, 시험용 PostgreSQL 17에서 표 12개가 오류 없이 만들어지고 제약이 동작하는 것을 확인했다.
+- 2026-10-28 버린 공고 표(`listing_seen`)를 더해 13개. 2026-10-29 AWS RDS(PostgreSQL 18)에도 같은 DDL로 만들었다.
+- 2026-10-29 바꿈(사용자 결정): 웹 상세 화면에 원문을 보여 주려고 **본문 HTML(`body_html`)**을 담고, 노트북에서만 열 수 있는 경로 칸(`raw_path`, `file_path`, `ocr_path`)은 뺐다(팀원·웹은 못 쓰는 값). 이미 만든 DB는 `py -3.12 db_load.py migrate-body-html` 로 바꾼다(원본 파일로 본문을 채운 뒤 경로 칸을 뺌).
 
 표와 칸의 한글 이름은 DDL의 `COMMENT`로 DB 안에도 남겨 두었다.
 모든 표는 `job` 스키마(DB 안의 폴더)에 있다. 다른 쪽(BE 등)에서 읽을 때는 `job.posting`처럼 스키마 이름을 붙인다.
@@ -52,10 +54,10 @@
 | 공고 형태 | `kind` | text | NOT NULL, 글/이미지/섞임 |
 | 상태 | `status` | text | NOT NULL, 진행/마감, 기본값 '진행' |
 | 마감일 | `deadline` | date | 상시채용이면 비움 |
-| 원본 위치 | `raw_path` | text | NOT NULL |
+| 본문 HTML | `body_html` | text | 사람인 본문 칸(스크립트 등은 뺌, 이미지 주소는 전체 주소). 웹 상세 화면용, 본문이 없으면 비움 |
 | 원본 해시 | `raw_hash` | char(64) | NOT NULL |
 | 수집 시각 | `collected_at` | timestamptz | NOT NULL, 기본값 지금 |
-| 마지막 확인 시각 | `last_checked_at` | timestamptz | NOT NULL, 기본값 지금 |
+| 마지막 확인 시각 | `last_checked_at` | timestamptz | NOT NULL, 본문을 받은 시각(저장 시각이 아님) |
 
 **공고 이미지 `posting_image`**
 | 한글 | 영어 | 자료형 | 제약 |
@@ -63,10 +65,17 @@
 | 이미지ID | `id` | bigint | PK |
 | 공고ID | `posting_id` | bigint | NOT NULL, FK → posting |
 | 순서 | `seq` | smallint | NOT NULL, 1 이상, UNIQUE(posting_id, seq) |
-| 이미지 주소 | `url` | text | NOT NULL |
-| 파일 위치 | `file_path` | text | NOT NULL |
+| 이미지 주소 | `url` | text | NOT NULL, 원본 서버 주소 — 웹은 이 주소로 띄운다 |
 | 남김 여부 | `kept` | boolean | 판정 전이면 비움 |
-| OCR 결과 위치 | `ocr_path` | text | |
+
+**버린 공고 `listing_seen`** (2026-10-28 추가)
+교육생·경력 조건을 알 수 없어 버린 공고의 번호를 기억한다. 본문은 받지 않는다. 공고 표와는 이어지지 않고, 목록 수집 때 "아는 번호"로만 쓴다.
+| 한글 | 영어 | 자료형 | 제약 |
+|---|---|---|---|
+| 사이트 | `site` | text | NOT NULL, 기본값 '사람인', PK(site, site_posting_no) |
+| 사이트 공고번호 | `site_posting_no` | text | NOT NULL |
+| 버린 이유 | `reason` | text | NOT NULL (교육생 / 경력 조건 모름 / 4년 이상) |
+| 처음 본 시각 | `first_seen_at` | timestamptz | NOT NULL, 기본값 지금 |
 
 ### ② 추출 결과
 
