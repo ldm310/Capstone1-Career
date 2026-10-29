@@ -17,15 +17,11 @@ from pathlib import Path
 import certifi
 from pydriller import Repository
 
+from paths import HEAD_BYTES, generated, line_count, skipped
+
 API = 'https://api.github.com'
 TLS = ssl.create_default_context(cafile=certifi.where())
 GIT_ENV = {**os.environ, 'GIT_TERMINAL_PROMPT': '0', 'GIT_LFS_SKIP_SMUDGE': '1'}
-# 더미·자동 생성 파일 경로 필터(제안). 기준은 팀 확정 전이다.
-SKIP_DIRS = {'node_modules', 'dist', 'build', '.next', 'out', 'vendor', 'venv', '.venv', '__pycache__', 'target', '.gradle', 'coverage'}
-SKIP_NAMES = {'package-lock.json', 'yarn.lock', 'pnpm-lock.yaml', 'poetry.lock', 'Pipfile.lock', 'uv.lock', 'Cargo.lock', 'go.sum', 'gradlew', 'gradlew.bat'}
-SKIP_EXT = ('.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico', '.webp', '.pdf', '.zip', '.jar', '.class', '.woff', '.woff2',
-            '.ttf', '.eot', '.mp4', '.mp3', '.map', '.min.js', '.min.css', '.bin', '.pt', '.onnx', '.pkl', '.h5', '.db', '.sqlite')
-MAX_BLOB = 512 * 1024
 # github.com/<이 이름>은 계정이 아니라 GitHub 화면 주소다. 같은 이름의 다른 계정을 분석하지 않도록 막는다.
 RESERVED = {'dashboard', 'settings', 'notifications', 'explore', 'orgs', 'organizations', 'marketplace', 'pulls', 'issues',
             'topics', 'trending', 'login', 'logout', 'signup', 'new', 'codespaces', 'sponsors', 'features', 'about',
@@ -114,12 +110,6 @@ def ranges(lines):
     return out
 
 
-def skipped(p, size):
-    parts = p.split('/')
-    return (size > MAX_BLOB or parts[-1] in SKIP_NAMES or any(d in SKIP_DIRS for d in parts[:-1])
-            or parts[-1].lower().endswith(SKIP_EXT))
-
-
 def own_commits(path, revs, api_shas, emails, names):
     """main·develop에서 닿는 commit을 SHA 기준으로 한 번만 세고, 본인 여부를 근거별로 나눈다."""
     rows = [r.split('\0') for r in git(path, 'log', '--format=%H%x00%ae%x00%an', *revs).splitlines()]
@@ -170,9 +160,12 @@ def history(path, sha, emails, names):
         reach |= more
 
 
-def line_counts(path, blobs, chunk=500):
-    """blob마다 줄 수(blame이 세는 방식: 마지막 줄에 줄바꿈이 없어도 한 줄)."""
-    counts = {}
+def scan_blobs(path, entries, chunk=500):
+    """entries [(경로, blob)]의 파일마다 줄 수(blame이 세는 방식: 마지막 줄에 줄바꿈이 없어도 한 줄)와 생성 파일 여부(paths.generated)를 구한다.
+    blob은 git cat-file 묶음으로 한 번만 읽고, 내용이 같은 파일은 읽은 것을 함께 쓴다. 돌려주는 것: {경로: (줄 수, 생성 파일인가)}."""
+    by_blob, scanned = {}, {}
+    for p, blob in entries: by_blob.setdefault(blob, []).append(p)
+    blobs = sorted(by_blob)
     for k in range(0, len(blobs), chunk):
         out = subprocess.run(['git', '-C', str(path), 'cat-file', '--batch'], input=('\n'.join(blobs[k:k + chunk]) + '\n').encode(),
                              capture_output=True, env=GIT_ENV, timeout=600, check=True).stdout
@@ -181,14 +174,17 @@ def line_counts(path, blobs, chunk=500):
             j = out.index(b'\n', i)
             name, _, size = out[i:j].split()
             body = out[j + 1:j + 1 + int(size)]
-            counts[name.decode()] = body.count(b'\n') + (1 if body and not body.endswith(b'\n') else 0)
+            n, head = line_count(body), body[:HEAD_BYTES]
+            head_lines = n if len(body) <= HEAD_BYTES else None  # 앞부분이 파일 전체면 센 줄 수를 다시 세지 않는다
+            for p in by_blob[name.decode()]: scanned[p] = (n, generated(p, head, head_lines))
             i = j + 2 + int(size)
-    return counts
+    return scanned
 
 
 def blame(path, sha, emails, names):
     """평가 commit에서 줄마다 마지막 작성자를 보고, 본인 줄을 증거 단위 {sha, path, lines}로 묶는다.
-    모든 파일을 blame한 결과와 같되, 결과가 정해진 파일은 줄 수만 센다: 본인·이름 일치 commit이 닿지 않은 파일(전부 다른 사람),
+    경로·내용 필터(paths.skipped·generated)에 걸린 파일은 어디에도 세지 않는다.
+    나머지는 모든 파일을 blame한 결과와 같되, 결과가 정해진 파일은 줄 수만 센다: 본인·이름 일치 commit이 닿지 않은 파일(전부 다른 사람),
     한 번 추가되고 바뀐 적 없는 파일(전부 그 commit 작성자). 커널 소스처럼 한 번에 올린 파일 수만 개도 몇 초 안에 끝난다."""
     count, units = dict(own=0, name_only=0, other=0, files=0), []
     entries = []
@@ -199,10 +195,12 @@ def blame(path, sha, emails, names):
         if kind == 'blob' and not skipped(p, int(size)): entries.append((p, blob))
     touches, added, reach = history(path, sha, emails, names)
     known = lambda p: p not in reach or (touches.get(p) == 1 and p in added)
-    sizes = line_counts(path, sorted({b for p, b in entries if known(p)}))
-    for p, blob in entries:
+    scanned = scan_blobs(path, entries)  # 후보 blob을 한 번씩만 읽는다: 줄 수(빠른 길 파일)와 생성 파일 여부(모든 파일)
+    for p, _ in entries:
+        n, is_generated = scanned[p]
+        if is_generated: continue  # 빌드 결과물·SQL 덤프·minified·생성 파일은 누구의 줄로도 세지 않는다(blame도 하지 않는다)
         if known(p):
-            n, who = sizes[blob], added.get(p, 'other') if p in reach else 'other'
+            who = added.get(p, 'other') if p in reach else 'other'
             count[who] += n
             count['files'] += 1
             if who == 'own' and n: units.append(dict(sha=sha, path=p, lines=[[1, n]]))
