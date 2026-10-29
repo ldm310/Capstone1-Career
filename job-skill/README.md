@@ -168,6 +168,13 @@ docker compose -f docker-compose.airflow.yml exec airflow-scheduler python -m py
    ```
 4. Airflow를 다시 띄운다: `docker compose -f docker-compose.airflow.yml up -d` (컨테이너는 `DATABASE_URL`을 빈 값으로 덮어 RDS로 간다).
 
+**매일 어제 AWS 비용 Slack 리포트** (노트북과 상관없이 AWS 안에서)
+- Lambda `aws-cost-report`(서울, Python 3.13, 제한 시간 30초)에 [aws/cost_report_lambda.py](aws/cost_report_lambda.py)를 그대로 붙여 넣는다.
+  - 환경변수 `SLACK_WEBHOOK_URL`, 실행 역할에 인라인 정책 `ce:GetCostAndUsage`(비용 조회만)
+- EventBridge 스케줄러 `aws-cost-report-daily`: cron `0 9 * * ? *`, 시간대 Asia/Seoul → 매일 09:00(AWS 하루 = UTC 0~24시 = 한국 시간 어제 09:00~오늘 09:00)
+- 비용 탐색기(Cost Explorer)를 처음 켜면 데이터가 하루 뒤에 생긴다. 그 전에는 "⚠️ AWS 비용 조회 실패(DataUnavailableException)"가 온다.
+- 조회 한 번에 $0.01. 12/20까지 쓰고 나면 Lambda·스케줄러·RDS를 지운다.
+
 - 브랜치를 바꾸면 Airflow 컨테이너가 보는 코드도 바뀐다(폴더를 그대로 붙여 씀). 바꾼 뒤에는 `up -d`로 다시 띄운다.
 - 공통 기능은 로컬 브랜치에서 고치고 AWS 브랜치로 합친다(`git merge feature/job-skill`).
 
