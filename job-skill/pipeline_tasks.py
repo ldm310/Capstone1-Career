@@ -60,8 +60,7 @@ def _has_images(run_dir: str) -> bool:
 
 def step_collect(run_dir: str, include_pending: bool, max_new: int | None = None) -> dict:
     """공고 목록 수집. 두 직무 목록을 경력 필터를 켜고 끝까지 본다(연속 멈춤 없음).
-    새 공고 = 목록 − 아는 번호(DB 공고 + 버린 공고) → targets.tsv. 버린 공고는 excluded.json 에만 두고
-    DB 기록은 DB 저장에 성공한 뒤(step_load) 한다.
+    새 공고 = 목록 − 아는 번호(DB 에 있는 공고) → targets.tsv. 버린 공고(교육생 등)는 excluded.json 에만 남긴다.
     ①(include_pending): 밀린 공고(추출 결과가 없는 진행 공고)를 targets 맨 위에 두고, 같은 목록으로
       - '수정'된 진행 공고와 목록에서 사라진 진행 공고를 골라 check.json(다음 태스크 변경 감지)
       - 목록에 보이는 공고의 마감일을 DB 에 반영(마감일은 본문 밖이라 지문으로는 안 잡힘)
@@ -214,7 +213,7 @@ def step_extract(run_dir: str, budget_usd: float, dag_label: str, limit: float |
 
 def step_load(run_dir: str) -> dict:
     """DB 저장. 추출 결과가 없는 공고도 공고로는 넣는다(다음 ① 때 밀린 공고로 다시 추출).
-    공고를 저장한 뒤에 버린 공고(excluded.json)를 기록한다 — 앞 단계가 실패한 실행의 버린 공고는 '아는 번호'가 되지 않게."""
+    버린 공고는 DB 에 기록하지 않는다(실행 폴더의 excluded.json 에만 남음)."""
     total = {}
     if _targets(run_dir):
         result = os.path.join(_abs(run_dir), "out", "load_result.json")
@@ -230,11 +229,6 @@ def step_load(run_dir: str) -> dict:
             raise
         if os.path.exists(result):
             total = json.load(open(result, encoding="utf-8"))["total"]
-    path = os.path.join(_abs(run_dir), "excluded.json")
-    if os.path.exists(path):
-        rows = [tuple(r) for r in json.load(open(path, encoding="utf-8"))]
-        with connect() as conn:
-            db_queries.record_excluded(conn, rows)
     return total
 
 
