@@ -50,17 +50,42 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
 
 
+RDS_USER = RDS_DB = "career"
+
+
+def _env_file() -> dict[str, str]:
+    """이 폴더의 .env (저장소에 올리지 않는다)."""
+    path = os.path.join(HERE, ".env")
+    out = {}
+    if os.path.exists(path):
+        for ln in open(path, encoding="utf-8"):
+            k, _, v = ln.strip().partition("=")
+            if k and v:
+                out[k] = v
+    return out
+
+
 def database_url() -> str | None:
-    """환경변수 DATABASE_URL, 없으면 이 폴더의 .env 에서 읽는다(.env 는 저장소에 올리지 않는다)."""
+    """파이프라인이 쓰는 DB (AWS 브랜치).
+    1) 환경변수 DATABASE_URL 을 값과 함께 직접 줬으면 그것(시험의 임시 DB 등)
+    2) RDS_HOST·RDS_PASSWORD(환경변수 또는 .env)가 있으면 AWS RDS — 암호화 접속(sslmode=require)
+    3) 그것도 없으면 .env 의 DATABASE_URL(로컬 Docker career-db)
+    Airflow 컨테이너는 DATABASE_URL 을 빈 값으로 덮어 2) 로 간다."""
     if os.environ.get("DATABASE_URL"):
         return os.environ["DATABASE_URL"]
-    env = os.path.join(HERE, ".env")
-    if os.path.exists(env):
-        for ln in open(env, encoding="utf-8"):
-            k, _, v = ln.strip().partition("=")
-            if k == "DATABASE_URL" and v:
-                return v
-    return None
+    env = _env_file()
+    host = os.environ.get("RDS_HOST") or env.get("RDS_HOST")
+    pw = os.environ.get("RDS_PASSWORD") or env.get("RDS_PASSWORD")
+    if host and pw:
+        from urllib.parse import quote
+        return f"postgresql://{RDS_USER}:{quote(pw, safe='')}@{host}:5432/{RDS_DB}?sslmode=require"
+    return env.get("DATABASE_URL")
+
+
+def local_database_url() -> str | None:
+    """시험용 DB(로컬 Docker career-db): TEST_DATABASE_URL, 없으면 .env 의 DATABASE_URL.
+    시험은 임시 DB 를 만들었다 지우므로 RDS 에서 하지 않는다."""
+    return os.environ.get("TEST_DATABASE_URL") or _env_file().get("DATABASE_URL")
 
 
 def connect(autocommit: bool = False) -> psycopg.Connection:

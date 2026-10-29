@@ -33,7 +33,7 @@ def db_url():
     import psycopg
     import db_load
 
-    admin = db_load.database_url()
+    admin = db_load.local_database_url()   # 시험은 늘 로컬 Docker DB 에(RDS 에 임시 DB 를 만들지 않게)
     if not admin:
         pytest.skip("DATABASE_URL 없음")
     name = "job_test_" + secrets.token_hex(4)

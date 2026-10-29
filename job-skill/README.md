@@ -142,6 +142,35 @@ py -3.12 -m pytest tests -q                    # career-db 가 켜져 있어야 
 docker compose -f docker-compose.airflow.yml exec airflow-scheduler python -m pytest /opt/airflow/job-skill/tests -q   # DAG 시험 포함
 ```
 
+## AWS(RDS)로 돌리기 — `feature/job-skill-aws` 브랜치
+
+로컬용(`feature/job-skill`)과 AWS용(`feature/job-skill-aws`) 브랜치를 따로 둔다. 다른 점은 **서빙 DB가 어디냐**뿐이다.
+수집·OCR·LLM(Airflow)은 두 브랜치 모두 노트북에서 돈다. AWS 브랜치에서는 결과를 **AWS RDS(PostgreSQL 18, 서울)**에 저장한다.
+
+| | 로컬 브랜치 | AWS 브랜치 |
+|---|---|---|
+| 파이프라인이 저장하는 DB | 노트북 Docker `career-db` (`.env`의 `DATABASE_URL`) | **RDS** (`.env`의 `RDS_HOST`·`RDS_PASSWORD`, 암호화 접속 `sslmode=require`) |
+| 시험(pytest)이 쓰는 DB | 노트북 Docker `career-db` | **노트북 Docker `career-db`** (시험은 임시 DB를 만들었다 지워서 RDS에서는 하지 않음) |
+
+**준비**
+1. `.env`에 두 줄을 넣는다(`.env.example` 참고). 비밀번호는 저장소·Slack에 올리지 않는다.
+   ```
+   RDS_HOST=career-db.xxxx.ap-northeast-2.rds.amazonaws.com
+   RDS_PASSWORD=RDS_마스터_암호
+   ```
+2. RDS 보안 그룹의 인바운드 규칙에 PostgreSQL(5432)을 연다(지금은 팀원이 여러 곳에서 접속해서 모두 허용 — 그래서 긴 암호와 팀원별 계정을 쓴다).
+3. 처음 한 번 RDS에 DB와 표, 사전을 만든다(AWS 브랜치에서 실행하면 RDS로 간다).
+   ```powershell
+   py -3.12 -c "import psycopg,db_load; c=psycopg.connect(db_load.database_url().replace('/career?','/postgres?'),autocommit=True); c.execute('CREATE DATABASE career')"
+   py -3.12 db_load.py init
+   py -3.12 -c "import db_load; c=db_load.connect(autocommit=True); c.execute(open('db/migrations/001_airflow.sql',encoding='utf-8').read())"
+   py -3.12 db_load.py sync-dict
+   ```
+4. Airflow를 다시 띄운다: `docker compose -f docker-compose.airflow.yml up -d` (컨테이너는 `DATABASE_URL`을 빈 값으로 덮어 RDS로 간다).
+
+- 브랜치를 바꾸면 Airflow 컨테이너가 보는 코드도 바뀐다(폴더를 그대로 붙여 씀). 바꾼 뒤에는 `up -d`로 다시 띄운다.
+- 공통 기능은 로컬 브랜치에서 고치고 AWS 브랜치로 합친다(`git merge feature/job-skill`).
+
 ## 데이터 원칙
 
 - 받은 이미지, 공고 본문, OCR 글자, 추출 결과, 샘플 목록은 **저장소에 올리지 않는다**(`.gitignore`). 외부에 다시 게시하지 않는다.
