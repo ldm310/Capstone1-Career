@@ -1,7 +1,11 @@
 """지시문(instructions)에 사용자가 정한 규칙이 들어 있는지."""
 from __future__ import annotations
 
+import pytest
+
 import extract_skills as ex
+
+pytestmark = pytest.mark.usefixtures("use_seed_dictionary")   # 지시문의 능력 목록은 DB 사전에서
 
 
 def relation_line(name: str) -> str:

@@ -190,11 +190,20 @@ def step_extract(run_dir: str, budget_usd: float, limit: float | None = None) ->
         return {"stopped": True, "left": len(targets)}
     ex = os.path.join(_abs(run_dir), "out", "extract")
     budget_path, stats_path = os.path.join(ex, "_budget.json"), os.path.join(ex, "_stats.json")
-    for path in (budget_path, stats_path):  # 지난 시도의 기록 — 이번 실행에서 다시 알리지 않게 지운다
+    dict_path = os.path.join(ex, "_dictionary.json")
+    for path in (budget_path, stats_path, dict_path):  # 지난 시도의 기록 — 이번 실행에서 다시 알리지 않게 지운다
         if os.path.exists(path):
             os.remove(path)
-    run_script("extract_skills.py", ["--models", MODEL, "--effort", "low", "--examples", f"--tag={TAG}",
-                                     "--max-usd", f"{budget_usd}", "--workers", str(LLM_WORKERS)], run_dir)
+    try:
+        run_script("extract_skills.py", ["--models", MODEL, "--effort", "low", "--examples", f"--tag={TAG}",
+                                         "--max-usd", f"{budget_usd}", "--workers", str(LLM_WORKERS)], run_dir)
+    except subprocess.CalledProcessError:
+        fatal = json.load(open(dict_path, encoding="utf-8")).get("fatal") if os.path.exists(dict_path) else None
+        if fatal:  # 사전이 통째로 망가짐 — 실패 알림에 이유가 보이게(그날 공고는 사전을 고친 다음 날 다시)
+            raise RuntimeError("사전이 망가져 추출을 멈춤: " + "; ".join(fatal)) from None
+        raise
+    if os.path.exists(dict_path):  # 사전이 조금 어긋남(별칭 겹침 등) — 추출은 했고 결과 알림에 적는다
+        _note(run_dir, "사전 확인 필요", json.load(open(dict_path, encoding="utf-8")).get("problems", []))
     items = []
     if os.path.exists(stats_path):  # 공고 하나하나의 추출 실패: 태스크는 계속하고 공고번호·원인·링크를 알린다
         for st in json.load(open(stats_path, encoding="utf-8")):
@@ -250,8 +259,8 @@ def _note(run_dir: str, key: str, value) -> None:
         json.dump(data, f, ensure_ascii=False)
 
 
-def run_alerts(run_dir: str) -> tuple[dict[str, list], dict | None]:
-    """결과 알림의 넘어간 공고({종류: [(공고번호, 원인)]}, SKIP_KINDS 순서)와 비용 상한 기록.
+def run_alerts(run_dir: str) -> tuple[dict[str, list], dict | None, list[str]]:
+    """결과 알림의 넘어간 공고({종류: [(공고번호, 원인)]}, SKIP_KINDS 순서)와 비용 상한 기록, 사전 확인 필요 목록.
     '추출할 글 없음' = 대상 가운데 추출 결과도 실패 기록도 없는 공고 — 비용 상한으로 멈춘 실행에서는 세지 않는다(남은 공고로 셈)."""
     path = os.path.join(_abs(run_dir), ALERTS)
     data = json.load(open(path, encoding="utf-8")) if os.path.exists(path) else {}
@@ -261,7 +270,7 @@ def run_alerts(run_dir: str) -> tuple[dict[str, list], dict | None]:
         done = {os.path.basename(p)[:-5] for p in glob.glob(os.path.join(_abs(run_dir), "out", "extract", RUN_NAME, "*.json"))}
         failed = {no for no, _ in found["LLM 추출 실패"]}
         found["추출할 글 없음"] = [(r["rec_idx"], "") for r in _targets(run_dir) if r["rec_idx"] not in done | failed]
-    return {k: v for k, v in found.items() if v}, budget
+    return {k: v for k, v in found.items() if v}, budget, data.get("사전 확인 필요") or []
 
 
 def daily_report(run_dir: str, got: dict, seen: dict, closed: int, today_cost: float) -> str:

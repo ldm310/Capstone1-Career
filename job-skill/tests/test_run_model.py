@@ -6,6 +6,8 @@ from types import SimpleNamespace
 
 import pytest
 
+pytestmark = pytest.mark.usefixtures("use_seed_dictionary")   # 추출은 DB 사전을 쓴다
+
 
 def unit(name, career, years, req_text, techs):
     return {"name": name, "it_job": True, "career": career, "years": years,

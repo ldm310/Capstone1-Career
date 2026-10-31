@@ -31,7 +31,7 @@ from datetime import datetime, timezone
 import numpy as np
 from PIL import Image
 
-from capdict import CapDict
+from capdict import CapDict, check_dictionary, load_dictionary
 from common import IMG_DIR, OUT_DIR, PAGE_DIR, images_by_posting, load_targets
 from html_text import BODY, html_text
 from table_layout import table_text
@@ -122,10 +122,12 @@ OCR 글은 오탈자가 있을 수 있고, 같은 높이에 나란한 칸은 ' |
 능력 목록
 {CAPABILITIES}"""
 
-CD = CapDict(json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "capabilities.json"), encoding="utf-8")))  # 4단계에서 DB 로
+# 표준화 사전(DB 가 원본). import 할 때 읽지 않고, 추출을 시작할 때 prepare_dictionary 로 한 번 읽는다(한 실행 안에서는 같은 사전).
+CD: CapDict | None = None
 # 능력 이름은 사전 목록 + '기타' 중에서만 고르게 강제한다(자유 입력이면 '언어'·'백엔드'처럼 분류 이름을 고르는 일이 생긴다).
+# 목록은 use_dictionary 가 사전에 맞춰 채운다.
 REQ = {"type": "object", "additionalProperties": False, "required": ["capability", "other_name", "techs", "relation"],
-       "properties": {"capability": {"type": "string", "enum": CD.cap_names() + ["기타"]},
+       "properties": {"capability": {"type": "string", "enum": ["기타"]},
                       "other_name": {"type": "string"},
                       "techs": {"type": "array", "items": {"type": "string"}},
                       "relation": {"type": "string", "enum": ["예시", "택1", "모두", "능력만"]}}}
@@ -142,6 +144,32 @@ SCHEMA = {"type": "object", "additionalProperties": False, "required": ["positio
           "properties": {"positions": {"type": "array", "items": POSITION},
                          "skipped": {"type": "array", "items": {"type": "string"}}, "notes": {"type": "string"}}}
 CATS = ("required", "preferred", "duties", "other")
+
+
+class DictionaryBroken(Exception):
+    """사전이 통째로 망가져(사용 중인 능력 없음, '기타' 없음 등) 추출하면 안 됨. reasons = 멈출 이유 목록."""
+
+    def __init__(self, reasons: list[str]):
+        super().__init__("; ".join(reasons))
+        self.reasons = reasons
+
+
+def use_dictionary(cd: CapDict) -> None:
+    """이 사전으로 추출한다: CD 와 LLM 능력 목록(JSON 스키마 enum — SCHEMA 가 같은 REQ 를 가리킴)을 바꾼다."""
+    global CD
+    CD = cd
+    REQ["properties"]["capability"]["enum"] = cd.cap_names() + ["기타"]
+
+
+def prepare_dictionary(conn) -> tuple[CapDict, list[str]]:
+    """DB 사전을 읽고 검사해 쓴다. 망가졌으면 DictionaryBroken, 아니면 (사전, 확인 필요 목록 — 추출은 계속)."""
+    data = load_dictionary(conn)
+    fatal, problems = check_dictionary(data)
+    if fatal:
+        raise DictionaryBroken(fatal)
+    cd = CapDict(data)
+    use_dictionary(cd)
+    return cd, problems
 
 
 # 작은 모델(luna)용 예시 답안. 실제 샘플 공고가 아니라 지어낸 공고다(시험 공고를 그대로 보여 주면 점수가 부풀려진다).
@@ -542,7 +570,7 @@ def extract_one(client, model: str, effort: str, rid: str, inp: dict, examples: 
         if len(second) <= len(first):
             parsed, raw, status, checks["used"], final = p2, raw2, st2, "retry", second
     return {"rec_idx": rid, "model": model, "effort": effort, "examples": examples,
-            "prompt_version": prompt_version(examples), "dict_version": CD.version.split()[0] if CD.version else "",
+            "prompt_version": prompt_version(examples), "dict_version": CD.version,
             "input_hash": sha256(llm_input(inp)), "run_at": run_at, "seconds": round(sec, 2),
             "input_tokens": tin, "output_tokens": tout, "cost_usd": round(tin / 1e6 * pin + tout / 1e6 * pout, 6),
             "status": status, "checks": checks, "review_reasons": reason(final), "llm_output_raw": raw, **parsed}
@@ -962,6 +990,19 @@ def main() -> None:
         json.dump([], open(os.path.join(EX, "_stats.json"), "w", encoding="utf-8"))
         print("추출할 공고가 없습니다.")
         return
+    import db_load   # 함수 안에서: db_load 가 이 모듈을 불러오므로(순환 import 피함)
+    report = {"version": "", "fatal": [], "problems": []}   # Airflow 태스크가 읽어 결과 알림·실패 이유에 쓴다
+    try:
+        with db_load.connect() as conn:
+            cd, report["problems"] = prepare_dictionary(conn)
+        report["version"] = cd.version
+    except DictionaryBroken as e:
+        report["fatal"] = e.reasons
+    with open(os.path.join(EX, "_dictionary.json"), "w", encoding="utf-8") as f:
+        json.dump(report, f, ensure_ascii=False)
+    if report["fatal"]:
+        sys.exit("사전이 망가져 추출을 멈춥니다: " + "; ".join(report["fatal"]))
+    print(f"사전 {report['version']}" + (f" (확인 필요 {len(report['problems'])}건)" if report["problems"] else ""))
     from openai import OpenAI
     client = OpenAI(max_retries=4, timeout=300)
     stats = [run_model(client, m, args.effort, inputs, examples=args.examples, tag=args.tag, max_usd=args.max_usd,
