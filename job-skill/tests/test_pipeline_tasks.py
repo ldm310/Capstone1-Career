@@ -429,3 +429,46 @@ def test_report_does_not_call_budget_stop_no_text(tmp_path):
     assert "추출할 글 없음" not in msg and "남은 공고 2건" in msg
     assert msg.splitlines()[:4] == ["✅ 전체 수집 완료", "• 수집: 대상 공고 4 · 제외 7", "• 추출: 1/4건 · 확인 필요 1",
                                     "• 비용: $0.73 (상한 $10)"]
+
+
+def _dictionary_run(monkeypatch, tmp_path, note: dict, fail: bool = False):
+    """가짜 추출: _dictionary.json 에 note 를 쓰고(fail 이면 스크립트가 실패한 것처럼) step_extract 를 돌린다."""
+    import pipeline_tasks
+    write_rows(tmp_path, ["A"])
+    ex = tmp_path / "out" / "extract"
+    ex.mkdir(parents=True)
+
+    def fake_run(script, args, run_dir, **k):
+        (ex / "_dictionary.json").write_text(json.dumps(note, ensure_ascii=False), encoding="utf-8")
+        if fail:
+            raise subprocess.CalledProcessError(1, ["extract_skills.py"])
+        (ex / "_stats.json").write_text(json.dumps([{"failed": [], "fail_reasons": {}}]), encoding="utf-8")
+
+    monkeypatch.setattr(pipeline_tasks, "run_script", fake_run)
+    return pipeline_tasks.step_extract(str(tmp_path), budget_usd=5.0, limit=5.0)
+
+
+def test_dictionary_problems_go_to_result_report(monkeypatch, tmp_path):
+    """팀원이 사전을 조금 어긋나게 고쳤으면 추출은 계속하고, 결과 알림에 '사전 확인 필요'로 적는다."""
+    import notify
+    import pipeline_tasks
+    problems = ["같은 이름·별칭 'aws' 이 기술 AWS, Lambda 에 겹침 (AWS 로 씀)", "능력이 없는 사용 중 기술: Kubernetes"]
+    _dictionary_run(monkeypatch, tmp_path, {"version": "abc", "fatal": [], "problems": problems})
+    assert alerts(tmp_path)["사전 확인 필요"] == problems
+    skipped, budget, dictionary = pipeline_tasks.run_alerts(str(tmp_path))
+    msg = notify.msg_report("매일 수집", [], skipped, budget, dictionary)
+    assert "⚠️ 사전 확인 필요 2건 (추출은 계속함)" in msg.splitlines()
+    assert f"• {problems[1]}" in msg.splitlines()
+
+
+def test_broken_dictionary_fails_task_with_reason(monkeypatch, tmp_path):
+    """사전이 통째로 망가졌으면 추출 태스크가 이유와 함께 실패한다(Airflow 실패 알림에 이유가 보이게)."""
+    with pytest.raises(RuntimeError, match="사전이 망가져 추출을 멈춤: '기타' 능력이 없거나 꺼짐"):
+        _dictionary_run(monkeypatch, tmp_path, {"version": "", "fatal": ["'기타' 능력이 없거나 꺼짐"], "problems": []}, fail=True)
+
+
+def test_report_without_dictionary_problems_has_no_dictionary_line(tmp_path):
+    import pipeline_tasks
+    _report_run(tmp_path)
+    assert pipeline_tasks.run_alerts(str(tmp_path))[2] == []
+    assert "사전 확인 필요" not in pipeline_tasks.backfill_report(str(tmp_path), {"new": 4, "excluded": 7})

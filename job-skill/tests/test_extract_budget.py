@@ -11,6 +11,8 @@ import pytest
 
 from conftest import HERE
 
+pytestmark = pytest.mark.usefixtures("use_seed_dictionary")   # 추출은 DB 사전을 쓴다
+
 MODEL, TAG = "gpt-5.6-luna", "-ex"
 ANSWER = {"positions": [{"name": "서버 개발자", "it_job": True, "career": "신입", "years": "",
                          "required": [{"text": "Java 개발 경험", "quote": "Java 개발 경험",

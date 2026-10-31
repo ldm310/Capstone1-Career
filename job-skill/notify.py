@@ -63,17 +63,23 @@ def send(text: str) -> bool:
 
 
 def msg_report(dag_label: str, rows: list[tuple[str, str]], skipped: dict[str, list] | None = None,
-               budget: dict | None = None) -> str:
+               budget: dict | None = None, dictionary: list[str] | None = None) -> str:
     """DAG 가 끝날 때 보내는 결과 알림 하나(2026-10-31 사용자 요청 — 중간 알림 없이 결과로만, 줄을 나눠 읽기 쉽게).
       ✅ 매일 수집 완료
       • 수집: 새 공고 143 · 밀린 공고 8
       ⚠️ 비용 상한 …(멈췄을 때만)
       ⚠️ 넘어간 공고 2건 — 다음 실행 때 다시 시도
       • <링크|50846359> LLM 추출 실패 · 응답 잘림·형식 오류      (공고번호에 사람인 링크, SHOW 건까지)
-    skipped: {종류: [(공고번호, 원인), …]}, budget: {"limit": 상한, "left": 남은 공고 수}."""
+    skipped: {종류: [(공고번호, 원인), …]}, budget: {"limit": 상한, "left": 남은 공고 수},
+    dictionary: 사전 확인 필요(팀원이 고친 사전의 어긋난 항목 — 추출은 계속함)."""
     out = [f"✅ {dag_label} 완료"] + [f"• {name}: {value}" for name, value in rows]
     if budget:
         out.append(f"⚠️ 비용 상한 ${budget['limit']:.2f} 도달로 LLM 추출 멈춤 · 남은 공고 {budget['left']}건은 다음 실행 때")
+    if dictionary:
+        out.append(f"⚠️ 사전 확인 필요 {len(dictionary)}건 (추출은 계속함)")
+        out += [f"• {p}" for p in dictionary[:SHOW]]
+        if len(dictionary) > SHOW:
+            out.append(f"…외 {len(dictionary) - SHOW}건")
     items = [(what, no, why) for what, xs in (skipped or {}).items() for no, why in xs]
     if items:
         out.append(f"⚠️ 넘어간 공고 {len(items)}건 — 다음 실행 때 다시 시도")

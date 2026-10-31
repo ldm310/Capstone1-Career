@@ -53,6 +53,42 @@ def db_url():
         c.execute(f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)')
 
 
+@pytest.fixture(scope="session")
+def seed_dictionary():
+    """시드 사전(CapDict) — 시드를 넣은 임시 DB 하나에서 읽고 DB 는 지운다(추출 시험이 같은 사전을 쓰게)."""
+    import psycopg
+    import db_load
+    from capdict import CapDict, load_dictionary
+
+    admin = getattr(db_load, "local_database_url", db_load.database_url)()   # 시험은 늘 로컬 Docker DB
+    if not admin:
+        pytest.skip("DATABASE_URL 없음")
+    name = "job_test_" + secrets.token_hex(4)
+    try:
+        with psycopg.connect(admin, autocommit=True, connect_timeout=3) as c:
+            c.execute(f'CREATE DATABASE "{name}"')
+    except psycopg.OperationalError as e:
+        pytest.skip(f"career-db 에 접속할 수 없음: {e}")
+    try:
+        with psycopg.connect(_with_db(admin, name), autocommit=True) as c:
+            c.execute(open(os.path.join(HERE, "db", "schema.sql"), encoding="utf-8").read())
+            c.execute(open(db_load.SEED_SQL, encoding="utf-8").read())
+            cd = CapDict(load_dictionary(c))
+    finally:
+        with psycopg.connect(admin, autocommit=True) as c:
+            c.execute(f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)')
+    return cd
+
+
+@pytest.fixture
+def use_seed_dictionary(seed_dictionary):
+    """extract_skills 가 시드 사전으로 추출하게 하고, 끝나면 다시 시드 사전으로 되돌린다(시험이 사전을 바꿔도 새지 않게)."""
+    import extract_skills
+    extract_skills.use_dictionary(seed_dictionary)
+    yield seed_dictionary
+    extract_skills.use_dictionary(seed_dictionary)
+
+
 @pytest.fixture
 def db(db_url):
     """임시 DB 연결(search_path=public, autocommit)."""
