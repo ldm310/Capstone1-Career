@@ -62,7 +62,7 @@ COMMENT ON COLUMN tech_capability.is_primary    IS '대표 능력 (기술마다 
 
 CREATE TABLE exclude_word (
     id    bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    word  text NOT NULL,
+    word  text NOT NULL CONSTRAINT exclude_word_word_not_blank CHECK (btrim(word) <> ''),   -- 빈 낱말은 모든 이름에 들어 있음
     kind  text NOT NULL CHECK (kind IN ('LLM 모델', '기술 아님', '일반 낱말')),
     UNIQUE (kind, word)
 );
@@ -105,6 +105,9 @@ COMMENT ON COLUMN dictionary_change.new_row    IS '새 값 (줄 전체, 지우�
 CREATE FUNCTION log_dictionary_change() RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp AS $$
 BEGIN
+    IF TG_TABLE_SCHEMA <> 'public' THEN   -- 임시 표 등에 이 함수를 걸어 가짜 기록을 넣지 못하게
+        RAISE EXCEPTION '사전 변경 기록은 public 의 사전 표에서만 남깁니다(%.%)', TG_TABLE_SCHEMA, TG_TABLE_NAME;
+    END IF;
     IF TG_OP = 'UPDATE' AND to_jsonb(OLD) = to_jsonb(NEW) THEN
         RETURN NULL;   -- 값이 그대로인 고치기는 남기지 않는다
     END IF;

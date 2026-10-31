@@ -79,3 +79,16 @@ def test_saved_run_records_dictionary_version(db, tmp_path):
     for no, ih in (("A", "1" * 64), ("B", "2" * 64)):
         db_load.insert_run(db, add_posting(db, no), {**run, "input_hash": ih}, None, str(path), {}, {})
     assert db.execute("SELECT version FROM dictionary_version").fetchall() == [("abcdef123456",)]
+
+
+def test_empty_exclude_word_is_blocked(db):
+    with pytest.raises(psycopg.errors.CheckViolation):
+        db.execute("INSERT INTO exclude_word (word, kind) VALUES ('  ', 'LLM 모델')")
+
+
+def test_log_function_rejects_tables_outside_public(db):
+    """임시 표에 기록 함수를 걸어 가짜 기록을 넣을 수 없다(기록 표는 사전 표 4개에서만 채워짐)."""
+    db.execute("CREATE TEMP TABLE tech (id int, name text)")
+    db.execute("CREATE TRIGGER fake AFTER INSERT ON pg_temp.tech FOR EACH ROW EXECUTE FUNCTION log_dictionary_change()")
+    with pytest.raises(psycopg.errors.RaiseException, match="public"):
+        db.execute("INSERT INTO pg_temp.tech VALUES (1, '가짜')")
