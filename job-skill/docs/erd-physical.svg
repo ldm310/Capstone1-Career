@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1860" height="880" viewBox="0 0 1860 880">
+<svg xmlns="http://www.w3.org/2000/svg" width="1860" height="1180" viewBox="0 0 1860 1180">
 <style>
   text { font-family: "Malgun Gothic", "Apple SD Gothic Neo", Arial, sans-serif; fill: #1a1a1a; dominant-baseline: central; }
   .title { font-size: 24px; font-weight: 700; }
@@ -21,13 +21,15 @@
 <marker id="omanyS" viewBox="-26 -9 28 18" refX="0" refY="0" markerWidth="28" markerHeight="18" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M-12,0 L0,-7 M-12,0 L0,0 M-12,0 L0,7" stroke="#1a1a1a" stroke-width="1.3" fill="none"/><path d="M-16,-7 L-16,7" stroke="#1a1a1a" stroke-width="1.3" fill="none"/></marker>
 <marker id="zmany" viewBox="-26 -9 28 18" refX="0" refY="0" markerWidth="28" markerHeight="18" markerUnits="userSpaceOnUse" orient="auto"><path d="M-12,0 L0,-7 M-12,0 L0,0 M-12,0 L0,7" stroke="#1a1a1a" stroke-width="1.3" fill="none"/><circle cx="-18" cy="0" r="4" fill="#fff" stroke="#1a1a1a" stroke-width="1.3"/></marker>
 <marker id="zmanyS" viewBox="-26 -9 28 18" refX="0" refY="0" markerWidth="28" markerHeight="18" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M-12,0 L0,-7 M-12,0 L0,0 M-12,0 L0,7" stroke="#1a1a1a" stroke-width="1.3" fill="none"/><circle cx="-18" cy="0" r="4" fill="#fff" stroke="#1a1a1a" stroke-width="1.3"/></marker>
+<marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#555"/></marker>
 </defs>
-<rect width="1860" height="880" fill="#fff"/>
-<rect x="20" y="20" width="1820" height="840" fill="none" stroke="#999" stroke-width="1"/>
+<rect width="1860" height="1180" fill="#fff"/>
+<rect x="20" y="20" width="1820" height="1140" fill="none" stroke="#999" stroke-width="1"/>
 <text class="title" x="44" y="58">채용공고 DB 물리 설계 (PostgreSQL 17(로컬)·18(AWS RDS) · 스키마 public)</text>
 <rect x="40" y="90" width="590" height="490" fill="none" stroke="#888" stroke-width="1.1" stroke-dasharray="6 4"/><text class="zt" x="52" y="110">① 수집</text>
 <rect x="640" y="90" width="1190" height="480" fill="none" stroke="#888" stroke-width="1.1" stroke-dasharray="6 4"/><text class="zt" x="652" y="110">② 추출 결과</text>
-<rect x="940" y="590" width="890" height="250" fill="none" stroke="#888" stroke-width="1.1" stroke-dasharray="6 4"/><text class="zt" x="952" y="610">③ 표준화 사전</text>
+<rect x="630" y="590" width="1200" height="270" fill="none" stroke="#888" stroke-width="1.1" stroke-dasharray="6 4"/><text class="zt" x="642" y="610">③ 표준화 사전</text>
+<rect x="630" y="880" width="1200" height="260" fill="none" stroke="#888" stroke-width="1.1" stroke-dasharray="6 4"/><text class="zt" x="642" y="900">④ 사전 변경 기록</text>
 <path class="rel" d="M310,186.0 H335 V210.0 H360" marker-start="url(#oneS)" marker-end="url(#omany)"/>
 <path class="rel" d="M360,330.0 H340 V320.0 H310" marker-start="url(#oneS)" marker-end="url(#zmany)"/>
 <path class="rel" d="M610,186.0 H622 V210.0 H660" marker-start="url(#oneS)" marker-end="url(#zmany)"/>
@@ -318,7 +320,7 @@
 <line x1="960" y1="794.0" x2="1210" y2="794.0" stroke="#e3e3e3" stroke-width="1"/>
 <text class="col" x="998" y="806.0" style="">is_active</text>
 <text class="typ" x="1200" y="806.0">boolean</text>
-<rect x="1260" y="640" width="250" height="82" fill="#fff" stroke="#1a1a1a" stroke-width="1.3"/>
+<rect x="1260" y="640" width="250" height="106" fill="#fff" stroke="#1a1a1a" stroke-width="1.3"/>
 <rect x="1260" y="640" width="250" height="34" fill="#efefef" stroke="#1a1a1a" stroke-width="1.3"/>
 <text class="tn" x="1272" y="657.0">tech_capability<tspan class="tk" dx="8">기술-능력</tspan></text>
 <rect x="1268" y="678.0" width="38" height="16" rx="3" fill="#1a1a1a" stroke="#1a1a1a" stroke-width="1"/>
@@ -330,16 +332,9 @@
 <text class="key" x="1287.0" y="710.5" style="fill:#fff">PK·FK</text>
 <text class="col" x="1312" y="710.0" style="font-weight:700;">capability_id</text>
 <text class="typ" x="1500" y="710.0">bigint</text>
-<rect x="1260" y="744" width="250" height="82" fill="#fff" stroke="#1a1a1a" stroke-width="1.3"/>
-<rect x="1260" y="744" width="250" height="34" fill="#efefef" stroke="#1a1a1a" stroke-width="1.3"/>
-<text class="tn" x="1272" y="761.0">dictionary_version<tspan class="tk" dx="8">사전 버전</tspan></text>
-<rect x="1268" y="782.0" width="22" height="16" rx="3" fill="#1a1a1a" stroke="#1a1a1a" stroke-width="1"/>
-<text class="key" x="1279.0" y="790.5" style="fill:#fff">PK</text>
-<text class="col" x="1298" y="790.0" style="font-weight:700;">version</text>
-<text class="typ" x="1500" y="790.0">text</text>
-<line x1="1260" y1="802.0" x2="1510" y2="802.0" stroke="#e3e3e3" stroke-width="1"/>
-<text class="col" x="1298" y="814.0" style="">synced_at</text>
-<text class="typ" x="1500" y="814.0">timestamptz</text>
+<line x1="1260" y1="722.0" x2="1510" y2="722.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="1298" y="734.0" style="">is_primary</text>
+<text class="typ" x="1500" y="734.0">boolean</text>
 <rect x="1560" y="640" width="250" height="154" fill="#fff" stroke="#1a1a1a" stroke-width="1.3"/>
 <rect x="1560" y="640" width="250" height="34" fill="#efefef" stroke="#1a1a1a" stroke-width="1.3"/>
 <text class="tn" x="1572" y="657.0">tech<tspan class="tk" dx="8">기술</tspan></text>
@@ -364,6 +359,65 @@
 <text class="col" x="1598" y="782.0" style="">is_active</text>
 <text class="typ" x="1800" y="782.0">boolean</text>
 
+<rect x="660" y="640" width="250" height="106" fill="#fff" stroke="#1a1a1a" stroke-width="1.3"/>
+<rect x="660" y="640" width="250" height="34" fill="#efefef" stroke="#1a1a1a" stroke-width="1.3"/>
+<text class="tn" x="672" y="657.0">exclude_word<tspan class="tk" dx="8">스킬이 아닌 낱말</tspan></text>
+<rect x="668" y="678.0" width="22" height="16" rx="3" fill="#1a1a1a" stroke="#1a1a1a" stroke-width="1"/>
+<text class="key" x="679.0" y="686.5" style="fill:#fff">PK</text>
+<text class="col" x="698" y="686.0" style="font-weight:700;">id</text>
+<text class="typ" x="900" y="686.0">bigint</text>
+<line x1="660" y1="698.0" x2="910" y2="698.0" stroke="#e3e3e3" stroke-width="1"/>
+<rect x="668" y="702.0" width="22" height="16" rx="3" fill="#fff" stroke="#777" stroke-width="1"/>
+<text class="key" x="679.0" y="710.5" style="fill:#777">UK</text>
+<text class="col" x="698" y="710.0" style="">word</text>
+<text class="typ" x="900" y="710.0">text</text>
+<line x1="660" y1="722.0" x2="910" y2="722.0" stroke="#e3e3e3" stroke-width="1"/>
+<rect x="668" y="726.0" width="22" height="16" rx="3" fill="#fff" stroke="#777" stroke-width="1"/>
+<text class="key" x="679.0" y="734.5" style="fill:#777">UK</text>
+<text class="col" x="698" y="734.0" style="">kind</text>
+<text class="typ" x="900" y="734.0">text</text>
+<rect x="660" y="768" width="250" height="82" fill="#fff" stroke="#1a1a1a" stroke-width="1.3"/>
+<rect x="660" y="768" width="250" height="34" fill="#efefef" stroke="#1a1a1a" stroke-width="1.3"/>
+<text class="tn" x="672" y="785.0">dictionary_version<tspan class="tk" dx="8">사전 판</tspan></text>
+<rect x="668" y="806.0" width="22" height="16" rx="3" fill="#1a1a1a" stroke="#1a1a1a" stroke-width="1"/>
+<text class="key" x="679.0" y="814.5" style="fill:#fff">PK</text>
+<text class="col" x="698" y="814.0" style="font-weight:700;">version</text>
+<text class="typ" x="900" y="814.0">text</text>
+<line x1="660" y1="826.0" x2="910" y2="826.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="698" y="838.0" style="">first_used_at</text>
+<text class="typ" x="900" y="838.0">timestamptz</text>
+<rect x="960" y="920" width="250" height="202" fill="#fff" stroke="#1a1a1a" stroke-width="1.3"/>
+<rect x="960" y="920" width="250" height="34" fill="#efefef" stroke="#1a1a1a" stroke-width="1.3"/>
+<text class="tn" x="972" y="937.0">dictionary_change<tspan class="tk" dx="8">사전 변경 기록</tspan></text>
+<rect x="968" y="958.0" width="22" height="16" rx="3" fill="#1a1a1a" stroke="#1a1a1a" stroke-width="1"/>
+<text class="key" x="979.0" y="966.5" style="fill:#fff">PK</text>
+<text class="col" x="998" y="966.0" style="font-weight:700;">id</text>
+<text class="typ" x="1200" y="966.0">bigint</text>
+<line x1="960" y1="978.0" x2="1210" y2="978.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="998" y="990.0" style="">changed_at</text>
+<text class="typ" x="1200" y="990.0">timestamptz</text>
+<line x1="960" y1="1002.0" x2="1210" y2="1002.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="998" y="1014.0" style="">changed_by</text>
+<text class="typ" x="1200" y="1014.0">text</text>
+<line x1="960" y1="1026.0" x2="1210" y2="1026.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="998" y="1038.0" style="">table_name</text>
+<text class="typ" x="1200" y="1038.0">text</text>
+<line x1="960" y1="1050.0" x2="1210" y2="1050.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="998" y="1062.0" style="">action</text>
+<text class="typ" x="1200" y="1062.0">text</text>
+<line x1="960" y1="1074.0" x2="1210" y2="1074.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="998" y="1086.0" style="">old_row</text>
+<text class="typ" x="1200" y="1086.0">jsonb<tspan class="nul">?</tspan></text>
+<line x1="960" y1="1098.0" x2="1210" y2="1098.0" stroke="#e3e3e3" stroke-width="1"/>
+<text class="col" x="998" y="1110.0" style="">new_row</text>
+<text class="typ" x="1200" y="1110.0">jsonb<tspan class="nul">?</tspan></text>
+<path d="M1085,862 V917" fill="none" stroke="#555" stroke-width="1.3" stroke-dasharray="5 4" marker-end="url(#arr)"/>
+<text class="lg" x="1097" y="896" style="fill:#555">트리거</text>
+<text class="lg" x="1240" y="955" style="fill:#555">사전 표 4개에서 줄이 바뀔 때마다 트리거가 한 줄 남긴다</text>
+<text class="lg" x="1240" y="981" style="fill:#555">(capability · tech · tech_capability · exclude_word)</text>
+<text class="lg" x="1240" y="1007" style="fill:#555">changed_by = DB 접속 계정 (예: dongmin, 파이프라인은 career)</text>
+<text class="lg" x="1240" y="1033" style="fill:#555">값이 그대로인 고치기는 남기지 않음 · TRUNCATE 는 막음</text>
+<text class="lg" x="1240" y="1059" style="fill:#555">팀원은 읽기만 · 잘못 고쳤으면 old_row 를 보고 되돌린다</text>
 <rect x="60" y="600" width="550" height="230" fill="#fff" stroke="#bbb" stroke-width="1"/>
 <text class="zt" x="76" y="622">읽는 법</text>
 <rect x="78" y="644" width="22" height="16" rx="3" fill="#1a1a1a"/><text class="key" x="89" y="652.5" style="fill:#fff">PK</text>

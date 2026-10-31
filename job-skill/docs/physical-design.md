@@ -9,6 +9,7 @@
 - 2026-10-28 버린 공고 표(`listing_seen`)를 더했다가 2026-10-29 뺐다(사용자 결정 — '연속 5개 멈춤'을 없애 쓸 곳이 없음). 지금 표는 12개. 2026-10-29 AWS RDS(PostgreSQL 18)에도 같은 DDL로 만들었다.
 - 2026-10-29 바꿈(사용자 결정): 웹 상세 화면에 원문을 보여 주려고 **본문 HTML(`body_html`)**을 담고, 노트북에서만 열 수 있는 경로 칸(`raw_path`, `file_path`, `ocr_path`)은 뺐다(팀원·웹은 못 쓰는 값). 이미 만든 DB는 `py -3.12 db_load.py migrate-body-html` 로 바꾼다(원본 파일로 본문을 채운 뒤 경로 칸을 뺌).
 - 2026-10-31 바꿈(사용자 결정): 표를 `job` 스키마에서 기본 스키마 **`public`**으로 옮겼다. BE가 이 표들과 바로 조인하므로 폴더를 나눌 까닭이 없다. 이미 만든 DB는 `db/migrations/003_public_schema.sql`로 옮긴다.
+- 2026-10-31 바꿈(사용자 결정): **사전의 원본을 DB로** 옮겼다(`capabilities.json` 삭제). 팀원이 RDS에서 SQL로 사전을 고치면 다음 추출부터 쓰이고, 바뀐 줄은 **사전 변경 기록(`dictionary_change`)**에 트리거가 남긴다. 파일에만 있던 스킬이 아닌 낱말은 `exclude_word` 표로, 기술의 대표 능력(파일의 첫 번째 능력)은 `tech_capability.is_primary`로 옮겼다. 빈 DB는 `db/seed_dictionary.sql`(DB에서 내려받은 사전)로 채운다. 이미 만든 DB는 `db/migrations/004_dictionary_in_db.sql`로 바꾼다. 지금 표는 14개.
 
 표와 칸의 한글 이름은 DDL의 `COMMENT`로 DB 안에도 남겨 두었다.
 모든 표는 기본 스키마 `public`(DB 안의 폴더)에 있다. BE 표도 같은 곳에 두고, 표 이름만 써서 바로 조인한다(예: `posting`).
@@ -78,7 +79,7 @@
 | 공고ID | `posting_id` | bigint | NOT NULL, FK → posting |
 | 모델 | `model` | text | NOT NULL |
 | 프롬프트 버전 | `prompt_version` | text | NOT NULL |
-| 사전 버전 | `dict_version` | text | NOT NULL |
+| 사전 판 | `dict_version` | text | NOT NULL, 사전 내용 지문 12자리(2026-10-31 전 결과는 0.1.1 같은 번호) |
 | 입력 해시 | `input_hash` | char(64) | NOT NULL |
 | 입력 토큰 | `input_tokens` | integer | NOT NULL, 0 이상 |
 | 출력 토큰 | `output_tokens` | integer | NOT NULL, 0 이상 |
@@ -150,12 +151,61 @@
 |---|---|---|---|
 | 기술ID | `tech_id` | bigint | PK, FK → tech |
 | 능력ID | `capability_id` | bigint | PK, FK → capability |
+| 대표 능력 | `is_primary` | boolean | NOT NULL, 기본값 false, **기술마다 최대 하나**(부분 UNIQUE 색인 `tech_capability_one_primary`) |
 
-**사전 버전 `dictionary_version`**
+대표 능력: LLM이 `기타: RDS`처럼 기술 이름을 능력 자리에 적으면 그 기술의 대표 능력으로 잇는다. 대표가 없으면 능력ID가 가장 작은 것을 쓴다.
+
+**스킬이 아닌 낱말 `exclude_word`**
 | 한글 | 영어 | 자료형 | 제약 |
 |---|---|---|---|
-| 사전 버전 | `version` | text | PK |
-| 동기화 시각 | `synced_at` | timestamptz | NOT NULL, 기본값 지금 |
+| 낱말ID | `id` | bigint | PK |
+| 낱말 | `word` | text | NOT NULL, UNIQUE(kind, word) |
+| 종류 | `kind` | text | NOT NULL, LLM 모델/기술 아님/일반 낱말 |
+
+`LLM 모델`은 이름 안에 들어 있으면 뺀다(예: `claude` → `Claude Code`도 뺌). `기술 아님`은 직무명 등, `일반 낱말`은 낱말만 빼고 요건은 남긴다. 비교는 대소문자·공백을 무시한다.
+
+**사전 판 `dictionary_version`**
+| 한글 | 영어 | 자료형 | 제약 |
+|---|---|---|---|
+| 사전 판 | `version` | text | PK, 사전 내용 지문 12자리 |
+| 처음 쓴 시각 | `first_used_at` | timestamptz | NOT NULL, 기본값 지금 |
+
+추출 결과를 저장할 때 그 결과가 쓴 사전 판을 한 줄 남긴다(같은 판은 한 줄). 2026-10-31 전에는 'JSON → DB 동기화 기록'이었다(`synced_at`, 판 `0.1.1`).
+
+### ④ 사전 변경 기록
+
+**사전 변경 기록 `dictionary_change`**
+| 한글 | 영어 | 자료형 | 제약 |
+|---|---|---|---|
+| 기록ID | `id` | bigint | PK |
+| 바꾼 시각 | `changed_at` | timestamptz | NOT NULL, 기본값 지금 |
+| 바꾼 사람 | `changed_by` | text | NOT NULL, DB 접속 계정(`session_user` — 팀원은 접속 뒤 `team` 역할이 되므로) |
+| 표 | `table_name` | text | NOT NULL, capability/tech/tech_capability/exclude_word |
+| 동작 | `action` | text | NOT NULL, 넣기/고치기/지우기 |
+| 예전 값 | `old_row` | jsonb | 줄 전체, 넣기면 비움 |
+| 새 값 | `new_row` | jsonb | 줄 전체, 지우기면 비움 |
+
+- 사전 표 4개에 트리거 `dictionary_change_log`(줄마다)를 걸었다. 누가 어떤 도구로 고치든 남는다. 값이 그대로인 고치기는 남기지 않는다.
+- 트리거 함수는 주인(`career`) 권한으로 돈다(`SECURITY DEFINER`). 팀원은 기록 표를 **읽기만** 한다(지우거나 고칠 수 없음).
+- `TRUNCATE`는 줄마다 걸리는 트리거를 거치지 않아 기록이 빠지므로, 사전 표에서는 트리거 `dictionary_no_truncate`로 막았다(`DELETE`를 씀).
+
+**팀원이 사전을 고치는 예** (RDS에 각자 계정으로 접속해 SQL로)
+```sql
+-- 별칭 더하기: 'Springboot 3' 도 Spring Boot 로
+UPDATE tech SET aliases = aliases || '{Springboot 3}' WHERE name = 'Spring Boot';
+
+-- 새 기술 넣고 능력에 잇기(대표 능력 표시)
+INSERT INTO tech (name, aliases) VALUES ('Bun', '{번}');
+INSERT INTO tech_capability (tech_id, capability_id, is_primary)
+SELECT t.id, c.id, true FROM tech t, capability c WHERE t.name = 'Bun' AND c.name = '백엔드 프레임워크';
+
+-- 그만 쓰기(지우지 않고 끔 — 추출 결과가 가리키고 있으면 지우기는 막힘)
+UPDATE tech SET is_active = false WHERE name = 'Bun';
+
+-- 누가 언제 무엇을 바꿨나
+SELECT changed_at, changed_by, table_name, action, old_row, new_row FROM dictionary_change ORDER BY id DESC LIMIT 20;
+```
+고친 사전은 다음 추출부터 쓰인다(이미 뽑은 결과는 다시 맞추지 않음). 사전이 통째로 망가지면(사용 중인 능력 0개, `기타` 능력 없음) 그날 추출이 멈추고 Slack 실패 알림에 이유가 온다. 별칭이 두 기술에 겹치는 정도는 추출을 계속하고 결과 알림에 "사전 확인 필요"로 온다.
 
 ## 업무규칙을 어디서 지키나
 
@@ -164,7 +214,9 @@
 | 같은 공고는 한 번만 | DB: `UNIQUE(site, site_posting_no)` |
 | 공고마다 현재 사용 실행은 최대 하나 | DB: 부분 UNIQUE 색인 `extraction_run_one_current` |
 | 경력 구분·칸·관계·상태 같은 정해진 값 | DB: `CHECK` |
-| 결과가 가리키는 능력·기술은 지우지 않음 | DB: FK `ON DELETE RESTRICT` (+ 사전 동기화 코드는 `is_active=false`로 표시) |
+| 결과가 가리키는 능력·기술은 지우지 않음 | DB: FK `ON DELETE RESTRICT` (그만 쓸 때는 `is_active=false`) |
+| 기술마다 대표 능력은 최대 하나 | DB: 부분 UNIQUE 색인 `tech_capability_one_primary` |
+| 사전을 바꾸면 기록이 남음 | DB: 트리거 `dictionary_change_log`, `TRUNCATE` 막음 |
 | 확인 결과와 확인 시각은 함께 | DB: `CHECK` |
 | 0~3년 공고만 수집, 교육생 제외 | 수집 코드 (`sample_random.py`의 `min_years`) |
 | 원본 해시가 바뀌면 다시 추출 | 수정 확인 코드 (아직 없음) |
@@ -194,6 +246,7 @@ PostgreSQL은 FK 칸에 색인을 자동으로 만들지 않는다. 그래서 �
 | `requirement (capability_id)`, `requirement_tech (tech_id)` | 능력별·기술별 통계와 매칭 |
 | `extraction_run_review_queue` (부분 색인) | 사람이 확인할 목록 (확인 필요 사유가 있고 아직 확인 안 함) |
 | `capability/tech (aliases)` GIN | 별칭으로 찾기 ("스프링 부트" → Spring Boot) |
+| `dictionary_change (changed_at)` | 최근 사전 변경 보기 |
 
 ## 시험 결과 (2026-10-27)
 
@@ -217,7 +270,7 @@ PostgreSQL은 FK 칸에 색인을 자동으로 만들지 않는다. 그래서 �
 - 시험(2026-10-27, 시험용 PostgreSQL 17, sample3):
   - 공고 20 · 이미지 21 · 추출 실행 19 · 자리 39 · 한 줄 307 · 요건 305 · 요건 기술 170. JSON에서 센 값과 같다.
   - 같은 것을 다시 넣으면 새로 들어가는 것이 0건이다.
-  - 사전에서 기술을 빼고 동기화하면 그 기술은 지워지지 않고 사용 여부만 false가 된다.
+  - (2026-10-31까지) 사전에서 기술을 빼고 동기화하면 그 기술은 지워지지 않고 사용 여부만 false가 되었다. 지금은 사전 원본이 DB라 동기화가 없다.
 
 ## 통계
 
