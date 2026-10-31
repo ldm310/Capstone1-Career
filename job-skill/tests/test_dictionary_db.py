@@ -66,3 +66,16 @@ def test_seed_does_nothing_when_dictionary_exists(db):
 def test_export_round_trip_is_identical(db):
     import db_load
     assert db_load.export_dictionary(db) == open(db_load.SEED_SQL, encoding="utf-8").read()
+
+
+def test_saved_run_records_dictionary_version(db, tmp_path):
+    """추출 결과를 저장하면 그 결과가 쓴 사전 판(지문)이 dictionary_version 에 한 줄 남는다(같은 판은 한 줄)."""
+    import db_load
+    from test_db_queries import add_posting
+    path = tmp_path / "A.json"
+    path.write_text("{}", encoding="utf-8")
+    run = {"model": "gpt-5.6-luna", "prompt_version": "p" * 12, "dict_version": "abcdef123456", "input_hash": "1" * 64,
+           "input_tokens": 10, "output_tokens": 5, "positions": []}
+    for no, ih in (("A", "1" * 64), ("B", "2" * 64)):
+        db_load.insert_run(db, add_posting(db, no), {**run, "input_hash": ih}, None, str(path), {}, {})
+    assert db.execute("SELECT version FROM dictionary_version").fetchall() == [("abcdef123456",)]
