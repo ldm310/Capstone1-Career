@@ -63,3 +63,36 @@ def test_tech_without_active_capability_is_a_problem(db):
     db.execute("UPDATE capability SET is_active = false WHERE name = '컨테이너 오케스트레이션'")
     fatal, problems = check_dictionary(load_dictionary(db))
     assert fatal == [] and any("Kubernetes" in p for p in problems)
+
+
+# ---------------------------------------------------------------- 최종 검토에서 찾은 것
+
+def test_capability_parent_cycle_does_not_hang(db):
+    """능력 상위가 고리(데이터베이스 → 관계형 DB → 데이터베이스)여도 충족 판정이 끝난다(매일 수집이 멈추면 안 됨)."""
+    import threading
+    db.execute("UPDATE capability SET parent_id = (SELECT id FROM capability WHERE name = '관계형 DB') WHERE name = '데이터베이스'")
+    cd = CapDict(load_dictionary(db))
+    out = []
+    t = threading.Thread(target=lambda: out.append(cd.satisfies(["관계형 DB"], "백엔드 프레임워크")), daemon=True)
+    t.start()
+    t.join(timeout=3)
+    assert not t.is_alive() and out == [False]
+    assert cd.satisfies(["관계형 DB"], "데이터베이스")
+
+
+def test_all_techs_off_is_fatal(db):
+    db.execute("UPDATE tech SET is_active = false")
+    fatal, _ = check_dictionary(load_dictionary(db))
+    assert "사용 중인 기술이 없음" in fatal
+
+
+def test_no_tech_capability_links_is_fatal(db):
+    db.execute("DELETE FROM tech_capability")
+    fatal, _ = check_dictionary(load_dictionary(db))
+    assert "기술과 능력을 잇는 연결이 없음" in fatal
+
+
+def test_empty_llm_word_does_not_exclude_everything(db):
+    data = load_dictionary(db)
+    data["exclude"]["llm_models"] += ["", "  "]
+    assert CapDict(data).lookup("MySQL")["kind"] == "tech"

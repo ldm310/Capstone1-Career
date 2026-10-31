@@ -60,6 +60,10 @@ def check_dictionary(data: dict) -> tuple[list[str], list[str]]:
         fatal.append("사용 중인 능력이 없음")
     if not data["has_other"]:
         fatal.append(f"'{OTHER}' 능력이 없거나 꺼짐")
+    if not data["techs"]:
+        fatal.append("사용 중인 기술이 없음")
+    elif not any(v.get("caps") for v in data["techs"].values()):
+        fatal.append("기술과 능력을 잇는 연결이 없음")
     problems = []
     for what, entries in (("기술", data["techs"]), ("능력", data["capabilities"])):
         owner: dict[str, str] = {}
@@ -95,9 +99,10 @@ class CapDict:
             for a in [name] + v.get("aliases", []):
                 self.tech_by_key.setdefault(key(a), name)
         ex = d.get("exclude", {})
-        self.llm_patterns = [key(p) for p in ex.get("llm_models", [])]
-        self.not_skill = {key(x) for x in ex.get("not_skill", [])}
-        self.generic = {key(x) for x in ex.get("generic_words", [])}
+        # 빈 낱말은 뺀다('' 는 모든 이름 안에 들어 있어서 모든 기술이 빠짐)
+        self.llm_patterns = [k for k in (key(p) for p in ex.get("llm_models", [])) if k]
+        self.not_skill = {key(x) for x in ex.get("not_skill", [])} - {""}
+        self.generic = {key(x) for x in ex.get("generic_words", [])} - {""}
 
     def cap_names(self) -> list[str]:
         return list(self.capabilities)
@@ -133,9 +138,11 @@ class CapDict:
     def satisfies(self, tech_caps: list[str], cap: str) -> bool:
         """기술의 능력 목록이 cap 을 충족하는가(상위 능력 포함: 관계형 DB 는 데이터베이스를 충족)."""
         for c in tech_caps:
-            while c:
+            seen = set()   # 팀원이 상위를 고리로 이어도(A → B → A) 끝나게
+            while c and c not in seen:
                 if c == cap:
                     return True
+                seen.add(c)
                 c = self.capabilities.get(c, {}).get("parent")
         return False
 
