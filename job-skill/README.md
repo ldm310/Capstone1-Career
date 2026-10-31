@@ -20,7 +20,7 @@
    - 모집 단위(자리)를 나눈다: 직무별, 신입/경력별
    - 단위마다 필수 · 우대 · 업무 · 기타로 나눈다.
    - 줄마다 요건을 적는다: 능력 + 기술 + 관계(예시 / 택1 / 모두 / 능력만) + 근거
-4. **기술 이름 표준화:** `capabilities.json` 사전으로 처리한다.
+4. **기술 이름 표준화:** DB의 표준화 사전으로 처리한다(사전의 원본은 DB — 팀이 SQL로 다듬고, 다음 추출부터 쓰인다).
    - 별칭은 표준 이름으로 바꾼다.
    - 일반 낱말은 뺀다.
    - 사전에 없는 이름은 확인 필요로 표시한다.
@@ -43,9 +43,10 @@
 | `section_split.py` | 단락 나누기 + 필요 없는 단락 빼기(rule base). 파이프라인에서는 `--paddle-only`로 돌린다. |
 | `table_layout.py` | OCR 상자를 표 구조대로 잇는다(왼쪽 머리말 표, 위쪽 머리말 열 표). |
 | `extract_skills.py` | LLM 추출, 표준화, 모집 단위 검사. 브라우저 채점 화면 `out/extract/index.html`도 만든다. |
-| `capabilities.json`, `capdict.py` | 표준화 사전(능력 61개, 기술 184개, 제외할 말)과 조회 코드. 사용자 역량도 같은 사전을 쓴다. |
+| `capdict.py` | 표준화 사전 조회(DB의 능력·기술·제외할 말을 읽음). 사용자 역량도 같은 사전을 쓴다. |
+| `db/seed_dictionary.sql` | 빈 DB(테스트·새 DB)를 채우는 사전. DB에서 `export-dict`로 내려받은 것이라 직접 고치지 않는다. |
 | `db/schema.sql` | DB 표 만들기(PostgreSQL DDL). 설명은 [docs/physical-design.md](docs/physical-design.md) |
-| `db_load.py` | DB 저장: 표 만들기(`init`), 사전 동기화(`sync-dict`), 공고·추출 결과 넣기(`load`). 여러 번 돌려도 겹치지 않는다. |
+| `db_load.py` | DB 저장: 표 만들기와 사전 채우기(`init`), 사전 내려받기(`export-dict`), 공고·추출 결과 넣기(`load`). 여러 번 돌려도 겹치지 않는다. |
 | `docker-compose.yml`, `.env.example` | 로컬 개발용 PostgreSQL(Docker). 비밀번호는 `.env`(올리지 않음) |
 | `collect.py` | Airflow 수집: 두 직무 목록을 경력 필터를 켜고 끝까지 보기, 새 공고 고르기(목록 − 아는 번호, 마감일, 버린 공고) |
 | `recheck.py` | ① 안의 수정·마감 확인: 다시 볼 공고 고르기('수정'·사라진 공고), 본문 지문 비교, 전체 페이지의 '접수마감' 확인 |
@@ -76,12 +77,14 @@ py -3.12 fetch_images.py                                  # 2. 이미지 받기
 <venv-paddle>\Scripts\python.exe dump_paddle_boxes.py --gpu   # 3. OCR
 py -3.12 section_split.py --paddle-only                   # 4. 단락 나누기·빼기
 py -3.12 extract_skills.py --models gpt-5.6-luna --examples --tag=-ex   # 5. LLM 추출·표준화·단위 검사 (유료)
-py -3.12 db_load.py init                                  # 6. DB: 표 만들기 (처음 한 번)
-py -3.12 db_load.py sync-dict                             #    사전 넣기 (사전을 고칠 때마다)
+py -3.12 db_load.py init                                  # 6. DB: 표 만들기·사전 채우기 (처음 한 번)
 py -3.12 db_load.py load --run gpt-5.6-luna-ex            #    공고·추출 결과 넣기
 ```
 
 비용은 공고당 약 $0.004다(luna low, 다시 부르기 포함).
+
+사전은 DB가 원본이다. SQL로 고치면 다음 추출부터 쓰이고, 바뀐 줄은 `dictionary_change`에 남는다(예시는 [물리 설계](docs/physical-design.md)).
+고친 뒤에는 `py -3.12 db_load.py export-dict`로 `db/seed_dictionary.sql`을 다시 내려받아 커밋한다(테스트·새 DB가 이 사전으로 채워짐).
 `--examples`는 프롬프트에 예시 답안을 붙인다(지금 쓰는 설정). `--tag`는 결과 폴더 이름 뒤에 붙는다(`out/extract/gpt-5.6-luna-ex/`).
 `-ex`가 `-`로 시작해서 `--tag -ex`라고 띄어 쓰면 옵션으로 읽힌다. 꼭 `--tag=-ex`로 쓴다. `--max-usd 1.0`을 주면 그 금액에서 추출을 멈춘다.
 추출 결과에는 표준화 전 답, 확인 필요 사유(`[{검사, 내용}]`), 프롬프트·사전 버전, 입력 해시, 비용이 함께 저장된다.

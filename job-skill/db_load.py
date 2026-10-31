@@ -1,5 +1,5 @@
 """
-DB 저장(Load): 표 만들기 · 표준화 사전 동기화 · 공고와 추출 결과 넣기 (PostgreSQL).
+DB 저장(Load): 표 만들기 · 표준화 사전 내려받기 · 공고와 추출 결과 넣기 (PostgreSQL).
 
 연결은 DATABASE_URL 로 한다(코드에 비밀번호를 넣지 않는다). 환경변수가 없으면 이 폴더의 .env 에서 읽는다.
   DB 띄우기: docker compose up -d   (docker-compose.yml, 비밀번호는 .env — .env.example 참고)
@@ -7,14 +7,13 @@ DB 저장(Load): 표 만들기 · 표준화 사전 동기화 · 공고와 추출
 실행:
   py -3.12 db_load.py init                                  # 표 만들기(db/schema.sql) + 사전 채우기(db/seed_dictionary.sql). 이미 있으면 건너뜀
   py -3.12 db_load.py export-dict                            # DB 사전 -> db/seed_dictionary.sql (사전을 고친 뒤 내려받아 커밋)
-  py -3.12 db_load.py sync-dict                              # capabilities.json -> 사전 표 (한 방향)
   $env:OCR_DATA_DIR = "sample3"
   py -3.12 db_load.py load --run gpt-5.6-luna-ex-chk         # 공고·이미지 + out/extract/<run>/ 의 추출 결과
 
 여러 번 돌려도 겹치지 않는다.
   - 공고는 (사이트, 사이트 공고번호)로 찾아 있으면 고친다.
   - 추출 결과는 (공고, 모델, 프롬프트 버전, 사전 버전, 입력 해시)가 같으면 이미 넣은 것으로 보고 건너뛴다.
-  - 사전은 이름으로 찾아 고치고, JSON 에서 빠진 능력·기술은 지우지 않고 사용 여부를 false 로 둔다.
+  - 사전의 원본은 DB 다(팀원이 SQL 로 고침, 바뀐 줄은 dictionary_change). 추출이 쓴 사전 판은 dictionary_version 에 남는다.
 """
 
 from __future__ import annotations
@@ -43,7 +42,6 @@ from sample_random import min_years
 HERE = os.path.dirname(os.path.abspath(__file__))
 SCHEMA_SQL = os.path.join(HERE, "db", "schema.sql")
 SEED_SQL = os.path.join(HERE, "db", "seed_dictionary.sql")   # 빈 DB 를 채우는 사전(export-dict 로 DB 에서 내려받음)
-DICT_JSON = os.path.join(HERE, "capabilities.json")
 EX = os.path.join(OUT_DIR, "extract")
 SAVE_TRIES = 3   # 공고 하나 저장을 일시 오류(연결 끊김·교착)일 때 몇 번까지 할지
 RETRY_WAIT = 2   # 다시 하기 전 기다림(초) × 몇 번째
@@ -123,51 +121,6 @@ def cmd_init() -> None:
         conn.execute(open(SEED_SQL, encoding="utf-8").read())
         n = conn.execute("SELECT count(*) FROM pg_tables WHERE schemaname = %s", (SCHEMA,)).fetchone()[0]
         print(f"스키마 {SCHEMA} 에 표 {n}개를 만들고 사전을 채웠습니다.")
-
-
-# ---------------------------------------------------------------- sync-dict
-
-def cmd_sync_dict() -> None:
-    d = json.load(open(DICT_JSON, encoding="utf-8"))
-    version = (d.get("version") or "").split()[0] or "unknown"
-    caps = dict(d["capabilities"])
-    caps.setdefault(OTHER, {})
-    techs = d["techs"]
-    bad = sorted({c for t in techs.values() for c in t.get("caps", []) if c not in caps})
-    if bad:
-        sys.exit(f"기술이 가리키는 능력이 사전에 없습니다: {bad}")
-
-    with connect() as conn, conn.transaction():
-        for name, v in caps.items():
-            conn.execute("""INSERT INTO capability (name, group_name, aliases, is_active) VALUES (%s, %s, %s, true)
-                            ON CONFLICT (name) DO UPDATE
-                            SET group_name = EXCLUDED.group_name, aliases = EXCLUDED.aliases, is_active = true""",
-                         (name, v.get("group"), v.get("aliases", [])))
-        for name, v in techs.items():
-            conn.execute("""INSERT INTO tech (name, aliases, is_active) VALUES (%s, %s, true)
-                            ON CONFLICT (name) DO UPDATE SET aliases = EXCLUDED.aliases, is_active = true""",
-                         (name, v.get("aliases", [])))
-        cap_id = dict(conn.execute("SELECT name, id FROM capability").fetchall())
-        tech_id = dict(conn.execute("SELECT name, id FROM tech").fetchall())
-        # 상위 (관계형 DB -> 데이터베이스, EC2 -> AWS)
-        for name, v in caps.items():
-            conn.execute("UPDATE capability SET parent_id = %s WHERE id = %s", (cap_id.get(v.get("parent")), cap_id[name]))
-        for name, v in techs.items():
-            conn.execute("UPDATE tech SET parent_id = %s WHERE id = %s", (tech_id.get(v.get("parent")), tech_id[name]))
-        # 기술-능력 연결은 통째로 다시 만든다(다른 표가 가리키지 않는다)
-        conn.execute("DELETE FROM tech_capability")
-        links = [(tech_id[t], cap_id[c]) for t, v in techs.items() for c in v.get("caps", [])]
-        with conn.cursor() as cur:
-            cur.executemany("INSERT INTO tech_capability (tech_id, capability_id) VALUES (%s, %s) ON CONFLICT DO NOTHING", links)
-        # JSON 에서 빠진 것은 지우지 않고 사용 안 함
-        off_c = conn.execute("UPDATE capability SET is_active = false WHERE is_active AND NOT (name = ANY(%s))",
-                             (list(caps),)).rowcount
-        off_t = conn.execute("UPDATE tech SET is_active = false WHERE is_active AND NOT (name = ANY(%s))",
-                             (list(techs),)).rowcount
-        conn.execute("""INSERT INTO dictionary_version (version) VALUES (%s)
-                        ON CONFLICT (version) DO UPDATE SET synced_at = now()""", (version,))
-    print(f"사전 {version}: 능력 {len(caps)}개, 기술 {len(techs)}개, 기술-능력 {len(links)}개 "
-          f"(사용 안 함으로 바꿈: 능력 {off_c}, 기술 {off_t})")
 
 
 # ---------------------------------------------------------------- export-dict
@@ -409,6 +362,7 @@ def insert_run(conn, posting_id: int, r: dict, inp: dict | None, path: str, cap_
         (posting_id, model, pv, dv, ih, r["input_tokens"], r["output_tokens"], cost, retried,
          Jsonb(review_reasons(r)), Jsonb(r["llm_output_raw"]) if r.get("llm_output_raw") is not None else None,
          run_at)).fetchone()[0]
+    conn.execute("INSERT INTO dictionary_version (version) VALUES (%s) ON CONFLICT DO NOTHING", (dv,))   # 추출에 쓰인 사전 판
 
     n = {"자리": 0, "한 줄": 0, "요건": 0, "요건 기술": 0}
     for useq, pos in enumerate(r["positions"], 1):
@@ -433,7 +387,7 @@ def insert_run(conn, posting_id: int, r: dict, inp: dict | None, path: str, cap_
                     elif cap not in cap_id:  # 사전에 없는 능력 이름은 '기타'로
                         cap, other = OTHER, cap
                     if cap not in cap_id:
-                        raise RuntimeError("사전이 비어 있습니다. 먼저 'db_load.py sync-dict' 를 실행하세요.")
+                        raise RuntimeError(f"사전에 '{OTHER}' 능력이 없습니다(사전이 비었거나 지워짐). 빈 DB 면 db/seed_dictionary.sql 을 적용하세요.")
                     req_id = conn.execute("""INSERT INTO requirement (item_id, capability_id, other_name, relation)
                                              VALUES (%s, %s, %s, %s) RETURNING id""",
                                           (item_id, cap_id[cap], other, rq["relation"])).fetchone()[0]
@@ -539,7 +493,6 @@ def main() -> None:
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("init", help="표 만들기(db/schema.sql)")
     sub.add_parser("migrate-body-html", help="한 번만: 본문 HTML 칸 채우기 + 노트북 경로 칸 빼기")
-    sub.add_parser("sync-dict", help="capabilities.json -> 사전 표")
     e = sub.add_parser("export-dict", help="DB 사전 -> db/seed_dictionary.sql (빈 DB·테스트용, 내려받아 커밋)")
     e.add_argument("--out", default=SEED_SQL, help="쓸 파일 (기본 db/seed_dictionary.sql)")
     p = sub.add_parser("load", help="공고·이미지·추출 결과 넣기 (데이터 폴더는 OCR_DATA_DIR)")
@@ -547,8 +500,6 @@ def main() -> None:
     args = ap.parse_args()
     if args.cmd == "init":
         cmd_init()
-    elif args.cmd == "sync-dict":
-        cmd_sync_dict()
     elif args.cmd == "export-dict":
         cmd_export_dict(args.out)
     elif args.cmd == "migrate-body-html":
