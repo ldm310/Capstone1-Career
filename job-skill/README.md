@@ -169,6 +169,19 @@ docker compose -f docker-compose.airflow.yml exec airflow-scheduler python -m py
    py -3.12 -c "import psycopg,db_load; c=psycopg.connect(db_load.database_url().replace('/career?','/postgres?'),autocommit=True); c.execute('CREATE DATABASE career')"
    py -3.12 db_load.py init
    ```
+   이어서 마스터 계정(`career`)으로 팀원 계정과 권한을 만든다(2026-10-31 정한 권한 — 파이프라인 표는 읽기·FK, 표준화 사전 4개는 읽기·쓰기, 팀원 표는 자유).
+   ```sql
+   CREATE ROLE team NOLOGIN;                                            -- 권한은 공통 역할 team 에만
+   GRANT CONNECT ON DATABASE career TO team;
+   GRANT USAGE, CREATE ON SCHEMA public TO team;                        -- 팀원 표는 public 에 자유롭게
+   GRANT SELECT, REFERENCES ON ALL TABLES IN SCHEMA public TO team;     -- 파이프라인 표: 읽기 + FK
+   REVOKE REFERENCES ON tech_capability FROM team;                      -- 팀이 통째로 고칠 수 있는 연결 표라 FK 는 빼둠
+   ALTER DEFAULT PRIVILEGES FOR ROLE career IN SCHEMA public GRANT SELECT, REFERENCES ON TABLES TO team;   -- 앞으로 만들 표도
+   GRANT INSERT, UPDATE, DELETE ON capability, tech, tech_capability, exclude_word TO team;              -- 표준화 사전: 쓰기
+   -- 팀원마다 (비밀번호는 실행할 때 정하고 1:1 로 전한다)
+   CREATE ROLE dongmin LOGIN PASSWORD '...' IN ROLE team;
+   ALTER ROLE dongmin SET role = 'team';                                -- 팀원이 만든 표의 주인 = team(서로 고칠 수 있게)
+   ```
 4. Airflow를 다시 띄운다: `docker compose -f docker-compose.airflow.yml up -d` (컨테이너는 `DATABASE_URL`을 빈 값으로 덮어 RDS로 간다).
 
 **표준화 사전은 RDS가 원본** (2026-10-31 사용자 결정 — 서비스를 써 보면서 팀이 함께 다듬는다)
