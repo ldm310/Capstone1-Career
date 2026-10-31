@@ -61,7 +61,7 @@ def test_raw_answer_saved_before_standardization(result):
 
 def test_run_records_versions_and_cost(result):
     _, r = result
-    assert len(r["prompt_version"]) == 12 and r["dict_version"] == "0.1.1" and len(r["input_hash"]) == 64
+    assert len(r["prompt_version"]) == 12 and len(r["dict_version"]) == 12 and len(r["input_hash"]) == 64
     assert (r["input_tokens"], r["output_tokens"]) == (20000, 2000)
     assert r["cost_usd"] == 0.0064
 
