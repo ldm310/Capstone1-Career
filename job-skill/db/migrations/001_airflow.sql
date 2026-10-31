@@ -1,6 +1,6 @@
 -- 2026-10-28 Airflow DAG 용: 버린 공고번호 표. 이미 있는 career-db 에 적용한다(여러 번 돌려도 안전).
 BEGIN;
-SET LOCAL search_path TO job;
+SET LOCAL search_path TO public;   -- 2026-10-31 표를 job 에서 public 으로 옮김(003)
 
 CREATE TABLE IF NOT EXISTS listing_seen (
     site             text        NOT NULL DEFAULT '사람인',

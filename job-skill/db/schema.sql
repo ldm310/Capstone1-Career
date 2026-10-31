@@ -1,8 +1,7 @@
 -- 채용공고 역량 추출 DB (PostgreSQL 17)
 -- 논리 설계: docs/erd.png · 물리 설계 설명: docs/physical-design.md
 -- 표·칸의 한글 이름은 COMMENT 로 DB 안에도 남긴다.
--- 모든 표는 스키마 job 안에 만든다. 같은 DB 를 쓰는 BE 표(기본 스키마 public)와 이름이 겹쳐도 부딪히지 않는다.
--- 다른 쪽에서 읽을 때는 job.posting 처럼 스키마 이름을 붙인다.
+-- 모든 표는 기본 스키마 public 에 만든다. BE 표도 같은 곳에 두고 바로 조인한다(BE 표 이름은 이 표들과 겹치지 않게).
 --
 -- 구역
 --   ① 수집        company, posting, posting_image
@@ -11,9 +10,7 @@
 
 BEGIN;
 
-CREATE SCHEMA IF NOT EXISTS job;
-COMMENT ON SCHEMA job IS '채용공고 역량 추출 파이프라인 (수집·추출 결과·표준화 사전)';
-SET LOCAL search_path TO job;   -- 아래 표·색인은 모두 job 안에 만들어진다
+SET LOCAL search_path TO public;   -- 아래 표·색인은 모두 public 안에 만들어진다
 
 -- ============================================================ ③ 표준화 사전
 -- 결과가 사전을 가리키므로 사전부터 만든다. 원본은 capabilities.json, DB 는 한 방향 복사본.

@@ -54,8 +54,8 @@ def db_url():
 
 @pytest.fixture
 def db(db_url):
-    """임시 DB 연결(search_path=job, autocommit)."""
+    """임시 DB 연결(search_path=public, autocommit)."""
     import psycopg
 
-    with psycopg.connect(db_url, autocommit=True, options="-c search_path=job") as c:
+    with psycopg.connect(db_url, autocommit=True, options="-c search_path=public") as c:
         yield c

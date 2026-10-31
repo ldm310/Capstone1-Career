@@ -67,7 +67,7 @@
 - DB는 Docker로 띄운다: `.env.example`을 `.env`로 복사해 비밀번호를 정하고 `docker compose up -d`.
   PostgreSQL 17이 `localhost:5433`에 뜬다(컨테이너 `career-db`, DB·계정 `career`, 내 컴퓨터에서만 접속). `db_load.py`는 `.env`의 `DATABASE_URL`을 읽는다.
   사람마다 자기 컴퓨터에 따로 뜨는 DB라 데이터는 공유되지 않는다. 샘플은 아래 `db_load.py`로 넣는다.
-  이 파이프라인의 표는 모두 `job` 스키마에 있다(BE 표는 기본 `public`). 다른 쪽에서 읽을 때는 `job.posting`처럼 부른다.
+  이 파이프라인의 표는 모두 기본 스키마 `public`에 있다. BE 표도 같은 곳에 두고 표 이름만 써서 바로 조인한다(예: `posting`).
 
 ```powershell
 py -3.12 sample_random.py --out sample3 --per-role 10      # 1. 수집
@@ -112,10 +112,10 @@ py -3.12 db_load.py load --run gpt-5.6-luna-ex            #    공고·추출 �
    ```powershell
    curl.exe -C - --create-dirs -o airflow/wheels/paddlepaddle_gpu-3.2.2-cp312-cp312-linux_x86_64.whl https://paddle-whl.cdn.bcebos.com/stable/cu126/paddlepaddle-gpu/paddlepaddle_gpu-3.2.2-cp312-cp312-linux_x86_64.whl
    ```
-4. 서빙 DB(`docker compose up -d`)가 이미 표가 있는 DB라면 변경을 적용한다(여러 번 해도 안전).
+4. 서빙 DB(`docker compose up -d`)가 이미 표가 있는 DB라면 변경(`db/migrations`)을 번호 순서대로 적용한다(여러 번 해도 안전).
    ```powershell
-   docker cp db/migrations/001_airflow.sql career-db:/tmp/001_airflow.sql
-   docker exec career-db psql -U career -d career -v ON_ERROR_STOP=1 -f /tmp/001_airflow.sql
+   Get-ChildItem db/migrations/*.sql | Sort-Object Name | ForEach-Object {
+     docker cp $_.FullName career-db:/tmp/m.sql; docker exec career-db psql -U career -d career -v ON_ERROR_STOP=1 -f /tmp/m.sql }
    ```
 5. Airflow를 띄운다. 이미지는 처음에 15~20분 걸리고 약 19GB다.
    ```powershell
