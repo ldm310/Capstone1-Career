@@ -6,14 +6,16 @@
 -- 구역
 --   ① 수집        company, posting, posting_image
 --   ② 추출 결과    extraction_run, recruit_unit, unit_item, requirement, requirement_tech
---   ③ 표준화 사전  capability, tech, tech_capability, dictionary_version
+--   ③ 표준화 사전  capability, tech, tech_capability, exclude_word, dictionary_version
+--   ④ 사전 변경 기록 dictionary_change (사전 표 4개에 트리거)
 
 BEGIN;
 
 SET LOCAL search_path TO public;   -- 아래 표·색인은 모두 public 안에 만들어진다
 
 -- ============================================================ ③ 표준화 사전
--- 결과가 사전을 가리키므로 사전부터 만든다. 원본은 capabilities.json, DB 는 한 방향 복사본.
+-- 결과가 사전을 가리키므로 사전부터 만든다. 사전의 원본은 DB — 팀원이 SQL 로 고치고, 바뀐 줄은 dictionary_change 에 남는다.
+-- 빈 DB 는 db/seed_dictionary.sql(db_load.py export-dict 로 DB 에서 내려받은 것)로 채운다.
 
 CREATE TABLE capability (
     id           bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -48,21 +50,95 @@ COMMENT ON COLUMN tech.aliases   IS '별칭 목록 (예: 스프링 부트)';
 COMMENT ON COLUMN tech.is_active IS '사용 여부 (사전에서 빠지면 false, 지우지 않음)';
 
 CREATE TABLE tech_capability (
-    tech_id       bigint NOT NULL REFERENCES tech (id) ON DELETE CASCADE,
-    capability_id bigint NOT NULL REFERENCES capability (id) ON DELETE CASCADE,
+    tech_id       bigint  NOT NULL REFERENCES tech (id) ON DELETE CASCADE,
+    capability_id bigint  NOT NULL REFERENCES capability (id) ON DELETE CASCADE,
+    is_primary    boolean NOT NULL DEFAULT false,
     PRIMARY KEY (tech_id, capability_id)
 );
 COMMENT ON TABLE  tech_capability               IS '기술-능력 (MySQL -> 관계형 DB)';
 COMMENT ON COLUMN tech_capability.tech_id       IS '기술ID';
 COMMENT ON COLUMN tech_capability.capability_id IS '능력ID';
+COMMENT ON COLUMN tech_capability.is_primary    IS '대표 능력 (기술마다 최대 하나, LLM 이 ''기타: RDS''처럼 적으면 이 능력으로 잇는다. 없으면 능력ID 가 가장 작은 것)';
+
+CREATE TABLE exclude_word (
+    id    bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    word  text NOT NULL,
+    kind  text NOT NULL CHECK (kind IN ('LLM 모델', '기술 아님', '일반 낱말')),
+    UNIQUE (kind, word)
+);
+COMMENT ON TABLE  exclude_word      IS '스킬이 아닌 낱말 (대소문자·공백 무시)';
+COMMENT ON COLUMN exclude_word.id   IS '낱말ID';
+COMMENT ON COLUMN exclude_word.word IS '낱말 (예: Claude, CTO, AI)';
+COMMENT ON COLUMN exclude_word.kind IS '종류 (LLM 모델 = 이름 안에 들어 있으면 뺌 / 기술 아님 = 직무명 등 / 일반 낱말 = 낱말만 빼고 요건은 남김)';
 
 CREATE TABLE dictionary_version (
-    version    text        PRIMARY KEY,
-    synced_at  timestamptz NOT NULL DEFAULT now()
+    version        text        PRIMARY KEY,
+    first_used_at  timestamptz NOT NULL DEFAULT now()
 );
-COMMENT ON TABLE  dictionary_version           IS '사전 버전 (JSON -> DB 동기화 기록, 최근 것이 현재 버전)';
-COMMENT ON COLUMN dictionary_version.version   IS '사전 버전 (capabilities.json 의 version)';
-COMMENT ON COLUMN dictionary_version.synced_at IS '동기화 시각';
+COMMENT ON TABLE  dictionary_version               IS '사전 판 (추출에 쓰인 사전 지문과 처음 쓴 시각)';
+COMMENT ON COLUMN dictionary_version.version       IS '사전 판 (사전 내용 지문 12자리, 2026-10-31 전에는 0.1.1 같은 번호)';
+COMMENT ON COLUMN dictionary_version.first_used_at IS '처음 쓴 시각';
+
+-- ============================================================ ④ 사전 변경 기록
+-- 사전 표 4개에 줄이 바뀔 때마다 트리거가 남긴다(누가 어떤 도구로 고치든). 팀원은 읽기만 한다.
+
+CREATE TABLE dictionary_change (
+    id          bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    changed_at  timestamptz NOT NULL DEFAULT now(),
+    changed_by  text        NOT NULL,
+    table_name  text        NOT NULL CHECK (table_name IN ('capability', 'tech', 'tech_capability', 'exclude_word')),
+    action      text        NOT NULL CHECK (action IN ('넣기', '고치기', '지우기')),
+    old_row     jsonb,
+    new_row     jsonb
+);
+COMMENT ON TABLE  dictionary_change            IS '사전 변경 기록';
+COMMENT ON COLUMN dictionary_change.id         IS '기록ID';
+COMMENT ON COLUMN dictionary_change.changed_at IS '바꾼 시각';
+COMMENT ON COLUMN dictionary_change.changed_by IS '바꾼 사람 (DB 접속 계정, 예: dongmin / 파이프라인은 career)';
+COMMENT ON COLUMN dictionary_change.table_name IS '표';
+COMMENT ON COLUMN dictionary_change.action     IS '동작 (넣기/고치기/지우기)';
+COMMENT ON COLUMN dictionary_change.old_row    IS '예전 값 (줄 전체, 넣기면 비움)';
+COMMENT ON COLUMN dictionary_change.new_row    IS '새 값 (줄 전체, 지우기면 비움)';
+
+-- 팀원(team)은 기록 표에 쓸 권한이 없으므로 주인(career) 권한으로 남긴다. 팀원이 public 에 만든 함수가 끼어들지 않게
+-- pg_catalog 를 먼저 찾고 기록 표는 public. 을 붙여 부른다. 바꾼 사람은 접속 계정(session_user — 팀원은 접속 뒤 team 이 됨).
+CREATE FUNCTION log_dictionary_change() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp AS $$
+BEGIN
+    IF TG_OP = 'UPDATE' AND to_jsonb(OLD) = to_jsonb(NEW) THEN
+        RETURN NULL;   -- 값이 그대로인 고치기는 남기지 않는다
+    END IF;
+    INSERT INTO public.dictionary_change (changed_by, table_name, action, old_row, new_row)
+    VALUES (session_user, TG_TABLE_NAME,
+            CASE TG_OP WHEN 'INSERT' THEN '넣기' WHEN 'UPDATE' THEN '고치기' ELSE '지우기' END,
+            CASE WHEN TG_OP <> 'INSERT' THEN to_jsonb(OLD) END,
+            CASE WHEN TG_OP <> 'DELETE' THEN to_jsonb(NEW) END);
+    RETURN NULL;
+END $$;
+
+-- TRUNCATE 는 줄마다 걸리는 트리거를 거치지 않아 기록이 빠진다 → 막는다.
+CREATE FUNCTION block_dictionary_truncate() RETURNS trigger
+LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp AS $$
+BEGIN
+    RAISE EXCEPTION '사전 표는 TRUNCATE 할 수 없습니다(변경 기록이 남지 않음). DELETE 를 쓰세요.';
+END $$;
+
+CREATE TRIGGER dictionary_change_log AFTER INSERT OR UPDATE OR DELETE ON capability
+    FOR EACH ROW EXECUTE FUNCTION log_dictionary_change();
+CREATE TRIGGER dictionary_change_log AFTER INSERT OR UPDATE OR DELETE ON tech
+    FOR EACH ROW EXECUTE FUNCTION log_dictionary_change();
+CREATE TRIGGER dictionary_change_log AFTER INSERT OR UPDATE OR DELETE ON tech_capability
+    FOR EACH ROW EXECUTE FUNCTION log_dictionary_change();
+CREATE TRIGGER dictionary_change_log AFTER INSERT OR UPDATE OR DELETE ON exclude_word
+    FOR EACH ROW EXECUTE FUNCTION log_dictionary_change();
+CREATE TRIGGER dictionary_no_truncate BEFORE TRUNCATE ON capability
+    FOR EACH STATEMENT EXECUTE FUNCTION block_dictionary_truncate();
+CREATE TRIGGER dictionary_no_truncate BEFORE TRUNCATE ON tech
+    FOR EACH STATEMENT EXECUTE FUNCTION block_dictionary_truncate();
+CREATE TRIGGER dictionary_no_truncate BEFORE TRUNCATE ON tech_capability
+    FOR EACH STATEMENT EXECUTE FUNCTION block_dictionary_truncate();
+CREATE TRIGGER dictionary_no_truncate BEFORE TRUNCATE ON exclude_word
+    FOR EACH STATEMENT EXECUTE FUNCTION block_dictionary_truncate();
 
 -- ============================================================ ① 수집
 
@@ -153,7 +229,7 @@ COMMENT ON COLUMN extraction_run.id             IS '실행ID';
 COMMENT ON COLUMN extraction_run.posting_id     IS '공고ID';
 COMMENT ON COLUMN extraction_run.model          IS '모델 (예: gpt-5.6-luna)';
 COMMENT ON COLUMN extraction_run.prompt_version IS '프롬프트 버전';
-COMMENT ON COLUMN extraction_run.dict_version   IS '사전 버전 (예: 0.1.1)';
+COMMENT ON COLUMN extraction_run.dict_version   IS '사전 판 (사전 내용 지문, 2026-10-31 전 결과는 0.1.1 같은 번호)';
 COMMENT ON COLUMN extraction_run.input_hash     IS '입력 해시 (같은 입력이면 다시 부르지 않음)';
 COMMENT ON COLUMN extraction_run.input_tokens   IS '입력 토큰 (다시 부름 포함 합계)';
 COMMENT ON COLUMN extraction_run.output_tokens  IS '출력 토큰 (다시 부름 포함 합계)';
@@ -252,6 +328,9 @@ CREATE INDEX ON requirement (capability_id);                   -- 능력별 통�
 CREATE INDEX ON requirement_tech (requirement_id);
 CREATE INDEX ON requirement_tech (tech_id);                    -- 기술별 통계·매칭
 CREATE INDEX ON tech_capability (capability_id);
+CREATE UNIQUE INDEX tech_capability_one_primary
+    ON tech_capability (tech_id) WHERE is_primary;             -- 기술마다 대표 능력은 최대 하나
+CREATE INDEX ON dictionary_change (changed_at);
 CREATE INDEX ON capability (parent_id);
 CREATE INDEX ON tech (parent_id);
 CREATE INDEX ON capability USING gin (aliases);                -- 별칭으로 찾기
