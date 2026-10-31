@@ -26,6 +26,8 @@ from db_load import connect
 HERE = os.path.dirname(os.path.abspath(__file__))
 MODEL, TAG = "gpt-5.6-luna", "-ex"
 RUN_NAME = MODEL + TAG
+ALERTS = "alerts.json"   # 단계들이 결과 알림용으로 적어 두는 것(넘어간 공고·비용 상한) — Slack 은 끝날 때 한 번만
+SKIP_KINDS = ("확인 못 한 공고", "본문을 못 받은 공고", "LLM 추출 실패", "추출할 글 없음")   # 결과 알림에 나오는 순서
 DAILY_LIMIT = 5.0      # 하루(KST) ① 매일 수집
 BACKFILL_LIMIT = 10.0  # ③ 한 번 실행
 LLM_WORKERS = 8        # 공고 몇 건을 동시에 LLM 에 보낼지 — 계정 한도(분당 5,000번·200만 토큰)의 약 15%, 1,514건이 약 9시간 → 약 1시간
@@ -91,7 +93,7 @@ def step_collect(run_dir: str, include_pending: bool, max_new: int | None = None
     return out
 
 
-def step_detect(run_dir: str, dag_label: str = "매일 수집") -> dict:
+def step_detect(run_dir: str) -> dict:
     """변경 감지(①): 고른 공고만 확인 — 목록에서 사라진 공고는 전체 페이지의 마감 표시, 수정된 공고는 본문 지문.
     바뀐 공고는 targets.tsv 뒤에 붙고(다시 추출), 결과는 changes.json. check.json 이 없으면(③) 아무것도 안 한다.
     그대로인 공고만 확인 시각을 지금으로 바꾼다. 바뀐 공고는 다시 추출해 DB 저장에 성공할 때 바뀐다(실패하면 다음 날 다시)."""
@@ -104,9 +106,8 @@ def step_detect(run_dir: str, dag_label: str = "매일 수집") -> dict:
     res = recheck.detect_changes(d, rows)
     with connect() as conn:
         db_queries.touch_checked(conn, res["unchanged"], at=started)
-    if res["error"]:
-        notify.send(notify.msg_skipped(dag_label, "확인 못 한 공고", [(no, res.get("why", {}).get(no, "오류")) for no in res["error"]],
-                                       "마감으로 치지 않고 다음 날 다시 확인"))
+    # 확인 못 한 공고는 마감으로 치지 않고 다음 날 다시 확인 — 결과 알림에 공고번호·원인·링크
+    _note(d, "확인 못 한 공고", [(no, res.get("why", {}).get(no, "오류")) for no in res["error"]])
     return {"확인": len(rows), "바뀜": len(res["changed"]), "그대로": len(res["unchanged"]), "오류": len(res["error"])}
 
 
@@ -120,9 +121,9 @@ def step_close(run_dir: str) -> int:
         return db_queries.mark_closed(conn, res["closed"])
 
 
-def step_fetch_raw(run_dir: str, dag_label: str = "수집") -> dict:
+def step_fetch_raw(run_dir: str) -> dict:
     """공고 원본 수집(본문·이미지) → 글/이미지 종류 채우기. targets 가 비면 아무것도 안 함.
-    본문을 못 받아 빠진 공고는 공고번호·원인·링크를 Slack 으로 알린다(DB 에 안 들어가 다음 실행 때 다시 시도)."""
+    본문을 못 받아 빠진 공고는 결과 알림에 공고번호·원인·링크(DB 에 안 들어가 다음 실행 때 다시 시도)."""
     before = [r["rec_idx"] for r in _targets(run_dir)]
     if not before:
         return {}
@@ -130,15 +131,13 @@ def step_fetch_raw(run_dir: str, dag_label: str = "수집") -> dict:
     counts = collect.classify_targets(_abs(run_dir))
     kept = {r["rec_idx"] for r in _targets(run_dir)}
     dropped = [no for no in before if no not in kept]
-    if dropped:
-        why = {}
-        skipped = os.path.join(_abs(run_dir), "images", "skipped.tsv")
-        if os.path.exists(skipped):
-            import csv
-            with open(skipped, encoding="utf-8") as f:
-                why = {r["rec_idx"]: r["reason"] for r in csv.DictReader(f, delimiter="\t") if r["reason"] != "본문 이미지 없음"}
-        notify.send(notify.msg_skipped(dag_label, "본문을 못 받은 공고", [(no, why.get(no, "본문 없음")) for no in dropped],
-                                       "건너뜀 — 다음 실행 때 다시 시도"))
+    why = {}
+    skipped = os.path.join(_abs(run_dir), "images", "skipped.tsv")
+    if dropped and os.path.exists(skipped):
+        import csv
+        with open(skipped, encoding="utf-8") as f:
+            why = {r["rec_idx"]: r["reason"] for r in csv.DictReader(f, delimiter="\t") if r["reason"] != "본문 이미지 없음"}
+    _note(run_dir, "본문을 못 받은 공고", [(no, why.get(no, "본문 없음")) for no in dropped])
     return counts
 
 
@@ -179,15 +178,15 @@ def extract_budget(run_dir: str, limit: float, daily: bool) -> float:
     return max(0.0, round(limit - spent, 6))
 
 
-def step_extract(run_dir: str, budget_usd: float, dag_label: str, limit: float | None = None) -> dict:
-    """LLM 추출 + 표준화 + 모집 단위 검사. budget_usd 만큼만 쓰고, 상한에 닿으면 Slack 으로 한 번 알린다.
+def step_extract(run_dir: str, budget_usd: float, limit: float | None = None) -> dict:
+    """LLM 추출 + 표준화 + 모집 단위 검사. budget_usd 만큼만 쓰고, 상한에 닿아 멈추면 결과 알림에 적어 둔다.
     limit 은 알림에 적을 상한(하루 $5 또는 ③ $10), 없으면 budget_usd."""
     targets = _targets(run_dir)
     if not targets:
         return {"stopped": False}
     limit = budget_usd if limit is None else limit
     if budget_usd <= 0:
-        notify.send(notify.msg_budget(dag_label, limit - budget_usd, limit, len(targets)))
+        _note(run_dir, "budget", {"limit": limit, "left": len(targets)})
         return {"stopped": True, "left": len(targets)}
     ex = os.path.join(_abs(run_dir), "out", "extract")
     budget_path, stats_path = os.path.join(ex, "_budget.json"), os.path.join(ex, "_stats.json")
@@ -202,12 +201,12 @@ def step_extract(run_dir: str, budget_usd: float, dag_label: str, limit: float |
             detail = st.get("fail_detail", {})
             items += [(no, detail.get(no, "추출 실패")) for no in st.get("failed", [])]
     failed = len(items)
-    if items:
-        notify.send(notify.msg_skipped(dag_label, "LLM 추출 실패", items, "결과 없이 저장하고 넘어감(새 공고는 다음 날 밀린 공고로 다시)"))
+    _note(run_dir, "LLM 추출 실패", items)   # 결과 없이 저장하고 넘어감(새 공고는 다음 날 밀린 공고로 다시)
     if not os.path.exists(budget_path):
+        _note(run_dir, "budget", None)
         return {"stopped": False, "failed": failed}
     b = json.load(open(budget_path, encoding="utf-8"))
-    notify.send(notify.msg_budget(dag_label, (limit - budget_usd) + b["spent"], limit, b["left"]))
+    _note(run_dir, "budget", {"limit": limit, "left": b["left"]})
     return {"stopped": True, "left": b["left"], "failed": failed}
 
 
@@ -239,4 +238,48 @@ def summary(run_dir: str) -> dict:
         results.append(json.load(open(path, encoding="utf-8")))
     review = sum(1 for r in results if r.get("review_reasons") or r.get("check_flag"))
     cost = round(sum(r.get("cost_usd", 0) or 0 for r in results), 6)
-    return {"새 공고": len(_targets(run_dir)), "추출": len(results), "확인 필요": review, "비용": cost}
+    return {"대상": len(_targets(run_dir)), "추출": len(results), "확인 필요": review, "비용": cost}
+
+
+def _note(run_dir: str, key: str, value) -> None:
+    """결과 알림용 기록(alerts.json)에 key 를 통째로 쓴다 — 태스크를 다시 해도 겹치지 않게 덮어쓴다."""
+    path = os.path.join(_abs(run_dir), ALERTS)
+    data = json.load(open(path, encoding="utf-8")) if os.path.exists(path) else {}
+    data[key] = value
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False)
+
+
+def run_alerts(run_dir: str) -> tuple[dict[str, list], dict | None]:
+    """결과 알림의 넘어간 공고({종류: [(공고번호, 원인)]}, SKIP_KINDS 순서)와 비용 상한 기록.
+    '추출할 글 없음' = 대상 가운데 추출 결과도 실패 기록도 없는 공고 — 비용 상한으로 멈춘 실행에서는 세지 않는다(남은 공고로 셈)."""
+    path = os.path.join(_abs(run_dir), ALERTS)
+    data = json.load(open(path, encoding="utf-8")) if os.path.exists(path) else {}
+    budget = data.get("budget")
+    found = {k: [tuple(x) for x in data.get(k) or []] for k in SKIP_KINDS[:3]}
+    if not budget:
+        done = {os.path.basename(p)[:-5] for p in glob.glob(os.path.join(_abs(run_dir), "out", "extract", RUN_NAME, "*.json"))}
+        failed = {no for no, _ in found["LLM 추출 실패"]}
+        found["추출할 글 없음"] = [(r["rec_idx"], "") for r in _targets(run_dir) if r["rec_idx"] not in done | failed]
+    return {k: v for k, v in found.items() if v}, budget
+
+
+def daily_report(run_dir: str, got: dict, seen: dict, closed: int, today_cost: float) -> str:
+    """① 결과 알림 한 통. got = 목록 수집 결과, seen = 변경 감지 결과, closed = 마감 처리한 수."""
+    s = summary(run_dir)
+    rows = [("수집", f"새 공고 {got.get('new', 0)} · 밀린 공고 {got.get('pending', 0)}"),
+            ("변경 감지", f"수정 {got.get('수정', 0)} → 바뀜 {seen.get('바뀜', 0)} · 마감일 바뀜 {got.get('마감일 바뀜', 0)} · "
+                      f"확인 오류 {seen.get('오류', 0)}"),
+            ("마감", f"목록에 없음 {got.get('목록에 없음', 0)} → 마감 {closed}"),
+            ("추출", f"{s['추출']}/{s['대상']}건 · 확인 필요 {s['확인 필요']}"),
+            ("비용", f"이번 ${s['비용']:.2f} · 오늘 ${today_cost:.2f} (하루 상한 ${DAILY_LIMIT:g})")]
+    return notify.msg_report("매일 수집", rows, *run_alerts(run_dir))
+
+
+def backfill_report(run_dir: str, got: dict) -> str:
+    """③ 결과 알림 한 통. got = 목록 수집 결과."""
+    s = summary(run_dir)
+    rows = [("수집", f"대상 공고 {got.get('new', s['대상'])} · 제외 {got.get('excluded', 0)}"),
+            ("추출", f"{s['추출']}/{s['대상']}건 · 확인 필요 {s['확인 필요']}"),
+            ("비용", f"${s['비용']:.2f} (상한 ${BACKFILL_LIMIT:g})")]
+    return notify.msg_report("전체 수집", rows, *run_alerts(run_dir))

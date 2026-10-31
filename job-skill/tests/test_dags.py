@@ -40,8 +40,7 @@ def test_dag_ids_and_schedules(bag):
 
 def test_daily_task_graph(bag):
     d = bag.get_dag("daily_collect")
-    cost = d.get_task("notify_cost")
-    assert cost.upstream_task_ids == set() and cost.downstream_task_ids == set()
+    assert "notify_cost" not in d.task_ids   # 알림은 끝날 때 결과 알림 하나(2026-10-31 사용자 요청)
     # 새·밀린 공고는 목록 수집에서 바로 원본 수집으로, DB 에 있는 진행 공고만 변경 감지로(그림과 같은 화살표)
     assert d.get_task("collect_list").downstream_task_ids == {"detect_changes", "fetch_raw"}
     assert d.get_task("detect_changes").downstream_task_ids == {"close_postings", "fetch_raw"}

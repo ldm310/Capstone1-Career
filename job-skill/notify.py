@@ -7,7 +7,6 @@ Slack 알림 (#data-pipeline). 웹훅 주소는 환경변수 SLACK_WEBHOOK_URL, 
 
 from __future__ import annotations
 
-import datetime as dt
 import json
 import logging
 import os
@@ -63,13 +62,25 @@ def send(text: str) -> bool:
         return False
 
 
-def _value(name: str, v) -> str:
-    return f"${v:.2f}" if "비용" in name else f"{v}"
-
-
-def msg_result(dag_label: str, counts: dict) -> str:
-    """'✅ 매일 수집 완료 · 새 공고 52 · 추출 52 · 확인 필요 2 · 오늘 비용 $0.21' (키 순서대로)."""
-    return " · ".join([f"✅ {dag_label} 완료"] + [f"{k} {_value(k, v)}" for k, v in counts.items()])
+def msg_report(dag_label: str, rows: list[tuple[str, str]], skipped: dict[str, list] | None = None,
+               budget: dict | None = None) -> str:
+    """DAG 가 끝날 때 보내는 결과 알림 하나(2026-10-31 사용자 요청 — 중간 알림 없이 결과로만, 줄을 나눠 읽기 쉽게).
+      ✅ 매일 수집 완료
+      • 수집: 새 공고 143 · 밀린 공고 8
+      ⚠️ 비용 상한 …(멈췄을 때만)
+      ⚠️ 넘어간 공고 2건 — 다음 실행 때 다시 시도
+      • <링크|50846359> LLM 추출 실패 · 응답 잘림·형식 오류      (공고번호에 사람인 링크, SHOW 건까지)
+    skipped: {종류: [(공고번호, 원인), …]}, budget: {"limit": 상한, "left": 남은 공고 수}."""
+    out = [f"✅ {dag_label} 완료"] + [f"• {name}: {value}" for name, value in rows]
+    if budget:
+        out.append(f"⚠️ 비용 상한 ${budget['limit']:.2f} 도달로 LLM 추출 멈춤 · 남은 공고 {budget['left']}건은 다음 실행 때")
+    items = [(what, no, why) for what, xs in (skipped or {}).items() for no, why in xs]
+    if items:
+        out.append(f"⚠️ 넘어간 공고 {len(items)}건 — 다음 실행 때 다시 시도")
+        out += [f"• <{POSTING_URL.format(no=no)}|{no}> {what}" + (f" · {why}" if why else "") for what, no, why in items[:SHOW]]
+        if len(items) > SHOW:
+            out.append(f"…외 {len(items) - SHOW}건")
+    return "\n".join(out)
 
 
 def msg_failure(dag_id: str, task_id: str, try_number: int, exc: BaseException | None) -> str:
@@ -77,20 +88,6 @@ def msg_failure(dag_id: str, task_id: str, try_number: int, exc: BaseException |
     if isinstance(exc, PostingsFailed):
         return f"{head} · {exc}\n{posting_lines(exc.items)}"
     return head if exc is None else f"{head} · {type(exc).__name__}: {str(exc)[:200]}"
-
-
-def msg_budget(dag_label: str, spent: float, limit: float, left: int) -> str:
-    return (f"⚠️ {dag_label}: 비용 상한 ${limit:.2f} 도달로 LLM 추출 멈춤 · 쓴 비용 ${spent:.2f} · "
-            f"남은 공고 {left}건은 다음 실행 때")
-
-
-def msg_skipped(dag_label: str, what: str, items: list[tuple[str, str]], after: str) -> str:
-    """태스크는 계속하고 넘어간 공고들: '⚠️ 매일 수집: LLM 추출 실패 2건 — 결과 없이 저장하고 넘어감' + 공고 줄."""
-    return f"⚠️ {dag_label}: {what} {len(items)}건 — {after}\n{posting_lines(items)}"
-
-
-def msg_daily_cost(day: dt.date, usd: float, runs: int) -> str:
-    return f"💰 {day.month}월 {day.day}일 LLM 비용 ${usd:.2f} (추출 {runs}건)"
 
 
 def on_failure(context: dict) -> None:
