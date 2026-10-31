@@ -165,7 +165,6 @@ docker compose -f docker-compose.airflow.yml exec airflow-scheduler python -m py
    ```powershell
    py -3.12 -c "import psycopg,db_load; c=psycopg.connect(db_load.database_url().replace('/career?','/postgres?'),autocommit=True); c.execute('CREATE DATABASE career')"
    py -3.12 db_load.py init
-   py -3.12 -c "import db_load; c=db_load.connect(autocommit=True); c.execute(open('db/migrations/001_airflow.sql',encoding='utf-8').read())"
    py -3.12 db_load.py sync-dict
    ```
 4. Airflow를 다시 띄운다: `docker compose -f docker-compose.airflow.yml up -d` (컨테이너는 `DATABASE_URL`을 빈 값으로 덮어 RDS로 간다).
