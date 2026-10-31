@@ -32,3 +32,8 @@ def test_choice_words_mean_one_of():
     line = relation_line("택1")
     for w in ("'또는'", "'혹은'", "'or'"):
         assert w in line
+
+
+def test_examples_are_only_examples():
+    """예시 답안의 능력 이름이 사전과 달라도 목록을 따른다(예시는 코드에 고정, 목록은 DB 사전)."""
+    assert "능력 이름은 위 '능력 목록'에 있는 것만 쓰고, 예시와 다르면 목록을 따른다" in ex.instructions(examples=True)

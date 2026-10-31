@@ -92,3 +92,22 @@ def test_log_function_rejects_tables_outside_public(db):
     db.execute("CREATE TRIGGER fake AFTER INSERT ON pg_temp.tech FOR EACH ROW EXECUTE FUNCTION log_dictionary_change()")
     with pytest.raises(psycopg.errors.RaiseException, match="public"):
         db.execute("INSERT INTO pg_temp.tech VALUES (1, '가짜')")
+
+
+def test_tech_hidden_by_word_is_blocked(db):
+    """기술 이름·별칭이 '기술 아님'·'일반 낱말'과 같으면 넣을 수 없다(넣어도 영영 안 잡힘)."""
+    with pytest.raises(psycopg.errors.RaiseException, match="스킬이 아닌 낱말"):
+        db.execute("INSERT INTO tech (name) VALUES ('cto')")
+    with pytest.raises(psycopg.errors.RaiseException, match="스킬이 아닌 낱말"):
+        db.execute("UPDATE tech SET aliases = aliases || '{A I}' WHERE name = 'Java'")
+
+
+def test_word_hiding_tech_is_blocked(db):
+    with pytest.raises(psycopg.errors.RaiseException, match="MySQL"):
+        db.execute("INSERT INTO exclude_word (word, kind) VALUES ('mysql', '기술 아님')")
+
+
+def test_llm_word_may_share_tech_name(db):
+    db.execute("INSERT INTO tech (name) VALUES ('Claude API')")    # LLM 모델 낱말은 정확히 같은 기술을 가리지 않음
+    db.execute("UPDATE tech SET is_active = false WHERE name = 'MySQL'")
+    db.execute("INSERT INTO exclude_word (word, kind) VALUES ('mysql', '기술 아님')")   # 꺼진 기술과는 부딪치지 않음

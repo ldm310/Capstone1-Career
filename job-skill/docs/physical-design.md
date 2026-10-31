@@ -162,7 +162,7 @@
 | 낱말 | `word` | text | NOT NULL, UNIQUE(kind, word) |
 | 종류 | `kind` | text | NOT NULL, LLM 모델/기술 아님/일반 낱말 |
 
-`LLM 모델`은 이름 안에 들어 있으면 뺀다(예: `claude` → `Claude Code`도 뺌). `기술 아님`은 직무명 등, `일반 낱말`은 낱말만 빼고 요건은 남긴다. 비교는 대소문자·공백을 무시한다.
+`LLM 모델`은 이름 안에 들어 있으면 뺀다(예: `claude` → `Claude Code`도 뺌). 단 사전에 있는 기술·능력 이름과 **정확히 같으면** 기술로 본다(예: `llama`가 있어도 `LlamaIndex`는 기술, 2026-11-01). `기술 아님`은 직무명 등, `일반 낱말`은 낱말만 빼고 요건은 남긴다. 비교는 대소문자·공백을 무시한다.
 
 **사전 판 `dictionary_version`**
 | 한글 | 영어 | 자료형 | 제약 |
@@ -217,6 +217,7 @@ SELECT changed_at, changed_by, table_name, action, old_row, new_row FROM diction
 | 결과가 가리키는 능력·기술은 지우지 않음 | DB: FK `ON DELETE RESTRICT` (그만 쓸 때는 `is_active=false`) |
 | 기술마다 대표 능력은 최대 하나 | DB: 부분 UNIQUE 색인 `tech_capability_one_primary` |
 | 사전을 바꾸면 기록이 남음 | DB: 트리거 `dictionary_change_log`, `TRUNCATE` 막음 |
+| 스킬이 아닌 낱말(기술 아님·일반 낱말)이 사용 중인 기술·능력 이름을 가리지 않음 | DB: 트리거 `dictionary_no_hidden_name` (넣거나 고칠 때 오류로 알림) |
 | 확인 결과와 확인 시각은 함께 | DB: `CHECK` |
 | 0~3년 공고만 수집, 교육생 제외 | 수집 코드 (`sample_random.py`의 `min_years`) |
 | 원본 해시가 바뀌면 다시 추출 | 수정 확인 코드 (아직 없음) |

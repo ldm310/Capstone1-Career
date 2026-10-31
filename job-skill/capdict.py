@@ -28,21 +28,31 @@ def key(s: str) -> str:
 def load_dictionary(conn) -> dict:
     """DB 사전 -> {"capabilities", "techs", "exclude", "has_other"}. 사용 중(is_active)인 줄만, 능력·기술은 id 순.
     기술의 caps 는 대표 능력(is_primary)이 먼저, 나머지는 능력ID 순(대표가 없으면 능력ID 가 가장 작은 것이 맨 앞).
-    꺼진 능력·기술을 가리키는 연결·상위는 뺀다. '기타'는 능력 목록에 넣지 않고 has_other 로만 알린다."""
-    caps = conn.execute("SELECT id, name, group_name, aliases, parent_id FROM capability WHERE is_active ORDER BY id").fetchall()
-    techs = conn.execute("SELECT id, name, aliases, parent_id FROM tech WHERE is_active ORDER BY id").fetchall()
+    꺼진 능력·기술을 가리키는 연결·상위는 뺀다. '기타'는 능력 목록에 넣지 않고 has_other 로만 알린다.
+    추출을 시작한 순간의 모습으로 한 번에 읽는다(읽는 사이 팀원이 커밋한 것은 다음 추출부터)."""
+    from psycopg import pq
+
+    fresh = conn.info.transaction_status == pq.TransactionStatus.IDLE
+    with conn.transaction():
+        if fresh:
+            conn.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")
+        caps = conn.execute("SELECT id, name, group_name, aliases, parent_id FROM capability WHERE is_active ORDER BY id").fetchall()
+        techs = conn.execute("SELECT id, name, aliases, parent_id FROM tech WHERE is_active ORDER BY id").fetchall()
+        links = conn.execute("SELECT tech_id, capability_id FROM tech_capability ORDER BY tech_id, is_primary DESC, capability_id").fetchall()
+        words = conn.execute("SELECT kind, word FROM exclude_word ORDER BY id").fetchall()
+    clean = lambda xs: [x for x in xs if x and x.strip()]   # 별칭에 빈 값(NULL·공백)이 들어가도 무시
     cap_name = {r[0]: r[1] for r in caps}
     tech_name = {r[0]: r[1] for r in techs}
     tech_caps: dict[int, list[str]] = {}
-    for t, c in conn.execute("SELECT tech_id, capability_id FROM tech_capability ORDER BY tech_id, is_primary DESC, capability_id"):
+    for t, c in links:
         if t in tech_name and c in cap_name and cap_name[c] != OTHER:
             tech_caps.setdefault(t, []).append(cap_name[c])
     exclude = {k: [] for k in EXCLUDE_KINDS.values()}
-    for kind, word in conn.execute("SELECT kind, word FROM exclude_word ORDER BY id"):
+    for kind, word in words:
         exclude[EXCLUDE_KINDS[kind]].append(word)
-    return {"capabilities": {n: {"group": g, "aliases": list(a), "parent": cap_name.get(p)}
+    return {"capabilities": {n: {"group": g, "aliases": clean(a), "parent": cap_name.get(p)}
                              for i, n, g, a, p in caps if n != OTHER},
-            "techs": {n: {"caps": tech_caps.get(i, []), "aliases": list(a), "parent": tech_name.get(p)} for i, n, a, p in techs},
+            "techs": {n: {"caps": tech_caps.get(i, []), "aliases": clean(a), "parent": tech_name.get(p)} for i, n, a, p in techs},
             "exclude": exclude,
             "has_other": OTHER in cap_name.values()}
 
@@ -111,8 +121,6 @@ class CapDict:
         k = key(name)
         if not k:
             return {"kind": "unknown", "name": name}
-        if any(p in k for p in self.llm_patterns):
-            return {"kind": "exclude", "name": name, "reason": "LLM 모델 이름"}
         if k in self.not_skill:
             return {"kind": "exclude", "name": name, "reason": "기술 아님"}
         if k in self.generic:
@@ -123,6 +131,10 @@ class CapDict:
             return {"kind": "tech", "name": t, "caps": v.get("caps", []), "parent": v.get("parent")}
         if k in self.cap_by_key:
             return {"kind": "capability", "name": self.cap_by_key[k]}
+        # LLM 모델 낱말은 '이름 안에 들어 있으면' 뺀다. 단 사전에 있는 이름과 정확히 같으면 위에서 기술·능력으로 봤다
+        # (2026-11-01 사용자 결정 — 'llama' 때문에 LlamaIndex 가 빠지던 문제)
+        if any(p in k for p in self.llm_patterns):
+            return {"kind": "exclude", "name": name, "reason": "LLM 모델 이름"}
         if _split:
             parts = [p.strip() for p in re.split(r"[/()·,]", name) if p.strip()]
             if len(parts) > 1:
