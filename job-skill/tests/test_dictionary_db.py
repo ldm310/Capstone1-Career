@@ -43,3 +43,26 @@ def test_one_primary_per_tech(db):
 def test_exclude_word_kind_is_checked(db):
     with pytest.raises(psycopg.errors.CheckViolation):
         db.execute("INSERT INTO exclude_word (word, kind) VALUES ('x', '모름')")
+
+
+# ---------------------------------------------------------------- 시드(빈 DB 채우기)·내려받기
+
+def test_seed_fills_empty_db(db):          # conftest 가 시드를 적용한 임시 DB
+    assert db.execute("SELECT count(*) FROM capability WHERE name <> '기타'").fetchone()[0] == 61
+    assert db.execute("SELECT count(*) FROM tech").fetchone()[0] == 184
+    assert db.execute("SELECT count(*) FROM exclude_word").fetchone()[0] == 61
+    rds = db.execute("""SELECT c.name FROM tech_capability tc JOIN tech t ON t.id = tc.tech_id
+                        JOIN capability c ON c.id = tc.capability_id WHERE t.name = 'RDS' AND tc.is_primary""").fetchone()
+    assert rds == ("클라우드",)            # JSON 의 첫 번째 능력이 대표
+
+
+def test_seed_does_nothing_when_dictionary_exists(db):
+    import db_load
+    db.execute("DELETE FROM exclude_word WHERE word = 'CTO'")
+    db.execute(open(db_load.SEED_SQL, encoding="utf-8").read())
+    assert db.execute("SELECT count(*) FROM exclude_word WHERE word = 'CTO'").fetchone()[0] == 0
+
+
+def test_export_round_trip_is_identical(db):
+    import db_load
+    assert db_load.export_dictionary(db) == open(db_load.SEED_SQL, encoding="utf-8").read()

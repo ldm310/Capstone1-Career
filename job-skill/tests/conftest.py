@@ -29,7 +29,7 @@ def _with_db(url: str, name: str) -> str:
 
 @pytest.fixture
 def db_url():
-    """임시 DB 를 만들고 스키마·마이그레이션을 적용한 뒤 접속 주소를 준다."""
+    """임시 DB 를 만들고 스키마·마이그레이션·사전 시드를 적용한 뒤 접속 주소를 준다."""
     import psycopg
     import db_load
 
@@ -47,6 +47,7 @@ def db_url():
         c.execute(open(os.path.join(HERE, "db", "schema.sql"), encoding="utf-8").read())
         for path in sorted(glob.glob(os.path.join(HERE, "db", "migrations", "*.sql"))):
             c.execute(open(path, encoding="utf-8").read())
+        c.execute(open(db_load.SEED_SQL, encoding="utf-8").read())   # 사전(빈 DB 라 채워짐)
     yield url
     with psycopg.connect(admin, autocommit=True) as c:
         c.execute(f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)')
