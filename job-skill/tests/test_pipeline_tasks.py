@@ -28,6 +28,11 @@ def write_rows(run_dir, nos):
     collect.write_targets(str(run_dir), [{"rec_idx": n, **ROW} for n in nos])
 
 
+def alerts(run_dir) -> dict:
+    """단계들이 결과 알림용으로 적어 둔 것(넘어간 공고·비용 상한)."""
+    return json.load(open(os.path.join(str(run_dir), "alerts.json"), encoding="utf-8"))
+
+
 def test_run_dir_for_sanitizes():
     import pipeline_tasks
     assert pipeline_tasks.run_dir_for("daily_collect", "scheduled__2026-10-28T00:00:00+09:00") == \
@@ -40,10 +45,10 @@ def test_empty_run_skips_everything(pt, tmp_path):
     pt.step_fetch_raw(d)
     pt.step_ocr(d)
     pt.step_filter(d)
-    pt.step_extract(d, budget_usd=5.0, dag_label="매일 수집", limit=5.0)
+    pt.step_extract(d, budget_usd=5.0, limit=5.0)
     pt.step_load(d)
     assert pt._calls == [] and pt._sent == []
-    assert pt.summary(d) == {"새 공고": 0, "추출": 0, "확인 필요": 0, "비용": 0.0}
+    assert pt.summary(d) == {"대상": 0, "추출": 0, "확인 필요": 0, "비용": 0.0}
 
 
 def with_image(run_dir):
@@ -83,7 +88,7 @@ def test_ocr_failure_propagates(monkeypatch, tmp_path):
         pipeline_tasks.step_ocr(str(tmp_path))
 
 
-def test_extract_passes_budget_and_alerts_once(monkeypatch, tmp_path):
+def test_extract_passes_budget_and_notes_stop(monkeypatch, tmp_path):
     import pipeline_tasks
     write_rows(tmp_path, ["A", "B"])
     ex = tmp_path / "out" / "extract"
@@ -97,18 +102,18 @@ def test_extract_passes_budget_and_alerts_once(monkeypatch, tmp_path):
 
     monkeypatch.setattr(pipeline_tasks, "run_script", fake_run)
     monkeypatch.setattr(pipeline_tasks.notify, "send", lambda text: sent.append(text) or True)
-    res = pipeline_tasks.step_extract(str(tmp_path), budget_usd=1.5, dag_label="매일 수집", limit=5.0)
+    res = pipeline_tasks.step_extract(str(tmp_path), budget_usd=1.5, limit=5.0)
     script, args = calls[0]
     assert script == "extract_skills.py" and "--tag=-ex" in args and args[args.index("--max-usd") + 1] == "1.5"
     assert args[args.index("--workers") + 1] == "8"                      # 공고 8건씩 동시에(OpenAI 한도 분당 200만 토큰의 약 15%)
-    assert len(sent) == 1 and "$5.00" in sent[0] and "$5.00" in sent[0] and "1건" in sent[0]
+    assert sent == [] and alerts(tmp_path)["budget"] == {"limit": 5.0, "left": 1}   # Slack 은 결과 알림에서 한 번에
     assert res["stopped"] is True
 
 
 def test_extract_with_no_budget_left_skips_llm(pt, tmp_path):
     write_rows(tmp_path, ["A", "B", "C"])
-    res = pt.step_extract(str(tmp_path), budget_usd=0, dag_label="매일 수집", limit=5.0)
-    assert pt._calls == [] and len(pt._sent) == 1 and "3건" in pt._sent[0]
+    res = pt.step_extract(str(tmp_path), budget_usd=0, limit=5.0)
+    assert pt._calls == [] and pt._sent == [] and alerts(tmp_path)["budget"] == {"limit": 5.0, "left": 3}
     assert res["stopped"] is True
 
 
@@ -119,7 +124,7 @@ def test_summary_counts_results(tmp_path):
     d.mkdir(parents=True)
     (d / "A.json").write_text(json.dumps({"cost_usd": 0.004, "review_reasons": []}), encoding="utf-8")
     (d / "B.json").write_text(json.dumps({"cost_usd": 0.0035, "review_reasons": [{"검사": 1, "내용": "x"}]}), encoding="utf-8")
-    assert pipeline_tasks.summary(str(tmp_path)) == {"새 공고": 3, "추출": 2, "확인 필요": 1, "비용": 0.0075}
+    assert pipeline_tasks.summary(str(tmp_path)) == {"대상": 3, "추출": 2, "확인 필요": 1, "비용": 0.0075}
 
 
 def test_fetch_images_skips_existing_image(monkeypatch, tmp_path):
@@ -160,7 +165,7 @@ def test_detect_touches_unchanged_only(monkeypatch, tmp_path):
     assert touched == ["A"]          # 바뀐 공고는 다시 추출에 성공해야(DB 저장) 확인 시각이 바뀐다
     import datetime as dt
     assert stamps[0] is not None and stamps[0] <= dt.datetime.now(dt.timezone.utc)   # 본문을 받기 시작한 시각으로
-    assert len(sent) == 1 and "확인 못 한 공고 1건" in sent[0]   # 오류(D)는 링크와 함께 알림
+    assert sent == [] and alerts(tmp_path)["확인 못 한 공고"] == [["D", "오류"]]   # 오류(D)는 결과 알림에 링크와 함께
     assert res == {"확인": 4, "바뀜": 1, "그대로": 1, "오류": 1}
 
 
@@ -332,9 +337,9 @@ def test_extract_failures_are_alerted(monkeypatch, tmp_path):
 
     monkeypatch.setattr(pipeline_tasks, "run_script", fake_run)
     monkeypatch.setattr(pipeline_tasks.notify, "send", lambda text: sent.append(text) or True)
-    res = pipeline_tasks.step_extract(str(tmp_path), budget_usd=5.0, dag_label="매일 수집", limit=5.0)
-    assert len(sent) == 1 and "LLM 추출 실패 2건" in sent[0]
-    assert "rec_idx=A" in sent[0] and "rec_idx=B" in sent[0] and res["failed"] == 2
+    res = pipeline_tasks.step_extract(str(tmp_path), budget_usd=5.0, limit=5.0)
+    assert sent == [] and res["failed"] == 2
+    assert alerts(tmp_path)["LLM 추출 실패"] == [["A", "응답 잘림·형식 오류"], ["B", "응답 잘림·형식 오류"]]
 
 
 def test_extract_without_failures_sends_nothing(monkeypatch, tmp_path):
@@ -346,8 +351,8 @@ def test_extract_without_failures_sends_nothing(monkeypatch, tmp_path):
     monkeypatch.setattr(pipeline_tasks, "run_script", lambda script, args, run_dir, **k: (ex / "_stats.json").write_text(
         json.dumps([{"failed": [], "fail_reasons": {}}]), encoding="utf-8"))
     monkeypatch.setattr(pipeline_tasks.notify, "send", lambda text: sent.append(text) or True)
-    assert pipeline_tasks.step_extract(str(tmp_path), budget_usd=5.0, dag_label="매일 수집", limit=5.0)["failed"] == 0
-    assert sent == []
+    assert pipeline_tasks.step_extract(str(tmp_path), budget_usd=5.0, limit=5.0)["failed"] == 0
+    assert sent == [] and alerts(tmp_path)["LLM 추출 실패"] == []
 
 
 
@@ -365,9 +370,9 @@ def test_fetch_raw_alerts_postings_without_body(monkeypatch, tmp_path):
 
     monkeypatch.setattr(pipeline_tasks, "run_script", fake_fetch)
     monkeypatch.setattr(pipeline_tasks.notify, "send", lambda text: sent.append(text) or True)
-    pipeline_tasks.step_fetch_raw(str(tmp_path), dag_label="매일 수집")
+    pipeline_tasks.step_fetch_raw(str(tmp_path))
     assert [r["rec_idx"] for r in pipeline_tasks.collect.read_targets(str(tmp_path))] == ["A"]
-    assert len(sent) == 1 and "본문을 못 받은 공고 1건" in sent[0] and "• B HTTP 404" in sent[0] and "rec_idx=B" in sent[0]
+    assert sent == [] and alerts(tmp_path)["본문을 못 받은 공고"] == [["B", "HTTP 404"]]
 
 
 def test_detect_alerts_postings_it_could_not_check(monkeypatch, tmp_path):
@@ -380,4 +385,47 @@ def test_detect_alerts_postings_it_could_not_check(monkeypatch, tmp_path):
     monkeypatch.setattr(pipeline_tasks.recheck, "detect_changes", lambda run_dir, rows: {
         "changed": [], "closed": [], "unchanged": [], "error": ["D"], "why": {"D": "HTTP 429"}})
     pipeline_tasks.step_detect(str(tmp_path))
-    assert len(sent) == 1 and "확인 못 한 공고 1건" in sent[0] and "• D HTTP 429" in sent[0]
+    assert sent == [] and alerts(tmp_path)["확인 못 한 공고"] == [["D", "HTTP 429"]]
+
+
+def _report_run(tmp_path, budget=False):
+    """대상 A·B·C·E: A 는 추출됨(확인 필요), B 는 LLM 실패, C·E 는 결과 없음. 변경 감지에서 D 확인 못 함."""
+    write_rows(tmp_path, ["A", "B", "C", "E"])
+    d = tmp_path / "out" / "extract" / "gpt-5.6-luna-ex"
+    d.mkdir(parents=True)
+    (d / "A.json").write_text(json.dumps({"cost_usd": 0.73, "review_reasons": [{"검사": 2, "내용": "x"}]}), encoding="utf-8")
+    note = {"확인 못 한 공고": [["D", "HTTP 429"]], "LLM 추출 실패": [["B", "응답 잘림·형식 오류"]]}
+    if budget:
+        note["budget"] = {"limit": 5.0, "left": 2}
+    (tmp_path / "alerts.json").write_text(json.dumps(note, ensure_ascii=False), encoding="utf-8")
+
+
+def test_daily_report_is_one_message(tmp_path):
+    import pipeline_tasks
+    _report_run(tmp_path)
+    got = {"new": 3, "pending": 1, "수정": 14, "목록에 없음": 55, "마감일 바뀜": 12}
+    msg = pipeline_tasks.daily_report(str(tmp_path), got, {"바뀜": 2, "오류": 1}, closed=55, today_cost=0.73)
+    url = "https://www.saramin.co.kr/zf_user/jobs/relay/view?view_type=list&rec_idx="
+    assert msg.splitlines() == [
+        "✅ 매일 수집 완료",
+        "• 수집: 새 공고 3 · 밀린 공고 1",
+        "• 변경 감지: 수정 14 → 바뀜 2 · 마감일 바뀜 12 · 확인 오류 1",
+        "• 마감: 목록에 없음 55 → 마감 55",
+        "• 추출: 1/4건 · 확인 필요 1",
+        "• 비용: 이번 $0.73 · 오늘 $0.73 (하루 상한 $5)",
+        "⚠️ 넘어간 공고 4건 — 다음 실행 때 다시 시도",
+        f"• <{url}D|D> 확인 못 한 공고 · HTTP 429",
+        f"• <{url}B|B> LLM 추출 실패 · 응답 잘림·형식 오류",
+        f"• <{url}C|C> 추출할 글 없음",
+        f"• <{url}E|E> 추출할 글 없음",
+    ]
+
+
+def test_report_does_not_call_budget_stop_no_text(tmp_path):
+    """비용 상한으로 멈춰 결과가 없는 공고는 '글 없음'이 아니라 상한 줄의 '남은 공고'로 센다."""
+    import pipeline_tasks
+    _report_run(tmp_path, budget=True)
+    msg = pipeline_tasks.backfill_report(str(tmp_path), {"new": 4, "excluded": 7})
+    assert "추출할 글 없음" not in msg and "남은 공고 2건" in msg
+    assert msg.splitlines()[:4] == ["✅ 전체 수집 완료", "• 수집: 대상 공고 4 · 제외 7", "• 추출: 1/4건 · 확인 필요 1",
+                                    "• 비용: $0.73 (상한 $10)"]

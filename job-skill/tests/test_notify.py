@@ -8,10 +8,38 @@ from types import SimpleNamespace
 import pytest
 
 
-def test_msg_result_format():
+URL = "https://www.saramin.co.kr/zf_user/jobs/relay/view?view_type=list&rec_idx="
+
+
+def test_msg_report_layout():
+    """DAG 결과 알림 하나(2026-10-31 사용자 요청 — 끝날 때 결과로만, 읽기 쉽게): 제목, '• 이름: 값' 줄,
+    넘어간 공고는 공고번호에 사람인 링크를 건다."""
     import notify
-    assert notify.msg_result("매일 수집", {"새 공고": 52, "추출": 52, "확인 필요": 2, "오늘 비용": 0.214}) == \
-        "✅ 매일 수집 완료 · 새 공고 52 · 추출 52 · 확인 필요 2 · 오늘 비용 $0.21"
+    msg = notify.msg_report("매일 수집", [("수집", "새 공고 143 · 밀린 공고 8"), ("추출", "151/153건 · 확인 필요 1")],
+                            {"LLM 추출 실패": [("50846359", "응답 잘림·형식 오류")], "추출할 글 없음": [("55337320", "")]})
+    assert msg.splitlines() == [
+        "✅ 매일 수집 완료",
+        "• 수집: 새 공고 143 · 밀린 공고 8",
+        "• 추출: 151/153건 · 확인 필요 1",
+        "⚠️ 넘어간 공고 2건 — 다음 실행 때 다시 시도",
+        f"• <{URL}50846359|50846359> LLM 추출 실패 · 응답 잘림·형식 오류",
+        f"• <{URL}55337320|55337320> 추출할 글 없음",
+    ]
+
+
+def test_msg_report_budget_and_long_list():
+    import notify
+    items = [(str(55000000 + i), "HTTP 404") for i in range(12)]
+    lines = notify.msg_report("매일 수집", [("추출", "3/15건")], {"본문을 못 받은 공고": items},
+                              budget={"limit": 5.0, "left": 12}).splitlines()
+    assert "⚠️ 비용 상한 $5.00 도달로 LLM 추출 멈춤 · 남은 공고 12건은 다음 실행 때" in lines
+    assert "⚠️ 넘어간 공고 12건 — 다음 실행 때 다시 시도" in lines and lines[-1] == "…외 2건"
+    assert sum(1 for ln in lines if ln.startswith("• <")) == 10
+
+
+def test_msg_report_without_problems():
+    import notify
+    assert notify.msg_report("전체 수집", [("추출", "3/3건")]) == "✅ 전체 수집 완료\n• 추출: 3/3건"
 
 
 def test_msg_failure_truncates():
@@ -22,11 +50,6 @@ def test_msg_failure_truncates():
     assert notify.msg_failure("d", "t", 1, None) == "❌ d · t 실패 (1번째 시도)"
 
 
-def test_msg_budget_and_daily_cost():
-    import notify
-    m = notify.msg_budget("매일 수집", 5.02, 5.0, 12)
-    assert "$5.00" in m and "$5.02" in m and "12건" in m and m.startswith("⚠️ 매일 수집:")
-    assert notify.msg_daily_cost(dt.date(2026, 10, 27), 0.413, 104) == "💰 10월 27일 LLM 비용 $0.41 (추출 104건)"
 
 
 def test_send_posts_json_to_webhook(monkeypatch):
@@ -63,17 +86,6 @@ def test_on_failure_sends_task_failure(monkeypatch):
     ti = SimpleNamespace(dag_id="daily_collect", task_id="load_db", try_number=3)
     notify.on_failure({"ti": ti, "exception": ValueError("DB 접속 실패")})
     assert sent == ["❌ daily_collect · load_db 실패 (3번째 시도) · ValueError: DB 접속 실패"]
-
-
-def test_msg_skipped_lists_postings_with_links():
-    """넘어간 공고는 공고번호·원인·사람인 링크를 한 줄씩(10건까지, 나머지는 '외 N건'). 제목·내용은 넣지 않는다."""
-    import notify
-    items = [(str(55000000 + i), "응답 잘림·형식 오류") for i in range(12)]
-    msg = notify.msg_skipped("매일 수집", "LLM 추출 실패", items, "결과 없이 저장하고 넘어감")
-    lines = msg.splitlines()
-    assert lines[0] == "⚠️ 매일 수집: LLM 추출 실패 12건 — 결과 없이 저장하고 넘어감"
-    assert lines[1] == "• 55000000 응답 잘림·형식 오류 https://www.saramin.co.kr/zf_user/jobs/relay/view?view_type=list&rec_idx=55000000"
-    assert len(lines) == 12 and lines[-1] == "…외 2건(태스크 로그)"
 
 
 def test_msg_failure_lists_failed_postings():
