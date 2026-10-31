@@ -161,6 +161,20 @@ def use_dictionary(cd: CapDict) -> None:
     REQ["properties"]["capability"]["enum"] = cd.cap_names() + ["기타"]
 
 
+def write_dictionary_report(conn, folder: str) -> dict:
+    """사전을 읽어 이 실행에 쓰고, Airflow 태스크가 읽을 쪽지(folder/_dictionary.json)를 남긴다.
+    쪽지: {"version": 사전 판, "fatal": 멈출 이유, "problems": 확인 필요} — 스크립트가 멈춰도 태스크가 이유를 알 수 있게."""
+    report = {"version": "", "fatal": [], "problems": []}
+    try:
+        cd, report["problems"] = prepare_dictionary(conn)
+        report["version"] = cd.version
+    except DictionaryBroken as e:
+        report["fatal"] = e.reasons
+    with open(os.path.join(folder, "_dictionary.json"), "w", encoding="utf-8") as f:
+        json.dump(report, f, ensure_ascii=False)
+    return report
+
+
 def prepare_dictionary(conn) -> tuple[CapDict, list[str]]:
     """DB 사전을 읽고 검사해 쓴다. 망가졌으면 DictionaryBroken, 아니면 (사전, 확인 필요 목록 — 추출은 계속)."""
     data = load_dictionary(conn)
@@ -177,6 +191,7 @@ def prepare_dictionary(conn) -> tuple[CapDict, list[str]]:
 EXAMPLES = """
 
 예시 (지어낸 공고)
+예시는 방법만 보여 준다. 능력 이름은 위 '능력 목록'에 있는 것만 쓰고, 예시와 다르면 목록을 따른다.
 입력:
 사람인 직무 분류: 백엔드 (참고용, 다른 직무 부문도 모두 정리)
 회사: (주)예시소프트
@@ -991,15 +1006,8 @@ def main() -> None:
         print("추출할 공고가 없습니다.")
         return
     import db_load   # 함수 안에서: db_load 가 이 모듈을 불러오므로(순환 import 피함)
-    report = {"version": "", "fatal": [], "problems": []}   # Airflow 태스크가 읽어 결과 알림·실패 이유에 쓴다
-    try:
-        with db_load.connect() as conn:
-            cd, report["problems"] = prepare_dictionary(conn)
-        report["version"] = cd.version
-    except DictionaryBroken as e:
-        report["fatal"] = e.reasons
-    with open(os.path.join(EX, "_dictionary.json"), "w", encoding="utf-8") as f:
-        json.dump(report, f, ensure_ascii=False)
+    with db_load.connect() as conn:
+        report = write_dictionary_report(conn, EX)
     if report["fatal"]:
         sys.exit("사전이 망가져 추출을 멈춥니다: " + "; ".join(report["fatal"]))
     print(f"사전 {report['version']}" + (f" (확인 필요 {len(report['problems'])}건)" if report["problems"] else ""))

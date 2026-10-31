@@ -96,3 +96,34 @@ def test_empty_llm_word_does_not_exclude_everything(db):
     data = load_dictionary(db)
     data["exclude"]["llm_models"] += ["", "  "]
     assert CapDict(data).lookup("MySQL")["kind"] == "tech"
+
+
+# ---------------------------------------------------------------- 작은 문제(사용자와 하나씩 정함, 2026-11-01)
+
+def test_dictionary_is_read_as_one_snapshot(db_url):
+    """추출을 시작한 순간의 모습으로 한 번에 읽는다 — 읽는 사이 팀원이 커밋한 것은 다음 추출부터."""
+    import psycopg
+
+    with psycopg.connect(db_url) as reader, psycopg.connect(db_url, autocommit=True) as writer:
+        class Reader:   # 첫 SELECT(능력 읽기) 바로 뒤에 팀원이 기술을 넣고 커밋한다
+            info, done = reader.info, False
+
+            def transaction(self):
+                return reader.transaction()
+
+            def execute(self, query, *a, **k):
+                r = reader.execute(query, *a, **k)
+                if not self.done and str(query).lstrip().upper().startswith("SELECT"):
+                    self.done = True
+                    writer.execute("INSERT INTO tech (name) VALUES ('시험기술')")
+                return r
+
+        assert "시험기술" not in load_dictionary(Reader())["techs"]
+        assert "시험기술" in load_dictionary(reader)["techs"]   # 다음에 읽으면 보임
+
+
+def test_llm_word_does_not_hide_exact_tech(db):
+    """사전에 있는 이름과 정확히 같으면 기술 — 'llama'(LLM 모델) 때문에 LlamaIndex 가 빠지지 않는다."""
+    cd = CapDict(load_dictionary(db))
+    assert cd.lookup("LlamaIndex")["kind"] == "tech"
+    assert cd.lookup("Llama 3")["kind"] == "exclude"
