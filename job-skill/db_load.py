@@ -5,7 +5,8 @@ DB 저장(Load): 표 만들기 · 표준화 사전 동기화 · 공고와 추출
   DB 띄우기: docker compose up -d   (docker-compose.yml, 비밀번호는 .env — .env.example 참고)
 
 실행:
-  py -3.12 db_load.py init                                  # 표 만들기(db/schema.sql). 이미 있으면 건너뜀
+  py -3.12 db_load.py init                                  # 표 만들기(db/schema.sql) + 사전 채우기(db/seed_dictionary.sql). 이미 있으면 건너뜀
+  py -3.12 db_load.py export-dict                            # DB 사전 -> db/seed_dictionary.sql (사전을 고친 뒤 내려받아 커밋)
   py -3.12 db_load.py sync-dict                              # capabilities.json -> 사전 표 (한 방향)
   $env:OCR_DATA_DIR = "sample3"
   py -3.12 db_load.py load --run gpt-5.6-luna-ex-chk         # 공고·이미지 + out/extract/<run>/ 의 추출 결과
@@ -40,6 +41,7 @@ from sample_random import min_years
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SCHEMA_SQL = os.path.join(HERE, "db", "schema.sql")
+SEED_SQL = os.path.join(HERE, "db", "seed_dictionary.sql")   # 빈 DB 를 채우는 사전(export-dict 로 DB 에서 내려받음)
 DICT_JSON = os.path.join(HERE, "capabilities.json")
 EX = os.path.join(OUT_DIR, "extract")
 SAVE_TRIES = 3   # 공고 하나 저장을 일시 오류(연결 끊김·교착)일 때 몇 번까지 할지
@@ -143,8 +145,9 @@ def cmd_init() -> None:
             print("표가 이미 있습니다. 건너뜁니다.")
             return
         conn.execute(open(SCHEMA_SQL, encoding="utf-8").read())
+        conn.execute(open(SEED_SQL, encoding="utf-8").read())
         n = conn.execute("SELECT count(*) FROM pg_tables WHERE schemaname = %s", (SCHEMA,)).fetchone()[0]
-        print(f"스키마 {SCHEMA} 에 표 {n}개를 만들었습니다.")
+        print(f"스키마 {SCHEMA} 에 표 {n}개를 만들고 사전을 채웠습니다.")
 
 
 # ---------------------------------------------------------------- sync-dict
@@ -190,6 +193,84 @@ def cmd_sync_dict() -> None:
                         ON CONFLICT (version) DO UPDATE SET synced_at = now()""", (version,))
     print(f"사전 {version}: 능력 {len(caps)}개, 기술 {len(techs)}개, 기술-능력 {len(links)}개 "
           f"(사용 안 함으로 바꿈: 능력 {off_c}, 기술 {off_t})")
+
+
+# ---------------------------------------------------------------- export-dict
+
+KINDS = ("LLM 모델", "기술 아님", "일반 낱말")   # exclude_word.kind (내보내는 순서)
+
+
+def _sql(v) -> str:
+    """SQL 값 글자: None -> NULL, bool, 글자 목록 -> ARRAY[...]::text[], 글자 -> '...'."""
+    if v is None:
+        return "NULL"
+    if isinstance(v, bool):
+        return "true" if v else "false"
+    if isinstance(v, list):
+        return "ARRAY[" + ", ".join(_sql(x) for x in v) + "]::text[]" if v else "'{}'::text[]"
+    return "'" + str(v).replace("'", "''") + "'"
+
+
+def _values(rows: list[tuple], indent: str) -> str:
+    return f",\n{indent}".join("(" + ", ".join(_sql(v) for v in r) + ")" for r in rows)
+
+
+def export_dictionary(conn) -> str:
+    """사전 4개 표 -> 빈 DB 를 채우는 SQL(사전이 이미 있으면 아무것도 안 함). 사용 안 함 줄도 내보낸다.
+    능력·기술은 id 순(LLM 지시문의 능력 줄 순서·예시 기술 순서가 그대로 이어짐), 정렬은 파이썬에서 해서 DB 마다 같은 글이 나온다."""
+    caps = conn.execute("SELECT id, name, group_name, aliases, is_active, parent_id FROM capability ORDER BY id").fetchall()
+    techs = conn.execute("SELECT id, name, aliases, is_active, parent_id FROM tech ORDER BY id").fetchall()
+    cap_name = {r[0]: r[1] for r in caps}
+    tech_name = {r[0]: r[1] for r in techs}
+    links = sorted(conn.execute("SELECT tech_id, capability_id, is_primary FROM tech_capability").fetchall(),
+                   key=lambda r: (r[0], not r[2], r[1]))
+    words = sorted(conn.execute("SELECT kind, word FROM exclude_word").fetchall(), key=lambda r: (KINDS.index(r[0]), r[1]))
+    i = " " * 12
+    parts = [
+        "-- 표준화 사전 시드: 사전이 비어 있는 DB(테스트·CI·새 DB)만 채운다. 이미 사전이 있으면 아무것도 하지 않는다.",
+        "-- 사전의 원본은 DB 다. 이 파일은 고치지 말고 'py -3.12 db_load.py export-dict' 로 DB 에서 다시 내려받는다.",
+        "BEGIN;",
+        "SET LOCAL search_path TO public;",
+        "DO $seed$",
+        "BEGIN",
+        "    IF EXISTS (SELECT 1 FROM capability) THEN",
+        "        RETURN;",
+        "    END IF;",
+    ]
+    if caps:
+        parts += ["    INSERT INTO capability (name, group_name, aliases, is_active) VALUES",
+                  i + _values([(r[1], r[2], r[3], r[4]) for r in caps], i) + ";"]
+    if techs:
+        parts += ["    INSERT INTO tech (name, aliases, is_active) VALUES",
+                  i + _values([(r[1], r[2], r[3]) for r in techs], i) + ";"]
+    for table, rows, names in (("capability", caps, cap_name), ("tech", techs, tech_name)):
+        parents = [(r[1], names[r[-1]]) for r in rows if r[-1] is not None]
+        if parents:
+            parts += [f"    UPDATE {table} x SET parent_id = p.id FROM (VALUES",
+                      i + _values(parents, i),
+                      f"        ) AS v (name, parent), {table} p",
+                      "    WHERE x.name = v.name AND p.name = v.parent;"]
+    if links:
+        parts += ["    INSERT INTO tech_capability (tech_id, capability_id, is_primary)",
+                  "    SELECT t.id, c.id, v.is_primary FROM (VALUES",
+                  i + _values([(tech_name[t], cap_name[c], p) for t, c, p in links], i),
+                  "        ) AS v (tech, cap, is_primary)",
+                  "    JOIN tech t ON t.name = v.tech JOIN capability c ON c.name = v.cap;"]
+    if words:
+        parts += ["    INSERT INTO exclude_word (kind, word) VALUES",
+                  i + _values(words, i) + ";"]
+    parts += ["END $seed$;", "COMMIT;", ""]
+    return "\n".join(parts)
+
+
+def cmd_export_dict(out: str = SEED_SQL) -> None:
+    """지금 접속한 DB(aws 브랜치면 RDS)의 사전을 out 에 내려받는다. 커밋하면 테스트·CI·새 DB 가 이 사전으로 채워진다."""
+    with connect() as conn:
+        text = export_dictionary(conn)
+        n = [conn.execute(f"SELECT count(*) FROM {t}").fetchone()[0] for t in ("capability", "tech", "tech_capability", "exclude_word")]
+    with open(out, "w", encoding="utf-8", newline="\n") as f:
+        f.write(text)
+    print(f"사전 -> {os.path.relpath(out, HERE)}: 능력 {n[0]}, 기술 {n[1]}, 연결 {n[2]}, 낱말 {n[3]}")
 
 
 # ---------------------------------------------------------------- load
@@ -484,6 +565,8 @@ def main() -> None:
     sub.add_parser("init", help="표 만들기(db/schema.sql)")
     sub.add_parser("migrate-body-html", help="한 번만: 본문 HTML 칸 채우기 + 노트북 경로 칸 빼기")
     sub.add_parser("sync-dict", help="capabilities.json -> 사전 표")
+    e = sub.add_parser("export-dict", help="DB 사전 -> db/seed_dictionary.sql (빈 DB·테스트용, 내려받아 커밋)")
+    e.add_argument("--out", default=SEED_SQL, help="쓸 파일 (기본 db/seed_dictionary.sql)")
     p = sub.add_parser("load", help="공고·이미지·추출 결과 넣기 (데이터 폴더는 OCR_DATA_DIR)")
     p.add_argument("--run", required=True, help="out/extract/ 아래 결과 폴더 이름 (예: gpt-5.6-luna-ex-chk)")
     args = ap.parse_args()
@@ -491,6 +574,8 @@ def main() -> None:
         cmd_init()
     elif args.cmd == "sync-dict":
         cmd_sync_dict()
+    elif args.cmd == "export-dict":
+        cmd_export_dict(args.out)
     elif args.cmd == "migrate-body-html":
         cmd_migrate_body_html()
     else:
