@@ -33,6 +33,7 @@ from datetime import datetime, timezone
 import psycopg
 from psycopg.types.json import Jsonb
 
+from capdict import OTHER
 from common import IMG_DIR, OUT_DIR, PAGE_DIR, load_targets
 from extract_skills import CATS, PRICES, llm_input, review_reasons, sha256
 from fetch_images import RELAY, image_urls
@@ -47,7 +48,6 @@ EX = os.path.join(OUT_DIR, "extract")
 SAVE_TRIES = 3   # 공고 하나 저장을 일시 오류(연결 끊김·교착)일 때 몇 번까지 할지
 RETRY_WAIT = 2   # 다시 하기 전 기다림(초) × 몇 번째
 CAT_KO = {"required": "필수", "preferred": "우대", "duties": "업무", "other": "기타"}
-OTHER = "기타"  # 사전에 맞는 능력이 없을 때 가리키는 능력
 SCHEMA = "public"  # 이 파이프라인의 표는 모두 기본 스키마 public 에 있다(BE 표와 같은 곳)
 
 if hasattr(sys.stdout, "reconfigure"):

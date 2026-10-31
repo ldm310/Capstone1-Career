@@ -122,7 +122,7 @@ OCR 글은 오탈자가 있을 수 있고, 같은 높이에 나란한 칸은 ' |
 능력 목록
 {CAPABILITIES}"""
 
-CD = CapDict()
+CD = CapDict(json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "capabilities.json"), encoding="utf-8")))  # 4단계에서 DB 로
 # 능력 이름은 사전 목록 + '기타' 중에서만 고르게 강제한다(자유 입력이면 '언어'·'백엔드'처럼 분류 이름을 고르는 일이 생긴다).
 REQ = {"type": "object", "additionalProperties": False, "required": ["capability", "other_name", "techs", "relation"],
        "properties": {"capability": {"type": "string", "enum": CD.cap_names() + ["기타"]},
