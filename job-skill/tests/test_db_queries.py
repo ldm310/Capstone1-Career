@@ -38,7 +38,7 @@ def test_known_is_postings_only(db):
     import db_queries as q
     add_posting(db, "100")
     assert q.known_posting_nos(db) == {"100"}
-    assert db.execute("SELECT to_regclass('job.listing_seen')").fetchone()[0] is None   # 버린 공고 표는 없음
+    assert db.execute("SELECT to_regclass('public.listing_seen')").fetchone()[0] is None   # 버린 공고 표는 없음
 
 
 def test_open_postings_hides_past_deadline(db):
@@ -208,7 +208,7 @@ def test_migrate_body_html_fills_from_files_and_drops_paths(db, tmp_path):
     assert db_load.migrate_body_html(db, base=str(tmp_path)) == {"채움": 1, "파일 없음": 1}
     assert dict(db.execute("SELECT site_posting_no, body_html FROM posting").fetchall()) == {"A": "<p>지어낸 본문 A</p>", "B": None}
     cols = {(t, c) for t, c in db.execute("""SELECT table_name, column_name FROM information_schema.columns
-                                              WHERE table_schema = 'job' AND table_name IN ('posting', 'posting_image')""")}
+                                              WHERE table_schema = 'public' AND table_name IN ('posting', 'posting_image')""")}
     assert ("posting", "body_html") in cols
     assert not cols & {("posting", "raw_path"), ("posting_image", "file_path"), ("posting_image", "ocr_path")}
     assert db_load.migrate_body_html(db, base=str(tmp_path)) == {"채움": 0, "파일 없음": 0}   # 다시 돌려도 안전

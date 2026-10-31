@@ -1,10 +1,10 @@
 """
-파이프라인이 다음에 할 일을 정하려고 DB(job 스키마)에서 읽고 쓰는 함수들.
+파이프라인이 다음에 할 일을 정하려고 DB(public 스키마)에서 읽고 쓰는 함수들.
 웹에 보여 주기 위한 조회·뷰는 BE 몫이라 여기 두지 않는다.
 
   - 진행 공고: status = '진행' AND (마감일 없음 OR 마감일 >= 오늘 KST)
   - 밀린 공고: 진행 공고 가운데 추출 실행이 하나도 없는 공고
-연결은 db_load.connect() 를 쓴다(search_path=job). 쓰는 함수는 스스로 트랜잭션을 연다.
+연결은 db_load.connect() 를 쓴다(search_path=public). 쓰는 함수는 스스로 트랜잭션을 연다.
 """
 
 from __future__ import annotations

@@ -8,15 +8,16 @@
 - 시험: 2026-10-27, 시험용 PostgreSQL 17에서 표 12개가 오류 없이 만들어지고 제약이 동작하는 것을 확인했다.
 - 2026-10-28 버린 공고 표(`listing_seen`)를 더했다가 2026-10-29 뺐다(사용자 결정 — '연속 5개 멈춤'을 없애 쓸 곳이 없음). 지금 표는 12개. 2026-10-29 AWS RDS(PostgreSQL 18)에도 같은 DDL로 만들었다.
 - 2026-10-29 바꿈(사용자 결정): 웹 상세 화면에 원문을 보여 주려고 **본문 HTML(`body_html`)**을 담고, 노트북에서만 열 수 있는 경로 칸(`raw_path`, `file_path`, `ocr_path`)은 뺐다(팀원·웹은 못 쓰는 값). 이미 만든 DB는 `py -3.12 db_load.py migrate-body-html` 로 바꾼다(원본 파일로 본문을 채운 뒤 경로 칸을 뺌).
+- 2026-10-31 바꿈(사용자 결정): 표를 `job` 스키마에서 기본 스키마 **`public`**으로 옮겼다. BE가 이 표들과 바로 조인하므로 폴더를 나눌 까닭이 없다. 이미 만든 DB는 `db/migrations/003_public_schema.sql`로 옮긴다.
 
 표와 칸의 한글 이름은 DDL의 `COMMENT`로 DB 안에도 남겨 두었다.
-모든 표는 `job` 스키마(DB 안의 폴더)에 있다. 다른 쪽(BE 등)에서 읽을 때는 `job.posting`처럼 스키마 이름을 붙인다.
+모든 표는 기본 스키마 `public`(DB 안의 폴더)에 있다. BE 표도 같은 곳에 두고, 표 이름만 써서 바로 조인한다(예: `posting`).
 
 ## 정한 규칙
 
 | 항목 | 규칙 | 예 |
 |---|---|---|
-| 스키마 | 모든 표를 **`job`** 스키마에 둔다. 같은 DB를 쓰는 BE 표(`public`)와 이름이 겹쳐도 부딪히지 않는다 | `job.posting` |
+| 스키마 | 모든 표를 기본 **`public`** 스키마에 둔다. BE 표도 같은 곳이라 BE 표 이름은 이 표들과 겹치지 않게 정한다 | `posting` |
 | 이름 | 영어 소문자 + 밑줄(snake_case), 표 이름은 단수 | `posting`, `site_posting_no` |
 | 기본 키 | 표마다 `id` (`bigint`, 자동 증가) | `posting.id` |
 | 외래 키 | `<가리키는 표>_id` | `posting.company_id` |
@@ -223,7 +224,6 @@ PostgreSQL은 FK 칸에 색인을 자동으로 만들지 않는다. 그래서 �
 **공고 기준**으로 센다(2026-10-27 결정). 공고 하나에 자리가 여러 개여도 1로 친다. 예: "필수에 '관계형 DB'가 나온 공고 수".
 
 ```sql
-SET search_path TO job;   -- 표 이름 앞에 job. 을 매번 붙이지 않으려면
 SELECT c.name, count(DISTINCT e.posting_id) AS 공고수
 FROM extraction_run e
 JOIN recruit_unit u ON u.run_id = e.id AND u.is_it

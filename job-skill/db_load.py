@@ -46,7 +46,7 @@ SAVE_TRIES = 3   # 공고 하나 저장을 일시 오류(연결 끊김·교착)�
 RETRY_WAIT = 2   # 다시 하기 전 기다림(초) × 몇 번째
 CAT_KO = {"required": "필수", "preferred": "우대", "duties": "업무", "other": "기타"}
 OTHER = "기타"  # 사전에 맞는 능력이 없을 때 가리키는 능력
-SCHEMA = "job"  # 이 파이프라인의 표는 모두 job 스키마에 있다(BE 표는 public)
+SCHEMA = "public"  # 이 파이프라인의 표는 모두 기본 스키마 public 에 있다(BE 표와 같은 곳)
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
@@ -94,7 +94,7 @@ def connect(autocommit: bool = False) -> psycopg.Connection:
     url = database_url()
     if not url:
         sys.exit("DATABASE_URL 이 없습니다. .env.example 을 .env 로 복사해 채우거나 환경변수로 설정하세요.")
-    # 스키마 이름을 붙이지 않은 표 이름은 job 에서 찾는다
+    # 스키마 이름을 붙이지 않은 표 이름은 public 에서 찾는다
     return psycopg.connect(url, autocommit=autocommit, options=f"-c search_path={SCHEMA}")
 
 
