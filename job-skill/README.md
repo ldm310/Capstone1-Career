@@ -145,6 +145,62 @@ py -3.12 -m pytest tests -q                    # career-db 가 켜져 있어야 
 docker compose -f docker-compose.airflow.yml exec airflow-scheduler python -m pytest /opt/airflow/job-skill/tests -q   # DAG 시험 포함
 ```
 
+## AWS(RDS)로 돌리기 — `feature/job-skill-aws` 브랜치
+
+![AWS 구성도](docs/aws-architecture.png)
+
+로컬용(`feature/job-skill`)과 AWS용(`feature/job-skill-aws`) 브랜치를 따로 둔다. 다른 점은 **서빙 DB가 어디냐**뿐이다.
+수집·OCR·LLM(Airflow)은 두 브랜치 모두 노트북에서 돈다. AWS 브랜치에서는 결과를 **AWS RDS(PostgreSQL 18, 서울)**에 저장한다.
+
+| | 로컬 브랜치 | AWS 브랜치 |
+|---|---|---|
+| 파이프라인이 저장하는 DB | 노트북 Docker `career-db` (`.env`의 `DATABASE_URL`) | **RDS** (`.env`의 `RDS_HOST`·`RDS_PASSWORD`, 암호화 접속 `sslmode=require`) |
+| 시험(pytest)이 쓰는 DB | 노트북 Docker `career-db` | **노트북 Docker `career-db`** (시험은 임시 DB를 만들었다 지워서 RDS에서는 하지 않음) |
+
+**준비**
+1. `.env`에 두 줄을 넣는다(`.env.example` 참고). 비밀번호는 저장소·Slack에 올리지 않는다.
+   ```
+   RDS_HOST=career-db.xxxx.ap-northeast-2.rds.amazonaws.com
+   RDS_PASSWORD=RDS_마스터_암호
+   ```
+2. RDS 보안 그룹의 인바운드 규칙에 PostgreSQL(5432)을 연다(지금은 팀원이 여러 곳에서 접속해서 모두 허용 — 그래서 긴 암호와 팀원별 계정을 쓴다).
+3. 처음 한 번 RDS에 DB와 표, 사전을 만든다(AWS 브랜치에서 실행하면 RDS로 간다). 사전은 `init`이 `db/seed_dictionary.sql`로 채운다.
+   ```powershell
+   py -3.12 -c "import psycopg,db_load; c=psycopg.connect(db_load.database_url().replace('/career?','/postgres?'),autocommit=True); c.execute('CREATE DATABASE career')"
+   py -3.12 db_load.py init
+   ```
+   이어서 마스터 계정(`career`)으로 팀원 계정과 권한을 만든다(2026-10-31 정한 권한 — 파이프라인 표는 읽기·FK, 표준화 사전 4개는 읽기·쓰기, 팀원 표는 자유).
+   ```sql
+   CREATE ROLE team NOLOGIN;                                            -- 권한은 공통 역할 team 에만
+   GRANT CONNECT ON DATABASE career TO team;
+   GRANT USAGE, CREATE ON SCHEMA public TO team;                        -- 팀원 표는 public 에 자유롭게
+   GRANT SELECT, REFERENCES ON ALL TABLES IN SCHEMA public TO team;     -- 파이프라인 표: 읽기 + FK
+   REVOKE REFERENCES ON tech_capability FROM team;                      -- 팀이 통째로 고칠 수 있는 연결 표라 FK 는 빼둠
+   ALTER DEFAULT PRIVILEGES FOR ROLE career IN SCHEMA public GRANT SELECT, REFERENCES ON TABLES TO team;   -- 앞으로 만들 표도
+   GRANT INSERT, UPDATE, DELETE ON capability, tech, tech_capability, exclude_word TO team;              -- 표준화 사전: 쓰기
+   -- 팀원마다 (비밀번호는 실행할 때 정하고 1:1 로 전한다)
+   CREATE ROLE dongmin LOGIN PASSWORD '...' IN ROLE team;
+   ALTER ROLE dongmin SET role = 'team';                                -- 팀원이 만든 표의 주인 = team(서로 고칠 수 있게)
+   ```
+4. Airflow를 다시 띄운다: `docker compose -f docker-compose.airflow.yml up -d` (컨테이너는 `DATABASE_URL`을 빈 값으로 덮어 RDS로 간다).
+
+**표준화 사전은 RDS가 원본** (2026-10-31 사용자 결정 — 서비스를 써 보면서 팀이 함께 다듬는다)
+- 팀원은 각자 RDS 계정으로 사전 표 4개(`capability`, `tech`, `tech_capability`, `exclude_word`)를 SQL로 직접 고친다. 고친 사전은 **다음 추출부터** 쓰인다(이미 뽑은 결과는 그대로).
+- 누가 언제 무엇을 바꿨는지는 `dictionary_change`에 자동으로 남는다(팀원은 읽기만). 고치는 SQL 예시와 기록 보기는 [물리 설계](docs/physical-design.md)의 '④ 사전 변경 기록'.
+- 사전이 통째로 망가지면(사용 중인 능력 0개, `기타` 없음) 그날 추출이 멈추고 Slack 실패 알림에 이유가 온다. 별칭 겹침 같은 작은 어긋남은 결과 알림의 "사전 확인 필요"로 온다.
+- 가끔 `py -3.12 db_load.py export-dict`로 RDS 사전을 `db/seed_dictionary.sql`에 내려받아 커밋한다(테스트·CI·새 DB가 이 사전으로 채워짐, Git에 사전 변화가 남음).
+
+**매일 어제 AWS 비용 Slack 리포트** (노트북과 상관없이 AWS 안에서)
+- Lambda `aws-cost-report`(서울, Python 3.13, 제한 시간 30초)에 [aws/cost_report_lambda.py](aws/cost_report_lambda.py)를 그대로 붙여 넣는다.
+  - 환경변수 `SLACK_WEBHOOK_URL`, 실행 역할에 인라인 정책 `ce:GetCostAndUsage`(비용 조회만)
+- EventBridge 스케줄러 `aws-cost-report-daily`: cron `0 9 * * ? *`, 시간대 Asia/Seoul → 매일 09:00(AWS 하루 = UTC 0~24시 = 한국 시간 어제 09:00~오늘 09:00)
+- 비용 탐색기(Cost Explorer)를 처음 켜면 데이터가 하루 뒤에 생긴다. 그 전에는 "⚠️ AWS 비용 조회 실패(DataUnavailableException)"가 온다.
+- 조회 한 번에 $0.01. 12/20까지 쓰고 나면 Lambda·스케줄러·RDS를 지운다.
+  - **RDS를 지우기 전에 `py -3.12 db_load.py export-dict`로 사전을 내려받아 커밋한다.** 안 하면 팀이 다듬은 사전이 RDS와 함께 사라진다.
+
+- 브랜치를 바꾸면 Airflow 컨테이너가 보는 코드도 바뀐다(폴더를 그대로 붙여 씀). 바꾼 뒤에는 `up -d`로 다시 띄운다.
+- 공통 기능은 로컬 브랜치에서 고치고 AWS 브랜치로 합친다(`git merge feature/job-skill`).
+
 ## 데이터 원칙
 
 - 받은 이미지, 공고 본문, OCR 글자, 추출 결과, 샘플 목록은 **저장소에 올리지 않는다**(`.gitignore`). 외부에 다시 게시하지 않는다.
