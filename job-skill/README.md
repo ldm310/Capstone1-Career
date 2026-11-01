@@ -145,17 +145,18 @@ py -3.12 -m pytest tests -q                    # career-db 가 켜져 있어야 
 docker compose -f docker-compose.airflow.yml exec airflow-scheduler python -m pytest /opt/airflow/job-skill/tests -q   # DAG 시험 포함
 ```
 
-## AWS(RDS)로 돌리기 — `feature/job-skill-aws` 브랜치
+## AWS(RDS)로 돌리기
 
 ![AWS 구성도](docs/aws-architecture.png)
 
-로컬용(`feature/job-skill`)과 AWS용(`feature/job-skill-aws`) 브랜치를 따로 둔다. 다른 점은 **서빙 DB가 어디냐**뿐이다.
-수집·OCR·LLM(Airflow)은 두 브랜치 모두 노트북에서 돈다. AWS 브랜치에서는 결과를 **AWS RDS(PostgreSQL 18, 서울)**에 저장한다.
+**코드는 하나**이고 DB는 설정으로 고른다(2026-11-01 사용자 결정 — `develop`·`main`이 같은 코드).
+수집·OCR·LLM(Airflow)은 노트북에서 돌고, 결과는 **AWS RDS(PostgreSQL 18, 서울)**에 저장한다.
 
-| | 로컬 브랜치 | AWS 브랜치 |
+| | 작업 폴더(개발) | Airflow 전용 폴더(운영, CD가 관리) |
 |---|---|---|
-| 파이프라인이 저장하는 DB | 노트북 Docker `career-db` (`.env`의 `DATABASE_URL`) | **RDS** (`.env`의 `RDS_HOST`·`RDS_PASSWORD`, 암호화 접속 `sslmode=require`) |
-| 시험(pytest)이 쓰는 DB | 노트북 Docker `career-db` | **노트북 Docker `career-db`** (시험은 임시 DB를 만들었다 지워서 RDS에서는 하지 않음) |
+| `.env` | `RDS_HOST`·`RDS_PASSWORD`를 **두지 않음** | `RDS_HOST`·`RDS_PASSWORD` 있음 |
+| 파이프라인이 저장하는 DB | 노트북 Docker `career-db` (`DATABASE_URL`) | **RDS** (암호화 접속 `sslmode=require`) |
+| 시험(pytest)이 쓰는 DB | 노트북 `career-db` (임시 DB를 만들었다 지움, RDS에서는 하지 않음) | — |
 
 **준비**
 1. `.env`에 두 줄을 넣는다(`.env.example` 참고). 비밀번호는 저장소·Slack에 올리지 않는다.
@@ -198,8 +199,34 @@ docker compose -f docker-compose.airflow.yml exec airflow-scheduler python -m py
 - 조회 한 번에 $0.01. 12/20까지 쓰고 나면 Lambda·스케줄러·RDS를 지운다.
   - **RDS를 지우기 전에 `py -3.12 db_load.py export-dict`로 사전을 내려받아 커밋한다.** 안 하면 팀이 다듬은 사전이 RDS와 함께 사라진다.
 
-- 브랜치를 바꾸면 Airflow 컨테이너가 보는 코드도 바뀐다(폴더를 그대로 붙여 씀). 바꾼 뒤에는 `up -d`로 다시 띄운다.
-- 공통 기능은 로컬 브랜치에서 고치고 AWS 브랜치로 합친다(`git merge feature/job-skill`).
+### 운영 — 브랜치·CI·CD
+
+1. `feature/…`에서 고치고 노트북 DB로 확인한다.
+2. `develop`으로 PR → **CI**(`.github/workflows/ci.yml`: 시험, DAG가 바뀌면 DAG 시험)가 통과하면 합친다.
+   실제 공고로 보고 싶으면 작업 폴더에서 위 '실행' 순서를 공고 몇 건으로(`sample_random.py --per-role 1`) 노트북 DB에 돌린다.
+   코드가 같으니 여기서 본 동작이 `main`에서도 그대로다(다른 것은 DB 주소뿐).
+3. 배포할 때 사람이 `develop` → `main` PR을 올리고 합친다 → **CD**(`.github/workflows/cd.yml`)
+   - ① RDS: 아직 적용하지 않은 마이그레이션만(`py -3.12 db_load.py migrate`, 적용한 것은 `schema_migration`에 기록)
+   - ② 노트북 Airflow 전용 폴더를 그 커밋으로(`deploy_airflow.py` — 도는 DAG 실행이 끝나길 기다림, Airflow 이미지가 바뀌었으면 다시 만듦)
+   - 둘 다 몇 번 돌려도 같은 결과. 손으로 다시 배포: Actions → CD → Run workflow.
+- **마이그레이션은 옛 코드와도 맞게** 쓴다(칸 더하기 먼저, 빼기·이름 바꾸기는 다음 배포에서). CD가 RDS를 먼저 바꾸고 Airflow 코드를 나중에 바꾸기 때문이다.
+- RDS 사전 내려받기(`export-dict`)처럼 RDS에 직접 할 일은 전용 폴더(`.env`에 RDS가 있음)에서 한다.
+
+**관리자(저장소 주인 `ldm310`)가 한 번 해 둘 것**
+1. Settings → Secrets and variables → Actions → Secrets: `RDS_HOST`, `RDS_PASSWORD`
+2. Settings → Actions → Runners → New self-hosted runner(Windows)를 노트북에 설치, 라벨 `career-laptop`, 서비스로 실행(`git`·`docker`·`py`가 PATH에 있어야 함)
+3. Settings → Branches: `main`·`develop`에 "PR 필수 + 검사 통과 필수"(검사: `changes`, `job-skill`, `job-skill-dags`)
+
+**Airflow 전용 폴더 준비** (처음 한 번, `main`이 생긴 뒤 — Airflow가 작업 폴더 대신 이 폴더를 보게)
+```powershell
+git clone https://github.com/ldm310/Capstone1-Career.git C:\career-airflow
+git -C C:\career-airflow checkout --detach origin/main
+copy job-skill\.env C:\career-airflow\job-skill\.env                  # RDS_HOST·RDS_PASSWORD 가 든 운영 설정
+robocopy job-skill\data\paddlex C:\career-airflow\job-skill\data\paddlex /E   # OCR 모델을 다시 받지 않게
+docker compose -f job-skill\docker-compose.airflow.yml down                       # 작업 폴더의 Airflow 내리기
+docker compose -f C:\career-airflow\job-skill\docker-compose.airflow.yml up -d   # 전용 폴더로 올리기(이미지는 그대로 씀)
+```
+그다음 작업 폴더 `.env`에서 `RDS_HOST`·`RDS_PASSWORD`를 지운다(작업 폴더에서 실수로 RDS에 쓰지 않게).
 
 ## 데이터 원칙
 
