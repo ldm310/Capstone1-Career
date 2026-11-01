@@ -47,8 +47,8 @@ def pending_postings(conn) -> list[dict]:
 
 
 def open_postings(conn) -> list[dict]:
-    """진행 공고 (② 수정 확인 대상). targets 칸 + raw_hash + last_checked_at."""
-    cur = conn.execute(f"""SELECT {TARGET_COLS}, p.raw_hash, p.last_checked_at
+    """진행 공고 (② 수정 확인 대상). targets 칸 + raw_hash + last_checked_at + recheck_due(다시 확인할 공고)."""
+    cur = conn.execute(f"""SELECT {TARGET_COLS}, p.raw_hash, p.last_checked_at, p.recheck_due
                            FROM posting p JOIN company c ON c.id = p.company_id
                            WHERE p.site = %(s)s AND {OPEN}
                            ORDER BY p.site_posting_no""",
@@ -78,12 +78,21 @@ def update_deadlines(conn, deadlines: dict[str, dt.date]) -> int:
                             (list(deadlines), list(deadlines.values()), SITE)).rowcount
 
 
-def touch_checked(conn, nos: list[str], at: dt.datetime | None = None) -> int:
-    """다시 확인했더니 본문이 그대로인 공고의 마지막 확인 시각을 at(본문을 받은 시각, 없으면 지금)으로."""
+def mark_recheck_due(conn, nos: list[str]) -> int:
+    """'수정'으로 고른 공고를 '다시 확인할 공고'로 표시한다 — 확인을 마치거나 다시 저장하면 지워진다(실패하면 다음 날 다시)."""
     if not nos:
         return 0
     with conn.transaction():
-        return conn.execute("""UPDATE posting SET last_checked_at = coalesce(%s, now())
+        return conn.execute("UPDATE posting SET recheck_due = true WHERE site = %s AND site_posting_no = ANY(%s)",
+                            (SITE, list(nos))).rowcount
+
+
+def touch_checked(conn, nos: list[str], at: dt.datetime | None = None) -> int:
+    """다시 확인했더니 본문이 그대로인 공고의 마지막 확인 시각을 at(본문을 받은 시각, 없으면 지금)으로. 다시 확인할 표시도 지운다."""
+    if not nos:
+        return 0
+    with conn.transaction():
+        return conn.execute("""UPDATE posting SET last_checked_at = coalesce(%s, now()), recheck_due = false
                                WHERE site = %s AND site_posting_no = ANY(%s)""", (at, SITE, list(nos))).rowcount
 
 

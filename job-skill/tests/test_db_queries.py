@@ -212,3 +212,24 @@ def test_migrate_body_html_fills_from_files_and_drops_paths(db, tmp_path):
     assert ("posting", "body_html") in cols
     assert not cols & {("posting", "raw_path"), ("posting_image", "file_path"), ("posting_image", "ocr_path")}
     assert db_load.migrate_body_html(db, base=str(tmp_path)) == {"채움": 0, "파일 없음": 0}   # 다시 돌려도 안전
+
+
+def test_recheck_due_stays_until_checked_or_saved(db, tmp_path, monkeypatch):
+    """'다시 확인할 공고' 표시는 본문이 그대로라 확인을 마쳤거나, 다시 추출해 원본까지 저장했을 때만 지운다."""
+    import db_load
+    import db_queries as q
+    add_posting(db, "A")
+    due = lambda: {r["rec_idx"]: r["recheck_due"] for r in q.open_postings(db)}["A"]
+    assert due() is False
+    q.mark_recheck_due(db, ["A"])
+    assert due() is True
+    q.touch_checked(db, ["A"])                                           # 확인했더니 그대로
+    assert due() is False
+    q.mark_recheck_due(db, ["A"])
+    (tmp_path / "A.html").write_text('<div class="user_content"><p>새 본문</p></div><script></script>', encoding="utf-8")
+    monkeypatch.setattr(db_load, "PAGE_DIR", str(tmp_path))
+    t = {"rec_idx": "A", "company": "(주)지어낸회사", "title": "지어낸 공고", "kind": "글"}
+    db_load.upsert_posting(db, t, update_raw=False)                      # 다시 추출에 실패 → 표시 남김
+    assert due() is True
+    db_load.upsert_posting(db, t, update_raw=True)                       # 다시 추출해 저장 → 표시 지움
+    assert due() is False

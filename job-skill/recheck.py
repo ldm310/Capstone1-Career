@@ -12,9 +12,9 @@ detect_changes: 고른 공고를 확인한다(fetch_images.get: 간격 1.2초, �
   - 본문 지문은 db_load.content_hash(보이는 글 + 본문 이미지 주소) — 요청마다 바뀌는 빈 <font color> 태그는 변경으로 치지 않는다.
   결과
   - changed : 지문이 다름 → <run_dir>/pages/<번호>.html 저장 + targets.tsv 뒤에 붙임(이미 있는 번호는 안 넣음)
-  - closed  : 전체 페이지에 마감 표시, 404·410, 또는 본문 칸(user_content)이 없음 → 마감
+  - closed  : 전체 페이지에 마감 표시, 404·410 → 마감
   - unchanged
-  - error   : 그 밖(연결 실패·5xx·403·429 등) → 일시 장애나 막힘일 수 있어 마감으로 치지 않고 건너뜀(다음 날 다시)
+  - error   : 그 밖(연결 실패·5xx·403·429 등, 본문 칸 없음) → 일시 장애·막힘·페이지 변경일 수 있어 마감으로 치지 않고 건너뜀(다음 날 다시)
 결과는 <run_dir>/changes.json 에도 쓴다.
 """
 
@@ -43,7 +43,8 @@ def select_recheck(listed: dict[str, dict], rows: list[dict], today: dt.date) ->
             check.append({**r, "reason": "목록에 없음"})
             continue
         at = it.get("updated_at")
-        if at is None or at <= r["last_checked_at"]:
+        # 지난번 '수정' 확인·다시 저장에 실패한 공고는 사람인 '수정' 표시가 사라졌어도 다시 고른다
+        if not r.get("recheck_due") and (at is None or at <= r["last_checked_at"]):
             continue
         modified += 1
         d = parse_deadline(it.get("deadline_text", ""), today)
@@ -90,8 +91,9 @@ def detect_changes(run_dir: str, rows: list[dict], get=fetch_images.get) -> dict
             res["why"][no] = _status_text(status)
             continue
         page = body.decode("utf-8", "replace")
-        if "user_content" not in page:
-            res["closed"].append(no)
+        if "user_content" not in page:  # 마감이 아니라 '확인 필요'(사용자 결정) — 사람인이 페이지를 고치면 진행 공고가 한꺼번에 마감될 수 있어서
+            res["error"].append(no)
+            res["why"][no] = "본문 칸 없음(확인 필요)"
             continue
         if content_hash(page, no) == r["raw_hash"]:
             res["unchanged"].append(no)
