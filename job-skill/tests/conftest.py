@@ -22,6 +22,13 @@ def no_real_slack(monkeypatch, tmp_path_factory):
     monkeypatch.setattr(notify, "ENV_PATH", str(tmp_path_factory.mktemp("noenv") / ".env"))
 
 
+def _no_db(why: str) -> None:
+    """DB 가 없을 때: 노트북에서는 DB 시험을 건너뛰고, CI(REQUIRE_DB=1)에서는 실패시킨다(안 돈 시험이 '통과'로 보이지 않게)."""
+    if os.environ.get("REQUIRE_DB"):
+        pytest.fail(f"REQUIRE_DB=1 인데 DB 를 쓸 수 없음: {why}")
+    pytest.skip(why)
+
+
 def _with_db(url: str, name: str) -> str:
     p = urllib.parse.urlsplit(url)
     return urllib.parse.urlunsplit((p.scheme, p.netloc, "/" + name, p.query, p.fragment))
@@ -35,13 +42,13 @@ def db_url():
 
     admin = db_load.local_database_url()   # 시험은 늘 로컬 Docker DB 에(RDS 에 임시 DB 를 만들지 않게)
     if not admin:
-        pytest.skip("DATABASE_URL 없음")
+        _no_db("DATABASE_URL 없음")
     name = "job_test_" + secrets.token_hex(4)
     try:
         with psycopg.connect(admin, autocommit=True, connect_timeout=3) as c:
             c.execute(f'CREATE DATABASE "{name}"')
     except psycopg.OperationalError as e:
-        pytest.skip(f"career-db 에 접속할 수 없음: {e}")
+        _no_db(f"career-db 에 접속할 수 없음: {e}")
     url = _with_db(admin, name)
     with psycopg.connect(url, autocommit=True) as c:
         c.execute(open(os.path.join(HERE, "db", "schema.sql"), encoding="utf-8").read())
@@ -62,13 +69,13 @@ def seed_dictionary():
 
     admin = getattr(db_load, "local_database_url", db_load.database_url)()   # 시험은 늘 로컬 Docker DB
     if not admin:
-        pytest.skip("DATABASE_URL 없음")
+        _no_db("DATABASE_URL 없음")
     name = "job_test_" + secrets.token_hex(4)
     try:
         with psycopg.connect(admin, autocommit=True, connect_timeout=3) as c:
             c.execute(f'CREATE DATABASE "{name}"')
     except psycopg.OperationalError as e:
-        pytest.skip(f"career-db 에 접속할 수 없음: {e}")
+        _no_db(f"career-db 에 접속할 수 없음: {e}")
     try:
         with psycopg.connect(_with_db(admin, name), autocommit=True) as c:
             c.execute(open(os.path.join(HERE, "db", "schema.sql"), encoding="utf-8").read())
