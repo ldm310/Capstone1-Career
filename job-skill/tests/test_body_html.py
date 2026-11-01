@@ -22,3 +22,14 @@ def test_body_html_keeps_layout_and_removes_dangerous_parts():
 def test_body_html_none_without_body():
     import db_load
     assert db_load.body_html("<html>마감된 공고</html>", "1") is None
+
+
+def test_body_html_removes_disguised_script_links():
+    """따옴표 없이, 글자를 바꿔(&#106; = j), 사이에 탭을 넣어 쓴 javascript: 주소도 뺀다(웹이 본문을 그대로 띄우므로)."""
+    import db_load
+    page = ('<div class="user_content"><a href=javascript:alert(1)>a</a><a href="&#106;avascript:alert(2)">b</a>'
+            '<a href="java&#9;script:alert(3)">c</a><a href=" JavaScript:alert(4)">d</a>'
+            '<a href="https://www.saramin.co.kr/x">정상</a></div><script></script>')
+    b = db_load.body_html(page, "1")
+    assert "alert" not in b
+    assert 'href="https://www.saramin.co.kr/x"' in b and ">정상</a>" in b
