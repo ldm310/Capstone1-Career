@@ -1,0 +1,53 @@
+# CD: main 에 합쳐지면 job-skill 을 배포한다(develop → main PR 은 사람이 올림 — 사용자 결정).
+#   1) rds-migrate: 아직 적용하지 않은 마이그레이션만 RDS 에(db_load.py migrate — 몇 번 돌려도 같은 결과)
+#   2) airflow    : 노트북 Airflow 전용 폴더를 이 커밋으로(deploy_airflow.py — 도는 DAG 실행이 끝나길 기다림, 이미 최신이면 그대로)
+# EC2 웹은 건드리지 않는다(웹 배포는 그 파트가 합칠 때 따로).
+# 관리자가 해 둘 것(job-skill/README 'CD'): Secrets RDS_HOST·RDS_PASSWORD, 노트북 러너(라벨 career-laptop).
+name: CD
+
+on:
+  push:
+    branches: [main]
+    paths: ["job-skill/**", ".github/workflows/cd.yml"]
+  workflow_dispatch: {}              # 손으로 다시 배포(같은 커밋이면 바뀌는 것 없음)
+
+concurrency:
+  group: cd-main
+  cancel-in-progress: false          # 배포는 하나씩, 도중에 끊지 않음
+
+jobs:
+  rds-migrate:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: job-skill
+    env:
+      RDS_HOST: ${{ secrets.RDS_HOST }}
+      RDS_PASSWORD: ${{ secrets.RDS_PASSWORD }}
+      PYTHONIOENCODING: utf-8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: job-skill/requirements-dev.txt
+      - run: pip install -r requirements-dev.txt
+      - name: Secrets 확인
+        run: |
+          if [ -z "$RDS_HOST" ] || [ -z "$RDS_PASSWORD" ]; then
+            echo "::error::저장소 Secrets 에 RDS_HOST·RDS_PASSWORD 가 없습니다(관리자 등록 필요)"; exit 1
+          fi
+      - name: 아직 안 적용한 마이그레이션만 RDS 에
+        run: python db_load.py migrate
+
+  airflow:
+    needs: rds-migrate                # RDS 를 먼저 바꾸고 코드를 나중에(마이그레이션은 옛 코드와도 맞게 쓴다)
+    runs-on: [self-hosted, career-laptop]
+    steps:
+      - uses: actions/checkout@v4     # 배포 스크립트만 쓰려고(Airflow 는 전용 폴더를 봄)
+      - name: Airflow 전용 폴더를 이 커밋으로
+        shell: powershell
+        env:
+          PYTHONIOENCODING: utf-8
+        run: py -3.12 job-skill/deploy_airflow.py --dir "${{ vars.AIRFLOW_DIR || 'C:/career-airflow' }}" --sha "${{ github.sha }}"

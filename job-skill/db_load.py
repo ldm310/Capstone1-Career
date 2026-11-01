@@ -6,6 +6,7 @@ DB 저장(Load): 표 만들기 · 표준화 사전 내려받기 · 공고와 추
 
 실행:
   py -3.12 db_load.py init                                  # 표 만들기(db/schema.sql) + 사전 채우기(db/seed_dictionary.sql). 이미 있으면 건너뜀
+  py -3.12 db_load.py migrate                                # 아직 적용 안 한 db/migrations 만 차례로(CD 가 main 에 합칠 때마다 부름)
   py -3.12 db_load.py export-dict                            # DB 사전 -> db/seed_dictionary.sql (사전을 고친 뒤 내려받아 커밋)
   $env:OCR_DATA_DIR = "sample3"
   py -3.12 db_load.py load --run gpt-5.6-luna-ex-chk         # 공고·이미지 + out/extract/<run>/ 의 추출 결과
@@ -42,6 +43,8 @@ from sample_random import min_years
 HERE = os.path.dirname(os.path.abspath(__file__))
 SCHEMA_SQL = os.path.join(HERE, "db", "schema.sql")
 SEED_SQL = os.path.join(HERE, "db", "seed_dictionary.sql")   # 빈 DB 를 채우는 사전(export-dict 로 DB 에서 내려받음)
+MIGRATIONS_DIR = os.path.join(HERE, "db", "migrations")
+MIGRATE_LOCK = 7231001   # 두 곳에서 동시에 migrate 하지 않게(pg_advisory_lock 번호)
 EX = os.path.join(OUT_DIR, "extract")
 SAVE_TRIES = 3   # 공고 하나 저장을 일시 오류(연결 끊김·교착)일 때 몇 번까지 할지
 RETRY_WAIT = 2   # 다시 하기 전 기다림(초) × 몇 번째
@@ -144,8 +147,55 @@ def cmd_init() -> None:
             return
         conn.execute(open(SCHEMA_SQL, encoding="utf-8").read())
         conn.execute(open(SEED_SQL, encoding="utf-8").read())
+        _record_migrations(conn, _migration_names())   # schema.sql 은 이미 최신 — 지금 있는 마이그레이션은 적용한 것으로
         n = conn.execute("SELECT count(*) FROM pg_tables WHERE schemaname = %s", (SCHEMA,)).fetchone()[0]
         print(f"스키마 {SCHEMA} 에 표 {n}개를 만들고 사전을 채웠습니다.")
+
+
+# ---------------------------------------------------------------- migrate
+
+def _migration_names() -> list[str]:
+    return sorted(f for f in os.listdir(MIGRATIONS_DIR) if f.endswith(".sql"))
+
+
+def _record_migrations(conn, names: list[str]) -> None:
+    conn.execute("""CREATE TABLE IF NOT EXISTS schema_migration (
+                        name       text        PRIMARY KEY,
+                        applied_at timestamptz NOT NULL DEFAULT now())""")
+    for name in names:
+        conn.execute("INSERT INTO schema_migration (name) VALUES (%s) ON CONFLICT DO NOTHING", (name,))
+
+
+def migrate(conn) -> list[str]:
+    """아직 적용하지 않은 db/migrations/*.sql 을 번호 순서대로 적용하고 schema_migration 에 기록한다. 적용한 이름 목록.
+    몇 번 돌려도 같은 결과(멱등): 기록된 것은 건너뛰고, 실패하면 거기서 멈춘다(기록 안 함 — 고친 뒤 이어서).
+    conn 은 autocommit(마이그레이션 파일이 스스로 BEGIN·COMMIT). 기록 표가 없던 DB(2026-11-01 전 RDS)는 처음에 모두 다시 적용한다
+    — 마이그레이션은 모두 여러 번 돌려도 안전하게 쓴다."""
+    conn.execute("SELECT pg_advisory_lock(%s)", (MIGRATE_LOCK,))
+    try:
+        _record_migrations(conn, [])
+        done = {r[0] for r in conn.execute("SELECT name FROM schema_migration")}
+        applied = []
+        for name in _migration_names():
+            if name in done:
+                continue
+            try:
+                conn.execute(open(os.path.join(MIGRATIONS_DIR, name), encoding="utf-8").read())
+            except Exception:
+                if conn.info.transaction_status == psycopg.pq.TransactionStatus.INERROR:
+                    conn.execute("ROLLBACK")   # 파일 안 BEGIN 이 실패한 채로 남지 않게
+                raise
+            _record_migrations(conn, [name])
+            applied.append(name)
+        return applied
+    finally:
+        conn.execute("SELECT pg_advisory_unlock(%s)", (MIGRATE_LOCK,))
+
+
+def cmd_migrate() -> None:
+    with connect(autocommit=True) as conn:
+        applied = migrate(conn)
+    print("적용한 마이그레이션: " + (", ".join(applied) if applied else "없음(이미 최신)"))
 
 
 # ---------------------------------------------------------------- export-dict
@@ -528,6 +578,7 @@ def main() -> None:
     ap = argparse.ArgumentParser(description="DB 저장(Load)")
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("init", help="표 만들기(db/schema.sql)")
+    sub.add_parser("migrate", help="아직 적용 안 한 db/migrations 만 차례로 적용(여러 번 해도 안전)")
     sub.add_parser("migrate-body-html", help="한 번만: 본문 HTML 칸 채우기 + 노트북 경로 칸 빼기")
     e = sub.add_parser("export-dict", help="DB 사전 -> db/seed_dictionary.sql (빈 DB·테스트용, 내려받아 커밋)")
     e.add_argument("--out", default=SEED_SQL, help="쓸 파일 (기본 db/seed_dictionary.sql)")
@@ -536,6 +587,8 @@ def main() -> None:
     args = ap.parse_args()
     if args.cmd == "init":
         cmd_init()
+    elif args.cmd == "migrate":
+        cmd_migrate()
     elif args.cmd == "export-dict":
         cmd_export_dict(args.out)
     elif args.cmd == "migrate-body-html":
