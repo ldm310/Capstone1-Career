@@ -17,6 +17,7 @@ jobs:
       job_skill: ${{ steps.diff.outputs.job_skill }}
       backend: ${{ steps.diff.outputs.backend }}
       frontend: ${{ steps.diff.outputs.frontend }}
+      dags: ${{ steps.diff.outputs.dags }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -35,6 +36,10 @@ jobs:
             if echo "$files" | grep -qE "^($part/|\.github/workflows/ci\.yml)"; then v=true; else v=false; fi
             echo "${part//-/_}=$v" >> "$GITHUB_OUTPUT"
           done
+          # DAG 와 Airflow 단계 코드가 바뀌었을 때만 Airflow 를 깔고 DAG 시험(1~2분 더 걸림)
+          dag_files='^(job-skill/airflow/|job-skill/(pipeline_tasks|notify|db_queries)\.py|job-skill/tests/test_dags\.py|\.github/workflows/ci\.yml)'
+          if echo "$files" | grep -qE "$dag_files"; then v=true; else v=false; fi
+          echo "dags=$v" >> "$GITHUB_OUTPUT"
 
   job-skill:
     needs: changes
@@ -67,8 +72,35 @@ jobs:
           cache: pip
           cache-dependency-path: job-skill/requirements-dev.txt
       - run: pip install -r requirements-dev.txt
-      - name: pytest (Airflow DAG 시험은 Airflow 가 없어 건너뜀 — 노트북 컨테이너에서 돌림)
+      - name: pytest (DAG 시험은 Airflow 가 있어야 해서 아래 job-skill-dags 잡에서)
         run: python -m pytest tests -q
+
+  job-skill-dags:
+    needs: changes
+    if: needs.changes.outputs.dags == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: job-skill
+    env:
+      AIRFLOW_HOME: /tmp/airflow
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW_DAGS: airflow/dags            # test_dags.py 가 읽는 DAG 폴더
+      PYTHONPATH: .                         # DAG 파일이 파이프라인 모듈(pipeline_tasks 등)을 바로 불러옴
+      PYTHONIOENCODING: utf-8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: job-skill/requirements-dev.txt
+      - name: Airflow 3.3.2 (노트북 이미지와 같은 판)
+        run: pip install "apache-airflow==3.3.2" --constraint https://raw.githubusercontent.com/apache/airflow/constraints-3.3.2/constraints-3.12.txt
+      - run: pip install -r requirements-dev.txt
+      - name: Airflow 자체 DB(sqlite) 만들기
+        run: airflow db migrate
+      - run: python -m pytest tests/test_dags.py -q
 
   # ---- backend/ (그 파트가 합칠 때 주석을 풀고 채운다 — 예: Spring Boot + Gradle)
   # backend:
