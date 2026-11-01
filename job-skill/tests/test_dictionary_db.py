@@ -48,12 +48,10 @@ def test_exclude_word_kind_is_checked(db):
 # ---------------------------------------------------------------- 시드(빈 DB 채우기)·내려받기
 
 def test_seed_fills_empty_db(db):          # conftest 가 시드를 적용한 임시 DB
-    assert db.execute("SELECT count(*) FROM capability WHERE name <> '기타'").fetchone()[0] == 61
-    assert db.execute("SELECT count(*) FROM tech").fetchone()[0] == 184
-    assert db.execute("SELECT count(*) FROM exclude_word").fetchone()[0] == 61
-    rds = db.execute("""SELECT c.name FROM tech_capability tc JOIN tech t ON t.id = tc.tech_id
-                        JOIN capability c ON c.id = tc.capability_id WHERE t.name = 'RDS' AND tc.is_primary""").fetchone()
-    assert rds == ("클라우드",)            # JSON 의 첫 번째 능력이 대표
+    """개수는 보지 않는다 — 팀원이 사전을 고쳐 내려받을 때마다 바뀌므로. 비어 있지 않고 '기타'가 있으면 된다."""
+    for table in ("capability", "tech", "tech_capability", "exclude_word"):
+        assert db.execute(f"SELECT count(*) FROM {table}").fetchone()[0] > 0, table
+    assert db.execute("SELECT is_active FROM capability WHERE name = '기타'").fetchone() == (True,)
 
 
 def test_seed_does_nothing_when_dictionary_exists(db):

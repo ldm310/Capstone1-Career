@@ -82,3 +82,20 @@ def test_cmd_load_writes_result_and_fails(run, monkeypatch, tmp_path):
     assert e.value.code == 1
     res = json.loads((tmp_path / "out" / "load_result.json").read_text(encoding="utf-8"))
     assert res["failed"] == ["D"] and res["why"] == {"D": "ValueError"} and res["total"]["공고"] == 1
+
+
+def test_broken_connection_is_reopened(run, monkeypatch, db):
+    """저장 중 연결이 정말 끊기면(RDS 재시작 등) 새로 연결해 이어서 저장한다."""
+    real, tries = run.upsert_posting, {}
+
+    def upsert(conn, t, update_raw=True):
+        no = t["rec_idx"]
+        tries[no] = tries.get(no, 0) + 1
+        if no == "D" and tries[no] == 1:
+            conn.close()                                   # 연결이 끊긴 것처럼
+            raise psycopg.OperationalError("지어낸 연결 끊김")
+        return real(conn, t, update_raw)
+
+    monkeypatch.setattr(run, "upsert_posting", upsert)
+    total, failed, why = run.load("gpt-5.6-luna-ex")
+    assert failed == [] and tries["D"] == 2 and saved(db) == ["D", "E"]
