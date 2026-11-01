@@ -209,6 +209,7 @@ CREATE TABLE posting (
     raw_hash          char(64)    NOT NULL,
     collected_at      timestamptz NOT NULL DEFAULT now(),
     last_checked_at   timestamptz NOT NULL DEFAULT now(),
+    recheck_due       boolean     NOT NULL DEFAULT false,
     UNIQUE (site, site_posting_no)
 );
 COMMENT ON TABLE  posting                   IS '공고';
@@ -228,6 +229,7 @@ COMMENT ON COLUMN posting.body_html         IS '본문 HTML (사람인 본문 �
 COMMENT ON COLUMN posting.raw_hash          IS '원본 해시 (보이는 글에서 띄어쓰기·줄바꿈을 지우고 만든 SHA-256)';
 COMMENT ON COLUMN posting.collected_at      IS '수집 시각';
 COMMENT ON COLUMN posting.last_checked_at   IS '마지막 확인 시각 (3일마다 수정 확인)';
+COMMENT ON COLUMN posting.recheck_due       IS '다시 확인할 공고 (''수정''으로 골랐는데 아직 확인·다시 저장을 못 함 — 사람인 수정 표시가 하루 뒤 사라져도 다음 날 다시 고른다)';
 
 CREATE TABLE posting_image (
     id          bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,

@@ -53,12 +53,6 @@ def test_font_color_noise_is_not_a_change(tmp_path):
     assert res["unchanged"] == ["A"] and res["changed"] == []
 
 
-def test_page_without_body_is_closed(tmp_path):
-    import recheck
-    res = recheck.detect_changes(str(tmp_path), [row("A", "a" * 64)], get=FakeGet({"A": ok("<html>마감된 공고입니다</html>")}))
-    assert res["closed"] == ["A"]
-
-
 def test_connection_error_is_not_closed(tmp_path):
     import recheck
     rows = [row("A", "a" * 64), row("B", "b" * 64)]
@@ -106,7 +100,7 @@ def test_select_recheck_takes_deadline_from_list():
 
 
 def test_blocked_responses_are_errors_not_closed(tmp_path):
-    """403·429 같은 막힘은 마감이 아니다(마감은 되돌릴 수 없음). 404·410 과 본문 없는 200 만 마감."""
+    """403·429 같은 막힘은 마감이 아니다(마감은 되돌릴 수 없음). 404·410 만 마감."""
     import recheck
     rows = [row(n, "x" * 64) for n in ("A", "B", "C", "D")]
     get = FakeGet({"A": (403, "", b""), "B": (429, "", b""), "C": (400, "", b""), "D": (410, "", b"")})
@@ -162,3 +156,19 @@ def test_detect_changes_adds_to_existing_targets(tmp_path):
     rows = [edited("B", "x" * 64), edited("C", "y" * 64)]
     recheck.detect_changes(str(tmp_path), rows, get=FakeGet({"B": ok(page()), "C": ok(page())}))
     assert [r["rec_idx"] for r in collect.read_targets(str(tmp_path))] == ["P", "B", "C"]
+
+
+def test_missing_body_needs_check_not_closed(tmp_path):
+    """본문 칸(user_content)이 없는 200 은 마감이 아니라 '확인 필요'(사용자 결정 2026-11-01) — 사람인이 페이지를 고치면
+    진행 중인 공고가 한꺼번에 마감될 수 있어서. 마감으로 치지 않고 다음 날 다시 확인한다."""
+    import recheck
+    res = recheck.detect_changes(str(tmp_path), [row("A", "x" * 64)], get=FakeGet({"A": (200, "", b"<html>no body</html>")}))
+    assert res["closed"] == [] and res["error"] == ["A"] and "확인 필요" in res["why"]["A"]
+
+
+def test_select_recheck_retries_when_last_check_failed():
+    """'수정'으로 골랐다가 확인·다시 저장을 못 한 공고(recheck_due)는 사람인 '수정' 표시가 사라진 다음 날에도 다시 고른다."""
+    import recheck
+    rows = [{**open_row("A", 3), "recheck_due": True}, {**open_row("B", 3), "recheck_due": False}]
+    check, counts = recheck.select_recheck({"A": listed(None), "B": listed(None)}, rows, TODAY)
+    assert [(r["rec_idx"], r["reason"]) for r in check] == [("A", "수정")] and counts["수정"] == 1

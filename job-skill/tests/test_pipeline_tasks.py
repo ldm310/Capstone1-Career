@@ -281,6 +281,7 @@ def daily(monkeypatch):
     monkeypatch.setattr(pipeline_tasks.db_queries, "open_postings", lambda conn: [
         {"rec_idx": n, **ROW, "raw_hash": "h", "last_checked_at": checked} for n in ("O1", "O2")])
     monkeypatch.setattr(pipeline_tasks.db_queries, "update_deadlines", lambda conn, m: calls.setdefault("deadlines", m) and len(m))
+    monkeypatch.setattr(pipeline_tasks.db_queries, "mark_recheck_due", lambda conn, nos: calls.setdefault("due", list(nos)) and len(nos))
     monkeypatch.setattr(pipeline_tasks.collect, "scan_lists", lambda **k: {
         "N1": item("N1"), "K1": item("K1"), "P1": item("P1"), "N2": item("N2", deadline_text="~11.30(월)"),
         "X9": item("X9", career="교육생"),
@@ -472,3 +473,9 @@ def test_report_without_dictionary_problems_has_no_dictionary_line(tmp_path):
     _report_run(tmp_path)
     assert pipeline_tasks.run_alerts(str(tmp_path))[2] == []
     assert "사전 확인 필요" not in pipeline_tasks.backfill_report(str(tmp_path), {"new": 4, "excluded": 7})
+
+
+def test_daily_collect_remembers_modified_postings(daily, tmp_path):
+    """'수정'으로 고른 공고는 DB 에 '다시 확인할 공고'로 표시해 둔다(확인·저장에 실패하면 다음 날 다시 고르게)."""
+    daily.step_collect(str(tmp_path), include_pending=True)
+    assert daily._calls["due"] == ["O1"]

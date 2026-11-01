@@ -89,6 +89,8 @@ def step_collect(run_dir: str, include_pending: bool, max_new: int | None = None
         deadlines = {no: dl for no, it in listed.items() if (dl := collect.parse_deadline(it.get("deadline_text", ""), today))}
         with connect() as conn:
             counts["마감일 바뀜"] = db_queries.update_deadlines(conn, deadlines)
+            # 확인·다시 저장에 실패해도 다음 날 다시 고르게(사람인 '수정' 표시는 하루 뒤 사라짐)
+            db_queries.mark_recheck_due(conn, [r["rec_idx"] for r in check if r["reason"] == "수정"])
         out.update(counts)
     return out
 
