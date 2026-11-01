@@ -231,10 +231,20 @@ def kept_by_image() -> dict[str, bool]:
 
 _DROP_TAGS = re.compile(r"<(script|style|iframe|noscript|object|embed)\b.*?(?:</\1\s*>|$)", re.S | re.I)
 _ON_ATTR = re.compile(r"""\s+on[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)""", re.I)
-_JS_URL = re.compile(r"""\b(href|src)\s*=\s*(["'])\s*javascript:[^"']*\2""", re.I)
+_URL_ATTR = re.compile(r"""\b(href|src|action|formaction|xlink:href)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))""", re.I)
+_BAD_SCHEME = re.compile(r"(javascript|vbscript):", re.I)
 _IMG_TAG = re.compile(r"<img\b[^>]*>", re.I)
 _SRC_ATTR = re.compile(r"""\s(?:data-src|src)\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)""", re.I)
 _ATTR_VAL = re.compile(r"""\b(data-src|src)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))""", re.I)
+
+
+def _no_script_url(m: re.Match) -> str:
+    """주소 속성이 javascript:/vbscript: 이면 '#' 로. 따옴표 없이·글자 바꿈(&#106;)·사이 공백(java&#9;script)도
+    브라우저처럼 풀어 본다(본문을 웹에 그대로 띄우므로)."""
+    raw = next((g for g in m.groups()[1:] if g is not None), "")
+    if _BAD_SCHEME.match(re.sub(r"[\x00-\x20]+", "", html.unescape(raw))):
+        return f'{m.group(1)}="#"'
+    return m.group(0)
 
 
 def body_html(page: str, rid: str) -> str | None:
@@ -246,7 +256,7 @@ def body_html(page: str, rid: str) -> str | None:
         return None
     b = _DROP_TAGS.sub("", m.group(1))
     b = _ON_ATTR.sub("", b)
-    b = _JS_URL.sub(r"\1=\2#\2", b)
+    b = _URL_ATTR.sub(_no_script_url, b)
     base = RELAY.format(id=rid)
 
     def fix(tag_m: re.Match) -> str:
@@ -288,7 +298,8 @@ def upsert_posting(conn, t: dict, update_raw: bool = True) -> int:
                deadline = coalesce(EXCLUDED.deadline, posting.deadline),
                body_html = CASE WHEN %(update_raw)s THEN EXCLUDED.body_html ELSE posting.body_html END,
                raw_hash = CASE WHEN %(update_raw)s THEN EXCLUDED.raw_hash ELSE posting.raw_hash END,
-               last_checked_at = CASE WHEN %(update_raw)s THEN EXCLUDED.last_checked_at ELSE posting.last_checked_at END
+               last_checked_at = CASE WHEN %(update_raw)s THEN EXCLUDED.last_checked_at ELSE posting.last_checked_at END,
+               recheck_due = CASE WHEN %(update_raw)s THEN false ELSE posting.recheck_due END   -- 다시 저장했으면 확인 끝
            RETURNING id""",
         {"cid": company_id, "no": rid, "title": t["title"], "role": t.get("role") or None,
          "career": t.get("career") or None, "miny": min_years(t.get("career", "")),
