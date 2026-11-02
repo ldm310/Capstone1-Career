@@ -1,0 +1,5 @@
+# 테스트(pytest)에 필요한 것 — 노트북·CI 같음. OCR(Paddle·EasyOCR)은 테스트에 쓰지 않는다.
+pytest==8.4.2
+psycopg[binary]==3.2.3
+numpy==2.2.6
+pillow==11.3.0
