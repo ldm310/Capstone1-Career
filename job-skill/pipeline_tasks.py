@@ -32,6 +32,8 @@ DAILY_LIMIT = 5.0      # 하루(KST) ① 매일 수집
 BACKFILL_LIMIT = 10.0  # ③ 한 번 실행
 LLM_WORKERS = 8        # 공고 몇 건을 동시에 LLM 에 보낼지 — 계정 한도(분당 5,000번·200만 토큰)의 약 15%, 1,514건이 약 9시간 → 약 1시간
 DAILY_DAGS = ("daily_collect",)  # 하루 상한을 쓰는 DAG(② 수정 확인은 ① 에 합침)
+CHECK_REASONS = ("수정", "목록에 없음")   # 변경 감지에서 다시 확인하는 이유(무리)
+OUTCOMES = {"changed": "바뀜", "unchanged": "그대로", "closed": "마감", "error": "오류"}   # recheck 결과 → 알림 낱말
 
 
 def _abs(run_dir: str) -> str:
@@ -98,11 +100,12 @@ def step_collect(run_dir: str, include_pending: bool, max_new: int | None = None
 def step_detect(run_dir: str) -> dict:
     """변경 감지(①): 고른 공고만 확인 — 목록에서 사라진 공고는 전체 페이지의 마감 표시, 수정된 공고는 본문 지문.
     바뀐 공고는 targets.tsv 뒤에 붙고(다시 추출), 결과는 changes.json. check.json 이 없으면(③) 아무것도 안 한다.
-    그대로인 공고만 확인 시각을 지금으로 바꾼다. 바뀐 공고는 다시 추출해 DB 저장에 성공할 때 바뀐다(실패하면 다음 날 다시)."""
+    그대로인 공고만 확인 시각을 지금으로 바꾼다. 바뀐 공고는 다시 추출해 DB 저장에 성공할 때 바뀐다(실패하면 다음 날 다시).
+    돌려주는 값: 다시 확인한 이유('수정' / '목록에 없음')마다 {바뀜, 그대로, 마감, 오류} — 결과 알림에서 무리마다 더하면 그 수."""
     d = _abs(run_dir)
     path = os.path.join(d, "check.json")
     if not os.path.exists(path):
-        return {"확인": 0, "바뀜": 0, "그대로": 0, "오류": 0}
+        return {why: dict.fromkeys(OUTCOMES.values(), 0) for why in CHECK_REASONS}
     rows = json.load(open(path, encoding="utf-8"))
     started = dt.datetime.now(dt.timezone.utc)  # 본문을 받기 시작한 시각 — 마지막 확인은 저장 시각이 아니라 받은 시각(이르게 잡음)
     res = recheck.detect_changes(d, rows)
@@ -110,7 +113,11 @@ def step_detect(run_dir: str) -> dict:
         db_queries.touch_checked(conn, res["unchanged"], at=started)
     # 확인 못 한 공고는 마감으로 치지 않고 다음 날 다시 확인 — 결과 알림에 공고번호·원인·링크
     _note(d, "확인 못 한 공고", [(no, res.get("why", {}).get(no, "오류")) for no in res["error"]])
-    return {"확인": len(rows), "바뀜": len(res["changed"]), "그대로": len(res["unchanged"]), "오류": len(res["error"])}
+    outcome = {no: OUTCOMES[k] for k in OUTCOMES for no in res[k]}
+    counts = {why: dict.fromkeys(OUTCOMES.values(), 0) for why in CHECK_REASONS}
+    for r in rows:
+        counts[r.get("reason", "수정")][outcome[r["rec_idx"]]] += 1
+    return counts
 
 
 def step_close(run_dir: str) -> int:
@@ -275,13 +282,17 @@ def run_alerts(run_dir: str) -> tuple[dict[str, list], dict | None, list[str]]:
     return {k: v for k, v in found.items() if v}, budget, data.get("사전 확인 필요") or []
 
 
-def daily_report(run_dir: str, got: dict, seen: dict, closed: int, today_cost: float) -> str:
-    """① 결과 알림 한 통. got = 목록 수집 결과, seen = 변경 감지 결과, closed = 마감 처리한 수."""
+def daily_report(run_dir: str, got: dict, seen: dict, today_cost: float) -> str:
+    """① 결과 알림 한 통. got = 목록 수집 결과, seen = 변경 감지 결과(다시 확인한 이유마다 바뀜·그대로·마감·오류).
+    무리마다 더하면 그 무리 수(사용자 요청 2026-11-03). 마감일은 목록 전체에서 따로 센다(본문 밖 값)."""
     s = summary(run_dir)
+    def out(why: str, order: tuple[str, ...]) -> str:
+        return " · ".join(f"{'확인 오류' if k == '오류' else k} {seen.get(why, {}).get(k, 0)}" for k in order)
+
     rows = [("수집", f"새 공고 {got.get('new', 0)} · 밀린 공고 {got.get('pending', 0)}"),
-            ("변경 감지", f"수정 {got.get('수정', 0)} → 바뀜 {seen.get('바뀜', 0)} · 마감일 바뀜 {got.get('마감일 바뀜', 0)} · "
-                      f"확인 오류 {seen.get('오류', 0)}"),
-            ("마감", f"목록에 없음 {got.get('목록에 없음', 0)} → 마감 {closed}"),
+            ("변경 감지", f"수정 {got.get('수정', 0)} → {out('수정', ('바뀜', '그대로', '마감', '오류'))}"),
+            ("마감 확인", f"목록에 없음 {got.get('목록에 없음', 0)} → {out('목록에 없음', ('마감', '바뀜', '그대로', '오류'))}"),
+            ("마감일", f"목록에서 바뀐 공고 {got.get('마감일 바뀜', 0)}"),
             ("추출", f"{s['추출']}/{s['대상']}건 · 확인 필요 {s['확인 필요']}"),
             ("비용", f"이번 ${s['비용']:.2f} · 오늘 ${today_cost:.2f} (하루 상한 ${DAILY_LIMIT:g})")]
     return notify.msg_report("매일 수집", rows, *run_alerts(run_dir))
