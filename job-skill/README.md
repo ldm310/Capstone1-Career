@@ -212,10 +212,7 @@ docker compose -f docker-compose.airflow.yml exec airflow-scheduler python -m py
 - **마이그레이션은 옛 코드와도 맞게** 쓴다(칸 더하기 먼저, 빼기·이름 바꾸기는 다음 배포에서). CD가 RDS를 먼저 바꾸고 Airflow 코드를 나중에 바꾸기 때문이다.
 - RDS 사전 내려받기(`export-dict`)처럼 RDS에 직접 할 일은 전용 폴더(`.env`에 RDS가 있음)에서 한다.
 
-**관리자(저장소 주인 `ldm310`)가 한 번 해 둘 것**
-1. Settings → Secrets and variables → Actions → Secrets: `RDS_HOST`, `RDS_PASSWORD`
-2. Settings → Actions → Runners → New self-hosted runner(Windows)를 노트북에 설치, 라벨 `career-laptop`, 서비스로 실행(`git`·`docker`·`py`가 PATH에 있어야 함)
-3. Settings → Branches: `main`·`develop`에 "PR 필수 + 검사 통과 필수"(검사: `changes`, `job-skill`, `job-skill-dags`)
+**관리자 설정**(Secrets·노트북 러너·브랜치 보호)은 맨 위 [README](../README.md)의 '관리자 설정'.
 
 **Airflow 전용 폴더 준비** (처음 한 번, `main`이 생긴 뒤 — Airflow가 작업 폴더 대신 이 폴더를 보게)
 ```powershell
