@@ -150,7 +150,8 @@ def test_fetch_images_skips_existing_image(monkeypatch, tmp_path):
 # ── ② 수정 확인 태스크 ────────────────────────────────────────────────────
 def test_detect_touches_unchanged_only(monkeypatch, tmp_path):
     import pipeline_tasks
-    (tmp_path / "check.json").write_text(json.dumps([{"rec_idx": n, **ROW, "raw_hash": "h"} for n in "ABCD"]),
+    (tmp_path / "check.json").write_text(json.dumps([{"rec_idx": n, **ROW, "raw_hash": "h", "reason": why}
+                                                     for n, why in zip("ABCD", ["수정", "수정", "목록에 없음", "목록에 없음"])]),
                                          encoding="utf-8")
     touched = []
     monkeypatch.setattr(pipeline_tasks, "connect", lambda: contextlib.nullcontext(object()))
@@ -166,7 +167,8 @@ def test_detect_touches_unchanged_only(monkeypatch, tmp_path):
     import datetime as dt
     assert stamps[0] is not None and stamps[0] <= dt.datetime.now(dt.timezone.utc)   # 본문을 받기 시작한 시각으로
     assert sent == [] and alerts(tmp_path)["확인 못 한 공고"] == [["D", "오류"]]   # 오류(D)는 결과 알림에 링크와 함께
-    assert res == {"확인": 4, "바뀜": 1, "그대로": 1, "오류": 1}
+    assert res == {"수정": {"바뀜": 1, "그대로": 1, "마감": 0, "오류": 0},          # 다시 확인한 이유(무리)마다 따로 센다
+                   "목록에 없음": {"바뀜": 0, "그대로": 0, "마감": 1, "오류": 1}}
 
 
 def test_close_marks_closed(monkeypatch, tmp_path):
@@ -318,7 +320,8 @@ def test_detect_and_close_without_check_file(monkeypatch, tmp_path):
     """③ 처럼 check.json·changes.json 이 없으면 아무것도 안 한다."""
     import pipeline_tasks
     monkeypatch.setattr(pipeline_tasks, "connect", lambda: pytest.fail("DB 를 열면 안 됨"))
-    assert pipeline_tasks.step_detect(str(tmp_path)) == {"확인": 0, "바뀜": 0, "그대로": 0, "오류": 0}
+    zero = {"바뀜": 0, "그대로": 0, "마감": 0, "오류": 0}
+    assert pipeline_tasks.step_detect(str(tmp_path)) == {"수정": zero, "목록에 없음": zero}
     assert pipeline_tasks.step_close(str(tmp_path)) == 0
 
 
@@ -405,13 +408,15 @@ def test_daily_report_is_one_message(tmp_path):
     import pipeline_tasks
     _report_run(tmp_path)
     got = {"new": 3, "pending": 1, "수정": 14, "목록에 없음": 55, "마감일 바뀜": 12}
-    msg = pipeline_tasks.daily_report(str(tmp_path), got, {"바뀜": 2, "오류": 1}, closed=55, today_cost=0.73)
+    seen = {"수정": {"바뀜": 2, "그대로": 11, "마감": 0, "오류": 1}, "목록에 없음": {"바뀜": 0, "그대로": 0, "마감": 55, "오류": 0}}
+    msg = pipeline_tasks.daily_report(str(tmp_path), got, seen, today_cost=0.73)
     url = "https://www.saramin.co.kr/zf_user/jobs/relay/view?view_type=list&rec_idx="
-    assert msg.splitlines() == [
+    assert msg.splitlines() == [   # 다시 확인한 무리마다 어떻게 나왔는지(더하면 그 무리 수) — 사용자 요청 2026-11-03
         "✅ 매일 수집 완료",
         "• 수집: 새 공고 3 · 밀린 공고 1",
-        "• 변경 감지: 수정 14 → 바뀜 2 · 마감일 바뀜 12 · 확인 오류 1",
-        "• 마감: 목록에 없음 55 → 마감 55",
+        "• 변경 감지: 수정 14 → 바뀜 2 · 그대로 11 · 마감 0 · 확인 오류 1",
+        "• 마감 확인: 목록에 없음 55 → 마감 55 · 바뀜 0 · 그대로 0 · 확인 오류 0",
+        "• 마감일: 목록에서 바뀐 공고 12",                           # 목록 전체에서 센다 — 위 두 무리와 따로(본문 밖 값)
         "• 추출: 1/4건 · 확인 필요 1",
         "• 비용: 이번 $0.73 · 오늘 $0.73 (하루 상한 $5)",
         "⚠️ 넘어간 공고 4건 — 다음 실행 때 다시 시도",

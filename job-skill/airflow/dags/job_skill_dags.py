@@ -122,8 +122,7 @@ def daily_collect():
         """Slack 알림은 이것 한 통(넘어간 공고·비용 상한도 여기에). 태스크가 실패하면 그 태스크의 실패 알림이 따로 온다."""
         ti = _ctx()["ti"]
         notify.send(pt.daily_report(_run_dir(), ti.xcom_pull(task_ids="collect_list") or {},
-                                    ti.xcom_pull(task_ids="detect_changes") or {},
-                                    ti.xcom_pull(task_ids="close_postings") or 0, _today_cost()))
+                                    ti.xcom_pull(task_ids="detect_changes") or {}, _today_cost()))
 
     collect, detect = collect_list(), detect_changes()
     close = close_postings()
