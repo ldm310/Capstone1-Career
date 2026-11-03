@@ -10,6 +10,19 @@ import java.time.OffsetDateTime;
 @Table(schema = "job", name = "extraction_run")
 public class ExtractionRun {
 
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
+    @Column(name = "llm_output_raw", columnDefinition = "jsonb")
+    private java.util.Map<String, Object> rawOutput;
+
+    public java.util.List<String> getSkipped() {
+        if (rawOutput == null || !(rawOutput.get("skipped") instanceof java.util.List<?> values)) {
+            return java.util.List.of();
+        }
+        return values.stream().filter(String.class::isInstance).map(String.class::cast).toList();
+    }
+
+    public boolean hasRawOutput() { return rawOutput != null; }
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
