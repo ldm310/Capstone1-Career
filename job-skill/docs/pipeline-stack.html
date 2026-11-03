@@ -1,0 +1,687 @@
+<title>파이프라인 기술 스택 결정</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+KR:wght@400;500;700&display=swap">
+<style>
+  :root {
+    --bg: #F3F5F8;
+    --surface: #FFFFFF;
+    --sunk: #EBEFF4;
+    --ink: #18202D;
+    --muted: #5A6476;
+    --line: #D8DEE7;
+    --accent: #2F5F96;
+    --accent-soft: #E2EBF6;
+    --good: #2C7449;
+    --good-soft: #E0F0E6;
+    --warn: #8E6210;
+    --warn-soft: #F6ECD6;
+    --bad: #A63F38;
+    --bad-soft: #F6E1DF;
+    --code-bg: #EDF1F6;
+    --code-ink: #1B2433;
+    --sans: "IBM Plex Sans KR", "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, "Consolas", monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --bg: #10151C;
+      --surface: #171F29;
+      --sunk: #1E2733;
+      --ink: #E5E9EF;
+      --muted: #98A3B3;
+      --line: #2B3644;
+      --accent: #84AEE2;
+      --accent-soft: #1C2E45;
+      --good: #6DC191;
+      --good-soft: #163021;
+      --warn: #E1B460;
+      --warn-soft: #33290F;
+      --bad: #E88A82;
+      --bad-soft: #3A1D1B;
+      --code-bg: #0D1218;
+      --code-ink: #D6DDE7;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #10151C;
+    --surface: #171F29;
+    --sunk: #1E2733;
+    --ink: #E5E9EF;
+    --muted: #98A3B3;
+    --line: #2B3644;
+    --accent: #84AEE2;
+    --accent-soft: #1C2E45;
+    --good: #6DC191;
+    --good-soft: #163021;
+    --warn: #E1B460;
+    --warn-soft: #33290F;
+    --bad: #E88A82;
+    --bad-soft: #3A1D1B;
+    --code-bg: #0D1218;
+    --code-ink: #D6DDE7;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 15px;
+    line-height: 1.65;
+    padding-inline: 20px;
+    padding-block: 48px 72px;
+    word-break: keep-all;
+  }
+  .page { max-width: 900px; margin: 0 auto; display: grid; gap: 56px; }
+
+  h1, h2, h3 { text-wrap: balance; margin: 0; line-height: 1.3; }
+  h1 { font-size: 32px; font-weight: 700; letter-spacing: -0.01em; }
+  h2 { font-size: 22px; font-weight: 700; }
+  h3 { font-size: 16px; font-weight: 700; }
+  p { margin: 0; max-width: 65ch; }
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+  .muted { color: var(--muted); }
+  .small { font-size: 13px; }
+  code, .mono { font-family: var(--mono); font-size: 0.92em; }
+
+  header { display: grid; gap: 12px; padding-bottom: 28px; border-bottom: 1px solid var(--line); }
+  header .meta { font-size: 13px; color: var(--muted); font-family: var(--mono); }
+
+  section { display: grid; gap: 18px; }
+  .sec-head { display: grid; gap: 6px; }
+
+  /* 결정 요약 */
+  .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .tile {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 16px;
+    display: grid;
+    grid-template-rows: auto auto 1fr;
+    gap: 6px;
+  }
+  .tile .role { font-size: 12px; color: var(--muted); letter-spacing: 0.04em; }
+  .tile .name { font-size: 20px; font-weight: 700; }
+  .tile .why { font-size: 13px; color: var(--muted); line-height: 1.5; }
+  .tile.pending { background: transparent; border-style: dashed; }
+  .tile.pending .name { color: var(--muted); }
+
+  /* 다이어그램 */
+  .figure {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 16px;
+    display: grid;
+    gap: 10px;
+  }
+  .scroll { overflow-x: auto; }
+  .scroll svg { display: block; width: 100%; min-width: 640px; height: auto; }
+  .caption { font-size: 13px; color: var(--muted); }
+
+  svg text { font-family: var(--sans); fill: var(--ink); }
+  svg .t-sm { font-size: 12px; }
+  svg .t-md { font-size: 13px; }
+  svg .t-b { font-weight: 700; }
+  svg .t-muted { fill: var(--muted); }
+  svg .t-accent { fill: var(--accent); }
+  svg .t-mono { font-family: var(--mono); font-size: 12px; }
+  svg .box { fill: var(--surface); stroke: var(--line); stroke-width: 1.2; }
+  svg .box-sunk { fill: var(--sunk); stroke: var(--line); stroke-width: 1.2; }
+  svg .box-accent { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.5; }
+  svg .box-dash { fill: var(--surface); stroke: var(--muted); stroke-width: 1.2; stroke-dasharray: 5 4; }
+  svg .hdr { fill: var(--sunk); }
+  svg .edge { stroke: var(--muted); stroke-width: 1.5; fill: none; }
+  svg .edge-dot { stroke: var(--muted); stroke-width: 1.2; stroke-dasharray: 2 4; fill: none; }
+  svg .ahead { fill: var(--muted); }
+  svg .rule { stroke: var(--line); stroke-width: 1; }
+
+  /* 표 */
+  .tbl-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+  table { width: 100%; min-width: 600px; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; vertical-align: top; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+  tr:last-child td { border-bottom: 0; }
+  thead th {
+    background: var(--sunk);
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--muted);
+    letter-spacing: 0.04em;
+  }
+  td.k { font-weight: 500; width: 30%; }
+  tr.core td { background: var(--accent-soft); }
+  .core-tag {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    border-radius: 4px;
+    padding: 0 5px;
+    margin-left: 6px;
+    vertical-align: 1px;
+  }
+  .cell { display: flex; gap: 8px; align-items: baseline; }
+  .mk {
+    flex: none;
+    display: inline-grid;
+    place-items: center;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    font-size: 12px;
+    font-weight: 700;
+    transform: translateY(5px);
+  }
+  .mk.g { background: var(--good-soft); color: var(--good); }
+  .mk.w { background: var(--warn-soft); color: var(--warn); }
+  .mk.b { background: var(--bad-soft); color: var(--bad); }
+  .mk.n { background: var(--sunk); color: var(--muted); }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip {
+    font-size: 13px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    border-radius: 999px;
+    padding: 2px 10px;
+  }
+
+  /* 집계 막대 */
+  .tally { display: grid; gap: 10px; }
+  .tally-row { display: grid; grid-template-columns: 96px 1fr; gap: 12px; align-items: center; }
+  .tally-row .lbl { font-size: 13px; font-weight: 500; }
+  .bar { display: flex; height: 26px; border-radius: 6px; overflow: hidden; gap: 2px; }
+  .seg { display: grid; place-items: center; font-size: 12px; font-weight: 700; }
+  .seg.g { background: var(--good-soft); color: var(--good); }
+  .seg.w { background: var(--warn-soft); color: var(--warn); }
+  .seg.b { background: var(--bad-soft); color: var(--bad); }
+  .seg.n { background: var(--sunk); color: var(--muted); }
+  .legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px; color: var(--muted); }
+  .legend span { display: inline-flex; gap: 6px; align-items: center; }
+
+  .note {
+    font-size: 14px;
+    color: var(--muted);
+    border-left: 3px solid var(--line);
+    padding-left: 12px;
+  }
+
+  pre {
+    margin: 0;
+    background: var(--code-bg);
+    color: var(--code-ink);
+    border-radius: 8px;
+    padding: 14px 16px;
+    overflow-x: auto;
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 1.6;
+  }
+  pre .c { color: var(--muted); }
+  pre .kw { color: var(--accent); font-weight: 500; }
+
+  /* 결정 박스 */
+  .decision {
+    background: var(--surface);
+    border: 1.5px solid var(--accent);
+    border-radius: 10px;
+    padding: 20px;
+    display: grid;
+    gap: 12px;
+  }
+  .decision .verdict { font-size: 19px; font-weight: 700; }
+  .decision ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
+
+  .flow { display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; gap: 10px; align-items: stretch; }
+  .flow .step {
+    background: var(--sunk);
+    border-radius: 8px;
+    padding: 12px 14px;
+    display: grid;
+    gap: 2px;
+    align-content: start;
+  }
+  .flow .step b { font-size: 14px; }
+  .flow .step span { font-size: 13px; color: var(--muted); }
+  .flow .arrow { align-self: center; color: var(--muted); font-size: 18px; }
+
+  .proposal { display: grid; gap: 10px; }
+  .proposal-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .tag-draft {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--warn);
+    background: var(--warn-soft);
+    border-radius: 4px;
+    padding: 1px 6px;
+  }
+  .prop-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .prop {
+    border: 1px dashed var(--line);
+    border-radius: 8px;
+    padding: 12px 14px;
+    display: grid;
+    gap: 4px;
+    align-content: start;
+  }
+  .prop b { font-size: 14px; }
+  .prop span { font-size: 13px; color: var(--muted); }
+
+  footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 18px; }
+
+  @media (max-width: 760px) {
+    .tiles { grid-template-columns: repeat(2, 1fr); }
+    .prop-grid { grid-template-columns: 1fr; }
+    .flow { grid-template-columns: 1fr; }
+    .flow .arrow { transform: rotate(90deg); justify-self: center; }
+  }
+  @media (max-width: 420px) {
+    h1 { font-size: 26px; }
+    .tiles { grid-template-columns: 1fr; }
+  }
+</style>
+
+<div class="page">
+
+  <header>
+    <div class="eyebrow">캡스톤 · 데이터 파이프라인 파트</div>
+    <h1>파이프라인 기술 스택 결정</h1>
+    <p class="muted">공고 수집 → LLM 가공 → 통계 계산을 맡는 파트에서 쓸 도구와 고른 이유입니다.</p>
+    <div class="meta">2026-10-01 · LLM은 결정 후 추가</div>
+  </header>
+
+  <!-- 요약 -->
+  <section>
+    <div class="sec-head">
+      <div class="eyebrow">한눈에 보기</div>
+      <h2>결정 요약</h2>
+    </div>
+    <div class="tiles">
+      <div class="tile">
+        <div class="role">데이터베이스</div>
+        <div class="name">PostgreSQL</div>
+        <div class="why">스킬 통계(JOIN·집계), JSONB로 유연한 항목, pgvector 확장</div>
+      </div>
+      <div class="tile">
+        <div class="role">파이프라인 오케스트레이션</div>
+        <div class="name">Airflow</div>
+        <div class="why">자동 재시도, 백필, 스케줄 관리</div>
+      </div>
+      <div class="tile">
+        <div class="role">모니터링</div>
+        <div class="name">Grafana</div>
+        <div class="why">서버 자원 상태를 시각화</div>
+      </div>
+      <div class="tile pending">
+        <div class="role">LLM</div>
+        <div class="name">미정</div>
+        <div class="why">결정되면 이 문서에 추가</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 전체 구조 -->
+  <section>
+    <div class="sec-head">
+      <div class="eyebrow">전체 구조</div>
+      <h2>데이터가 흐르는 길</h2>
+    </div>
+    <div class="figure">
+      <div class="scroll">
+        <svg viewBox="0 0 880 310" role="img" aria-label="수집 대상 3곳에서 Airflow DAG(수집, LLM 가공, 통계 재계산)를 거쳐 PostgreSQL에 적재되고 웹 서비스가 조회한다. Grafana가 서버 자원을 모니터링한다.">
+          <defs>
+            <marker id="ah" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+              <path d="M0,0 L8,4 L0,8 z" class="ahead"/>
+            </marker>
+          </defs>
+
+          <!-- 수집 대상 -->
+          <text x="90" y="26" text-anchor="middle" class="t-sm t-muted">수집 대상</text>
+          <rect x="10" y="40" width="160" height="40" rx="7" class="box"/>
+          <text x="90" y="65" text-anchor="middle" class="t-md">사람인</text>
+          <rect x="10" y="95" width="160" height="40" rx="7" class="box"/>
+          <text x="90" y="120" text-anchor="middle" class="t-md">잡코리아</text>
+          <rect x="10" y="150" width="160" height="40" rx="7" class="box"/>
+          <text x="90" y="175" text-anchor="middle" class="t-md">중앙대 게시판</text>
+
+          <path d="M170,60 L214,104" class="edge" marker-end="url(#ah)"/>
+          <path d="M170,115 L214,108" class="edge" marker-end="url(#ah)"/>
+          <path d="M170,170 L214,112" class="edge" marker-end="url(#ah)"/>
+
+          <!-- Airflow -->
+          <rect x="200" y="14" width="340" height="206" rx="10" class="box-sunk"/>
+          <text x="216" y="40" class="t-md t-b">Airflow DAG</text>
+          <text x="216" y="58" class="t-sm t-muted">매일 새벽 실행 · 실패 시 자동 재시도</text>
+
+          <rect x="216" y="82" width="90" height="48" rx="7" class="box"/>
+          <text x="261" y="111" text-anchor="middle" class="t-md">수집</text>
+          <rect x="326" y="82" width="90" height="48" rx="7" class="box"/>
+          <text x="371" y="111" text-anchor="middle" class="t-md">LLM 가공</text>
+          <rect x="436" y="82" width="90" height="48" rx="7" class="box"/>
+          <text x="481" y="111" text-anchor="middle" class="t-sm">통계 재계산</text>
+
+          <path d="M306,106 L324,106" class="edge" marker-end="url(#ah)"/>
+          <path d="M416,106 L434,106" class="edge" marker-end="url(#ah)"/>
+
+          <path d="M371,132 L371,158" class="edge" marker-start="url(#ah)" marker-end="url(#ah)"/>
+          <rect x="326" y="160" width="90" height="36" rx="7" class="box-dash"/>
+          <text x="371" y="183" text-anchor="middle" class="t-sm t-muted">LLM (미정)</text>
+
+          <!-- 적재 -->
+          <path d="M540,106 L588,106" class="edge" marker-end="url(#ah)"/>
+          <text x="564" y="96" text-anchor="middle" class="t-sm t-muted">적재</text>
+
+          <!-- PostgreSQL -->
+          <rect x="590" y="50" width="150" height="128" rx="10" class="box-accent"/>
+          <text x="665" y="77" text-anchor="middle" class="t-md t-b t-accent">PostgreSQL</text>
+          <line x1="604" y1="88" x2="726" y2="88" class="rule"/>
+          <text x="665" y="108" text-anchor="middle" class="t-sm">공고 · 부문 · 스킬</text>
+          <text x="665" y="130" text-anchor="middle" class="t-sm">JSONB 소스별 항목</text>
+          <text x="665" y="152" text-anchor="middle" class="t-sm t-muted">pgvector (추후)</text>
+
+          <!-- 웹 -->
+          <path d="M740,106 L778,106" class="edge" marker-end="url(#ah)"/>
+          <text x="759" y="96" text-anchor="middle" class="t-sm t-muted">조회</text>
+          <rect x="780" y="82" width="90" height="48" rx="7" class="box"/>
+          <text x="825" y="111" text-anchor="middle" class="t-md">웹 서비스</text>
+
+          <!-- Grafana -->
+          <path d="M370,220 L370,250" class="edge-dot"/>
+          <path d="M665,178 L665,250" class="edge-dot"/>
+          <rect x="200" y="250" width="670" height="44" rx="8" class="box"/>
+          <text x="535" y="277" text-anchor="middle" class="t-md"><tspan class="t-b">Grafana</tspan><tspan class="t-muted"> · 서버 자원 상태 모니터링</tspan></text>
+        </svg>
+      </div>
+      <div class="caption">DB는 1개. 파이프라인과 웹이 같은 PostgreSQL을 쓰고, 파이프라인은 새벽에 돈다.</div>
+    </div>
+  </section>
+
+  <!-- Airflow / Grafana -->
+  <section>
+    <div class="sec-head">
+      <div class="eyebrow">운영 도구</div>
+      <h2>Airflow · Grafana를 쓰는 이유</h2>
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr><th>도구</th><th>맡는 일</th><th>고른 이유</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="k">Airflow</td>
+            <td>수집 → LLM 가공 → 통계 재계산을 순서대로 매일 실행</td>
+            <td>
+              <div class="chips">
+                <span class="chip">실패 시 자동 재시도</span>
+                <span class="chip">백필 (지난 날짜 다시 돌리기)</span>
+                <span class="chip">스케줄 관리</span>
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td class="k">Grafana</td>
+            <td>서버 자원 상태 확인</td>
+            <td>
+              <div class="chips">
+                <span class="chip">서버 자원 상태 시각화</span>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- DB 선택 -->
+  <section>
+    <div class="sec-head">
+      <div class="eyebrow">DB 선택</div>
+      <h2>MongoDB 대신 PostgreSQL을 고른 이유</h2>
+      <p class="muted">MongoDB의 장점(유연한 구조)은 JSONB로 가져오고, 서비스 핵심인 스킬 통계는 RDB로 해결합니다.</p>
+    </div>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr><th>필요한 것</th><th>MongoDB</th><th>PostgreSQL</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="k">사이트·공고마다 다른 항목</td>
+            <td><div class="cell"><span class="mk g">✓</span><span>정해진 틀 없는 문서</span></div></td>
+            <td><div class="cell"><span class="mk g">✓</span><span>JSONB 칼럼에 저장</span></div></td>
+          </tr>
+          <tr>
+            <td class="k">LLM의 JSON 응답 저장</td>
+            <td><div class="cell"><span class="mk g">✓</span><span>JSON 문서 그대로 저장</span></div></td>
+            <td><div class="cell"><span class="mk g">✓</span><span>JSONB에 그대로 저장</span></div></td>
+          </tr>
+          <tr>
+            <td class="k">소스 추가 시 구조 변경</td>
+            <td><div class="cell"><span class="mk g">✓</span><span>변경 없음</span></div></td>
+            <td><div class="cell"><span class="mk g">✓</span><span>공통 칼럼은 그대로, 다른 항목은 JSONB</span></div></td>
+          </tr>
+          <tr class="core">
+            <td class="k">조건별 공고의 스킬 개수 통계<span class="core-tag">핵심</span></td>
+            <td><div class="cell"><span class="mk w">△</span><span>집계 파이프라인으로 가능하지만 복잡</span></div></td>
+            <td><div class="cell"><span class="mk g">✓</span><span>JOIN + GROUP BY, RDB 기본 기능</span></div></td>
+          </tr>
+          <tr>
+            <td class="k">공고 → 부문 → 스킬 정합성</td>
+            <td><div class="cell"><span class="mk b">✗</span><span>외래키 없음, 앱 코드가 책임</span></div></td>
+            <td><div class="cell"><span class="mk g">✓</span><span>외래키로 DB가 보장</span></div></td>
+          </tr>
+          <tr>
+            <td class="k">벡터(임베딩) 검색 확장</td>
+            <td><div class="cell"><span class="mk n">–</span><span class="muted">검토 범위 밖</span></div></td>
+            <td><div class="cell"><span class="mk g">✓</span><span>무료 확장 pgvector, 같은 DB에서 처리</span></div></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="figure">
+      <div class="tally" aria-label="위 표 6개 항목 집계">
+        <div class="tally-row">
+          <div class="lbl">PostgreSQL</div>
+          <div class="bar">
+            <div class="seg g" style="flex: 6">✓ 6</div>
+          </div>
+        </div>
+        <div class="tally-row">
+          <div class="lbl">MongoDB</div>
+          <div class="bar">
+            <div class="seg g" style="flex: 3">✓ 3</div>
+            <div class="seg w" style="flex: 1">△ 1</div>
+            <div class="seg b" style="flex: 1">✗ 1</div>
+            <div class="seg n" style="flex: 1">–</div>
+          </div>
+        </div>
+      </div>
+      <div class="legend">
+        <span><span class="mk g" style="transform:none">✓</span>잘 맞음</span>
+        <span><span class="mk w" style="transform:none">△</span>가능하지만 불편</span>
+        <span><span class="mk b" style="transform:none">✗</span>지원 안 함</span>
+        <span><span class="mk n" style="transform:none">–</span>비교 안 함</span>
+      </div>
+    </div>
+
+    <p class="note">MySQL도 후보였지만 커뮤니티판은 벡터 거리 계산 함수를 제공하지 않아 제외했습니다.</p>
+  </section>
+
+  <!-- 스키마 + 통계 쿼리 -->
+  <section>
+    <div class="sec-head">
+      <div class="eyebrow">DB 선택 · 예시</div>
+      <h2>핵심 통계는 이렇게 뽑힙니다</h2>
+      <p class="muted">표를 이어 붙여(JOIN) 세는(COUNT) 쿼리 한 번이면 됩니다. 스키마는 확정 전 예시입니다.</p>
+    </div>
+
+    <div class="figure">
+      <div class="scroll">
+        <svg viewBox="0 0 880 196" role="img" aria-label="예시 스키마: job_posting 1:N job_section 1:N section_skill N:1 skill. job_posting에 extra JSONB 칼럼.">
+          <!-- job_posting -->
+          <rect x="10" y="20" width="180" height="152" rx="8" class="box"/>
+          <path d="M18,20 H182 A8,8 0 0 1 190,28 V52 H10 V28 A8,8 0 0 1 18,20 Z" class="hdr"/>
+          <text x="22" y="41" class="t-md t-b">job_posting</text>
+          <text x="178" y="41" text-anchor="end" class="t-sm t-muted">공고</text>
+          <text x="22" y="74" class="t-mono">id <tspan class="t-muted">PK</tspan></text>
+          <text x="22" y="96" class="t-mono">source</text>
+          <text x="22" y="118" class="t-mono">title</text>
+          <text x="22" y="140" class="t-mono">company</text>
+          <text x="22" y="162" class="t-mono t-accent">extra <tspan class="t-b">JSONB</tspan></text>
+
+          <!-- job_section -->
+          <rect x="236" y="20" width="180" height="108" rx="8" class="box"/>
+          <path d="M244,20 H408 A8,8 0 0 1 416,28 V52 H236 V28 A8,8 0 0 1 244,20 Z" class="hdr"/>
+          <text x="248" y="41" class="t-md t-b">job_section</text>
+          <text x="404" y="41" text-anchor="end" class="t-sm t-muted">부문</text>
+          <text x="248" y="74" class="t-mono">id <tspan class="t-muted">PK</tspan></text>
+          <text x="248" y="96" class="t-mono">posting_id <tspan class="t-muted">FK</tspan></text>
+          <text x="248" y="118" class="t-mono">name</text>
+
+          <!-- section_skill -->
+          <rect x="462" y="20" width="180" height="86" rx="8" class="box"/>
+          <path d="M470,20 H634 A8,8 0 0 1 642,28 V52 H462 V28 A8,8 0 0 1 470,20 Z" class="hdr"/>
+          <text x="474" y="41" class="t-md t-b">section_skill</text>
+          <text x="630" y="41" text-anchor="end" class="t-sm t-muted">연결</text>
+          <text x="474" y="74" class="t-mono">section_id <tspan class="t-muted">FK</tspan></text>
+          <text x="474" y="96" class="t-mono">skill_id <tspan class="t-muted">FK</tspan></text>
+
+          <!-- skill -->
+          <rect x="688" y="20" width="180" height="86" rx="8" class="box"/>
+          <path d="M696,20 H860 A8,8 0 0 1 868,28 V52 H688 V28 A8,8 0 0 1 696,20 Z" class="hdr"/>
+          <text x="700" y="41" class="t-md t-b">skill</text>
+          <text x="856" y="41" text-anchor="end" class="t-sm t-muted">스킬</text>
+          <text x="700" y="74" class="t-mono">id <tspan class="t-muted">PK</tspan></text>
+          <text x="700" y="96" class="t-mono">name</text>
+
+          <!-- 관계선 -->
+          <path d="M190,70 L236,92" class="edge"/>
+          <text x="213" y="68" text-anchor="middle" class="t-sm t-muted">1 : N</text>
+          <path d="M416,70 L462,70" class="edge"/>
+          <text x="439" y="62" text-anchor="middle" class="t-sm t-muted">1 : N</text>
+          <path d="M642,92 L688,70" class="edge"/>
+          <text x="665" y="68" text-anchor="middle" class="t-sm t-muted">N : 1</text>
+        </svg>
+      </div>
+      <div class="caption">FK가 연결을 지켜 주므로, 없는 공고를 가리키는 부문이나 없는 스킬을 가리키는 연결은 DB가 막습니다.</div>
+    </div>
+
+<pre><span class="c">-- 조건에 맞는 공고에서 스킬별 등장 횟수</span>
+<span class="kw">SELECT</span> s.name, <span class="kw">COUNT</span>(*) <span class="kw">AS</span> cnt
+<span class="kw">FROM</span> job_posting p
+<span class="kw">JOIN</span> job_section   js <span class="kw">ON</span> js.posting_id = p.id
+<span class="kw">JOIN</span> section_skill ss <span class="kw">ON</span> ss.section_id = js.id
+<span class="kw">JOIN</span> skill         s  <span class="kw">ON</span> s.id = ss.skill_id
+<span class="kw">WHERE</span> p.source = 'saramin'
+  <span class="kw">AND</span> p.extra->>'employment_type' = '정규직'   <span class="c">-- 소스별 항목도 JSONB로 바로 조건에 사용</span>
+<span class="kw">GROUP BY</span> s.name
+<span class="kw">ORDER BY</span> cnt <span class="kw">DESC</span>;</pre>
+  </section>
+
+  <!-- DB 분리 -->
+  <section>
+    <div class="sec-head">
+      <div class="eyebrow">DB 구성</div>
+      <h2>가공 DB와 서빙 DB를 나눌까?</h2>
+      <p class="muted">매일 도는 배치(수집·LLM 가공·통계 재계산)가 웹 조회를 느리게 할 수 있어서 분리를 검토했습니다.</p>
+    </div>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr><th>기준</th><th>분리 (DB 2개)</th><th>DB 1개</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="k">배치 중 웹 조회 속도</td>
+            <td><div class="cell"><span class="mk g">✓</span><span>영향 없음</span></div></td>
+            <td><div class="cell"><span class="mk w">△</span><span>느려질 수 있음 (배치는 새벽)</span></div></td>
+          </tr>
+          <tr>
+            <td class="k">장애 격리</td>
+            <td><div class="cell"><span class="mk g">✓</span><span>디스크가 차거나 배치가 폭주해도 서비스 유지 (서버를 따로 쓸 때만)</span></div></td>
+            <td><div class="cell"><span class="mk b">✗</span><span>함께 영향받음</span></div></td>
+          </tr>
+          <tr>
+            <td class="k">보안</td>
+            <td><div class="cell"><span class="mk g">✓</span><span>크롤러 쪽이 뚫려도 서비스 데이터에 닿지 않음</span></div></td>
+            <td><div class="cell"><span class="mk w">△</span><span>계정 권한으로 보완</span></div></td>
+          </tr>
+          <tr>
+            <td class="k">팀 분업</td>
+            <td><div class="cell"><span class="mk g">✓</span><span>웹과 파이프라인이 서로 영향 없이 관리</span></div></td>
+            <td><div class="cell"><span class="mk w">△</span><span>같은 DB를 함께 관리</span></div></td>
+          </tr>
+          <tr>
+            <td class="k">통계 갱신</td>
+            <td><div class="cell"><span class="mk w">△</span><span>DB 사이에 데이터를 옮겨야 함</span></div></td>
+            <td><div class="cell"><span class="mk g">✓</span><span>SQL 한 번, 트랜잭션 1개로 끝</span></div></td>
+          </tr>
+          <tr>
+            <td class="k">데이터 일관성</td>
+            <td><div class="cell"><span class="mk b">✗</span><span>두 DB가 서로 어긋날 위험</span></div></td>
+            <td><div class="cell"><span class="mk g">✓</span><span>어긋날 일 없음</span></div></td>
+          </tr>
+          <tr>
+            <td class="k">설치·백업·모니터링</td>
+            <td><div class="cell"><span class="mk b">✗</span><span>각각 따로</span></div></td>
+            <td><div class="cell"><span class="mk g">✓</span><span>하나로 끝</span></div></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="decision">
+      <div class="eyebrow">결정</div>
+      <div class="verdict">DB 1개로 시작하고, 나누기 쉽게 만들어 둔다</div>
+      <ul>
+        <li>웹 조회가 조금 느려져도 우리 서비스에는 치명적이지 않다.</li>
+        <li>파이프라인은 새벽에 돌아서 영향받는 사용자가 적다.</li>
+      </ul>
+    </div>
+
+    <div class="flow">
+      <div class="step"><b>지금</b><span>PostgreSQL 1개로 운영</span></div>
+      <div class="arrow" aria-hidden="true">→</div>
+      <div class="step"><b>장애 발생</b><span>배치 때문에 서비스에 문제가 생기면</span></div>
+      <div class="arrow" aria-hidden="true">→</div>
+      <div class="step"><b>분리 검토</b><span>가공 DB와 서빙 DB를 나눔</span></div>
+    </div>
+
+    <div class="proposal">
+      <div class="proposal-head">
+        <h3>나누기 쉽게 만드는 방법</h3>
+        <span class="tag-draft">제안 · 의견 주세요</span>
+      </div>
+      <div class="prop-grid">
+        <div class="prop">
+          <b>스키마 분리</b>
+          <span>가공용(<code>raw</code>)과 서비스용(<code>serving</code>) 스키마를 처음부터 나눔</span>
+        </div>
+        <div class="prop">
+          <b>계정 분리</b>
+          <span>웹은 <code>serving</code>만 읽는 전용 계정으로 접속</span>
+        </div>
+        <div class="prop">
+          <b>접속 정보 분리</b>
+          <span>웹과 파이프라인의 DB 주소를 각각 환경변수로 두어, 나눌 때 주소만 변경</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer>LLM 선택은 정해지면 이 문서에 추가합니다. 질문이나 반대 의견은 편하게 주세요.</footer>
+
+</div>

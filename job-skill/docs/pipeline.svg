@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1700" height="580" viewBox="0 0 1700 580">
+<style>
+  text { font-family: "Malgun Gothic", "Apple SD Gothic Neo", Arial, sans-serif; fill: #1a1a1a; dominant-baseline: central; }
+  .title { font-size: 24px; font-weight: 700; }
+  .gt  { font-size: 17px; font-weight: 700; }
+  .lt  { font-size: 13px; font-weight: 700; fill: #555; }
+  .lbl { font-size: 14px; text-anchor: middle; }
+  .grp { fill: #fff; stroke: #1a1a1a; stroke-width: 1.3; }
+  .lane { fill: #f5f5f5; stroke: #777; stroke-width: 1.1; stroke-dasharray: 5 4; }
+  .ln  { fill: none; stroke: #1a1a1a; stroke-width: 1.4; }
+  .fail { fill: none; stroke: #d0342c; stroke-width: 1.4; stroke-dasharray: 6 4; }
+</style>
+<defs>
+  <marker id="a" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#1a1a1a"/></marker>
+  <marker id="r" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#d0342c"/></marker>
+</defs>
+<rect width="1700" height="580" fill="#fff"/>
+<rect x="20" y="20" width="1660" height="540" fill="none" stroke="#999" stroke-width="1"/>
+<text class="title" x="44" y="58">Pipeline Architecture</text>
+<rect class="grp" x="50" y="90" width="190" height="440"/><text class="gt" x="64" y="114">Extract</text>
+<rect class="grp" x="280" y="90" width="1100" height="440"/><text class="gt" x="294" y="114">Transform</text>
+<rect class="grp" x="1420" y="90" width="230" height="440"/><text class="gt" x="1434" y="114">Load</text>
+<rect class="lane" x="305" y="160" width="480" height="150"/><text class="lt" x="319" y="184">case①</text>
+<rect class="lane" x="305" y="340" width="480" height="150"/><text class="lt" x="319" y="364">case②</text>
+<rect x="85" y="285" width="120" height="96" rx="4" fill="#fff" stroke="#1a1a1a" stroke-width="1.3"/>
+<g transform="translate(129.0,298) scale(1.3333333333333333)" fill="none" stroke="#1a1a1a" stroke-width="1.20" stroke-linecap="round" stroke-linejoin="round"><path d="M19.5 7a9 9 0 0 0 -7.5 -4a8.991 8.991 0 0 0 -7.484 4" /><path d="M11.5 3a16.989 16.989 0 0 0 -1.826 4" /><path d="M12.5 3a16.989 16.989 0 0 1 1.828 4" /><path d="M19.5 17a9 9 0 0 1 -7.5 4a8.991 8.991 0 0 1 -7.484 -4" /><path d="M11.5 21a16.989 16.989 0 0 1 -1.826 -4" /><path d="M12.5 21a16.989 16.989 0 0 0 1.828 -4" /><path d="M2 10l1 4l1.5 -4l1.5 4l1 -4" /><path d="M17 10l1 4l1.5 -4l1.5 4l1 -4" /><path d="M9.5 10l1 4l1.5 -4l1.5 4l1 -4" /></g>
+<text class="lbl" x="145.0" y="355">사람인</text>
+<path class="ln" d="M205,333 H260"/>
+<path class="ln" d="M260,333 V243 H325" marker-end="url(#a)"/>
+<path class="ln" d="M260,333 V423 H325" marker-end="url(#a)"/>
+<rect x="325" y="195" width="120" height="96" rx="4" fill="#fff" stroke="#1a1a1a" stroke-width="1.3"/>
+<g transform="translate(369.0,208) scale(1.3333333333333333)" fill="none" stroke="#1a1a1a" stroke-width="1.20" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3v4a1 1 0 0 0 1 1h4" /><path d="M17 21h-10a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2h7l5 5v11a2 2 0 0 1 -2 2z" /><path d="M9 9l1 0" /><path d="M9 13l6 0" /><path d="M9 17l6 0" /></g>
+<text class="lbl" x="385.0" y="265">글</text>
+<path class="ln" d="M445,243 H485" marker-end="url(#a)"/>
+<rect x="485" y="195" width="120" height="96" rx="4" fill="#fff" stroke="#1a1a1a" stroke-width="1.3"/>
+<g transform="translate(529.0,208) scale(1.3333333333333333)" fill="none" stroke="#1a1a1a" stroke-width="1.20" stroke-linecap="round" stroke-linejoin="round"><path d="M7 8l-4 4l4 4" /><path d="M17 8l4 4l-4 4" /><path d="M14 4l-4 16" /></g>
+<text class="lbl" x="545.0" y="265">HTML</text>
+<rect x="325" y="375" width="120" height="96" rx="4" fill="#fff" stroke="#1a1a1a" stroke-width="1.3"/>
+<g transform="translate(369.0,388) scale(1.3333333333333333)" fill="none" stroke="#1a1a1a" stroke-width="1.20" stroke-linecap="round" stroke-linejoin="round"><path d="M15 8h.01" /><path d="M3 6a3 3 0 0 1 3 -3h12a3 3 0 0 1 3 3v12a3 3 0 0 1 -3 3h-12a3 3 0 0 1 -3 -3v-12z" /><path d="M3 16l5 -5c.928 -.893 2.072 -.893 3 0l5 5" /><path d="M14 14l1 -1c.928 -.893 2.072 -.893 3 0l3 3" /></g>
+<text class="lbl" x="385.0" y="445">이미지</text>
+<path class="ln" d="M445,423 H485" marker-end="url(#a)"/>
+<rect x="485" y="375" width="120" height="96" rx="4" fill="#fff" stroke="#1a1a1a" stroke-width="1.3"/>
+<g transform="translate(529.0,388) scale(1.3333333333333333)" fill="none" stroke="#1a1a1a" stroke-width="1.20" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8v-2a2 2 0 0 1 2 -2h2" /><path d="M4 16v2a2 2 0 0 0 2 2h2" /><path d="M16 4h2a2 2 0 0 1 2 2v2" /><path d="M16 20h2a2 2 0 0 0 2 -2v-2" /><path d="M8 12h8" /><path d="M8 9h6" /><path d="M8 15h4" /></g>
+<text class="lbl" x="545.0" y="445">OCR</text>
+<path class="ln" d="M605,423 H645" marker-end="url(#a)"/>
+<rect x="645" y="375" width="120" height="96" rx="4" fill="#fff" stroke="#1a1a1a" stroke-width="1.3"/>
+<g transform="translate(689.0,388) scale(1.3333333333333333)" fill="none" stroke="#1a1a1a" stroke-width="1.20" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v2.172a2 2 0 0 1 -.586 1.414l-4.414 4.414v7l-6 2v-8.5l-4.48 -4.928a2 2 0 0 1 -.52 -1.345v-2.227z" /></g>
+<text class="lbl" x="705.0" y="438">rule base</text>
+<text class="lbl" x="705.0" y="456">이미지 거르기</text>
+<path class="ln" d="M605,243 H815 V333"/>
+<path class="ln" d="M765,423 H815 V333"/>
+<path class="ln" d="M815,333 H845" marker-end="url(#a)"/>
+<rect x="845" y="285" width="120" height="96" rx="4" fill="#fff" stroke="#1a1a1a" stroke-width="1.3"/>
+<g transform="translate(889.0,298) scale(1.3333333333333333)" fill="none" stroke="#1a1a1a" stroke-width="1.20" stroke-linecap="round" stroke-linejoin="round"><path d="M11.217 19.384a3.501 3.501 0 0 0 6.783 -1.217v-5.167l-6 -3.35" /><path d="M5.214 15.014a3.501 3.501 0 0 0 4.446 5.266l4.34 -2.534v-6.946" /><path d="M6 7.63c-1.391 -.236 -2.787 .395 -3.534 1.689a3.474 3.474 0 0 0 1.271 4.745l4.263 2.514l6 -3.348" /><path d="M12.783 4.616a3.501 3.501 0 0 0 -6.783 1.217v5.067l6 3.45" /><path d="M18.786 8.986a3.501 3.501 0 0 0 -4.446 -5.266l-4.34 2.534v6.946" /><path d="M18 16.302c1.391 .236 2.787 -.395 3.534 -1.689a3.474 3.474 0 0 0 -1.271 -4.745l-4.308 -2.514l-5.955 3.42" /></g>
+<text class="lbl" x="905.0" y="348">LLM</text>
+<text class="lbl" x="905.0" y="366">필요 정보 추출</text>
+<path class="ln" d="M965,333 H1020" marker-end="url(#a)"/>
+<rect x="1020" y="285" width="120" height="96" rx="4" fill="#fff" stroke="#1a1a1a" stroke-width="1.3"/>
+<g transform="translate(1064.0,298) scale(1.3333333333333333)" fill="none" stroke="#1a1a1a" stroke-width="1.20" stroke-linecap="round" stroke-linejoin="round"><path d="M10 19h-6a1 1 0 0 1 -1 -1v-14a1 1 0 0 1 1 -1h6a2 2 0 0 1 2 2a2 2 0 0 1 2 -2h6a1 1 0 0 1 1 1v14a1 1 0 0 1 -1 1h-6a2 2 0 0 0 -2 2a2 2 0 0 0 -2 -2z" /><path d="M12 5v16" /><path d="M7 7h1" /><path d="M7 11h1" /><path d="M16 7h1" /><path d="M16 11h1" /><path d="M16 15h1" /></g>
+<text class="lbl" x="1080.0" y="348">기술 이름</text>
+<text class="lbl" x="1080.0" y="366">표준화</text>
+<path class="ln" d="M1140,333 H1195" marker-end="url(#a)"/>
+<rect x="1195" y="285" width="120" height="96" rx="4" fill="#fff" stroke="#1a1a1a" stroke-width="1.3"/>
+<g transform="translate(1239.0,298) scale(1.3333333333333333)" fill="none" stroke="#1a1a1a" stroke-width="1.20" stroke-linecap="round" stroke-linejoin="round"><path d="M9.615 20h-2.615a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h8a2 2 0 0 1 2 2v8" /><path d="M14 19l2 2l4 -4" /><path d="M9 8h4" /><path d="M9 12h2" /></g>
+<text class="lbl" x="1255.0" y="348">모집 단위</text>
+<text class="lbl" x="1255.0" y="366">검사</text>
+<path class="fail" d="M1255,381 V445 H905 V381" marker-end="url(#r)"/>
+<g transform="translate(1031,456) scale(0.75)" fill="none" stroke="#d0342c" stroke-width="2.13" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8.1 8.1 0 0 0 -15.5 -2m-.5 -4v4h4" /><path d="M4 13a8.1 8.1 0 0 0 15.5 2m.5 4v-4h-4" /></g>
+<text x="1056" y="465" style="font-size:15px;font-weight:700;fill:#d0342c">실패시</text>
+<path class="ln" d="M1315,333 H1475" marker-end="url(#a)"/>
+<rect x="1475" y="285" width="120" height="96" rx="4" fill="#fff" stroke="#1a1a1a" stroke-width="1.3"/>
+<g transform="translate(1519.0,298) scale(1.3333333333333333)" fill="none" stroke="#1a1a1a" stroke-width="1.20" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6m-8 0a8 3 0 1 0 16 0a8 3 0 1 0 -16 0" /><path d="M4 6v6a8 3 0 0 0 16 0v-6" /><path d="M4 12v6a8 3 0 0 0 16 0v-6" /></g>
+<text class="lbl" x="1535.0" y="355">DB</text>
+</svg>

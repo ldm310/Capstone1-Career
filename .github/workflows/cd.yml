@@ -1,0 +1,98 @@
+# CD: develop·main 에 합쳐지면 바뀐 파트만 배포한다(develop → main PR 은 사람이 올림 — 사용자 결정).
+#   develop → 웹 스테이징(EC2 3001번, https://staging.15-164-137-78.sslip.io)
+#   main    → 웹 운영(EC2 3000번) + job-skill(RDS 마이그레이션 → 노트북 Airflow 전용 폴더)
+# 모두 몇 번 돌려도 같은 결과. 그 커밋에 웹 코드(frontend/)가 없으면 웹은 건드리지 않는다.
+# 관리자가 해 둘 것(job-skill/README 'CD'): Secrets RDS_HOST·RDS_PASSWORD·EC2_SSH_KEY, 노트북 러너(라벨 career-laptop).
+name: CD
+
+on:
+  push:
+    branches: [main, develop]
+  workflow_dispatch: {}              # 손으로 다시 배포(같은 커밋이면 바뀌는 것 없음)
+
+concurrency:
+  group: cd-${{ github.ref_name }}
+  cancel-in-progress: false          # 배포는 하나씩, 도중에 끊지 않음
+
+env:
+  EC2_HOST: 15.164.137.78            # 비밀 아님(서버 키는 deploy/web/known_hosts 로 고정)
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      job_skill: ${{ steps.diff.outputs.job_skill }}
+      web: ${{ steps.diff.outputs.web }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: diff
+        name: 바뀐 파트 찾기
+        env:
+          BASE: ${{ github.event.before }}
+        run: |
+          # 손으로 돌렸거나 비교할 커밋이 없으면 모두 배포(어차피 멱등)
+          if [ "${{ github.event_name }}" != push ] || ! files=$(git diff --name-only "$BASE" "$GITHUB_SHA" 2>/dev/null); then
+            files=$(printf 'job-skill/\nfrontend/\n')
+          fi
+          echo "$files"
+          if echo "$files" | grep -qE '^(job-skill/|\.github/workflows/cd\.yml)'; then v=true; else v=false; fi
+          echo "job_skill=$v" >> "$GITHUB_OUTPUT"
+          if echo "$files" | grep -qE '^(frontend/|deploy/web/|\.github/workflows/cd\.yml)'; then v=true; else v=false; fi
+          echo "web=$v" >> "$GITHUB_OUTPUT"
+
+  web:
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: EC2 웹 배포(develop → 스테이징, main → 운영)
+        env:
+          EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+          TARGET: ${{ github.ref_name == 'main' && 'production' || 'staging' }}
+        run: |
+          if [ -z "$EC2_SSH_KEY" ]; then echo "::error::저장소 Secrets 에 EC2_SSH_KEY 가 없습니다(관리자 등록 필요)"; exit 1; fi
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$EC2_SSH_KEY" > ~/.ssh/ec2 && chmod 600 ~/.ssh/ec2
+          cp deploy/web/known_hosts ~/.ssh/known_hosts
+          ssh -i ~/.ssh/ec2 -o StrictHostKeyChecking=yes "ubuntu@$EC2_HOST" "bash -s -- $TARGET $GITHUB_SHA" < deploy/web/deploy.sh
+
+  rds-migrate:
+    needs: changes
+    if: github.ref_name == 'main' && needs.changes.outputs.job_skill == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: job-skill
+    env:
+      RDS_HOST: ${{ secrets.RDS_HOST }}
+      RDS_PASSWORD: ${{ secrets.RDS_PASSWORD }}
+      PYTHONIOENCODING: utf-8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: job-skill/requirements-dev.txt
+      - run: pip install -r requirements-dev.txt
+      - name: Secrets 확인
+        run: |
+          if [ -z "$RDS_HOST" ] || [ -z "$RDS_PASSWORD" ]; then
+            echo "::error::저장소 Secrets 에 RDS_HOST·RDS_PASSWORD 가 없습니다(관리자 등록 필요)"; exit 1
+          fi
+      - name: 아직 안 적용한 마이그레이션만 RDS 에
+        run: python db_load.py migrate
+
+  airflow:
+    needs: rds-migrate                # RDS 를 먼저 바꾸고 코드를 나중에(마이그레이션은 옛 코드와도 맞게 쓴다)
+    runs-on: [self-hosted, career-laptop]
+    steps:
+      - uses: actions/checkout@v4     # 배포 스크립트만 쓰려고(Airflow 는 전용 폴더를 봄)
+      - name: Airflow 전용 폴더를 이 커밋으로
+        shell: powershell
+        env:
+          PYTHONIOENCODING: utf-8
+        run: py -3.12 job-skill/deploy_airflow.py --dir "${{ vars.AIRFLOW_DIR || 'C:/career-airflow' }}" --sha "${{ github.sha }}"
