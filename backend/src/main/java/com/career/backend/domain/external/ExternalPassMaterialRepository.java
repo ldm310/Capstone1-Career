@@ -19,4 +19,13 @@ public interface ExternalPassMaterialRepository extends Repository<ExternalPassM
               and link.relationType <> com.career.backend.domain.external.MaterialRelationType.EXCLUDED
             """)
     Page<PostingPassMaterial> findLinked(Long postingId, Pageable pageable);
+
+    @Query("""
+            select distinct m from PostingPassMaterial link join link.material m, Posting p
+            where link.postingId = :postingId and p.id = link.postingId
+              and m.companyId = p.company.id and m.jobFamily = 'IT_SW'
+              and link.relationType <> com.career.backend.domain.external.MaterialRelationType.EXCLUDED
+            order by m.id
+            """)
+    java.util.List<ExternalPassMaterial> findAllLinkedForKeywords(Long postingId);
 }

@@ -98,6 +98,8 @@ RETURNING이 0행이면 같은 외부 ID에 대한 회사 매핑 충돌로 처�
 
 ## 조회 API
 
+표준 기술 ID 기준의 필수·우대 키워드 교집합은 별도 `GET /api/postings/{postingId}/external-pass-keywords`로 제공한다. 기존 자료 조회와 content 형식은 유지한다. [키워드 교집합 계약](external-pass-keywords.md)을 참고한다.
+
 `GET /api/postings/{postingId}/external-pass-materials?page=0&size=20`
 
 page는 0 이상, size는 1~100, postingId는 양수다. 존재하지 않는 공고는 404, 잘못된 파라미터는 400이다. 공고의 회사 ID로 공유 수집 상태를 조회한다. 자료는 EXCLUDED를 제외한 명시적 연결만 수집 시각 내림차순·ID 내림차순으로 반환한다. 같은 회사라도 연결되지 않은 자료는 자동으로 추가하지 않는다.

@@ -15,6 +15,11 @@ public class Tech {
     @Column(nullable = false, unique = true)
     private String name;
 
+    // Existing PostgreSQL text[] column; no schema change.
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.ARRAY)
+    @Column(name = "aliases")
+    private String[] aliases;
+
     protected Tech() {
     }
 
@@ -24,5 +29,10 @@ public class Tech {
 
     public String getName() {
         return name;
+    }
+
+    public java.util.List<String> getAliases() {
+        return aliases == null ? java.util.List.of() : java.util.Arrays.stream(aliases)
+                .filter(java.util.Objects::nonNull).toList();
     }
 }
