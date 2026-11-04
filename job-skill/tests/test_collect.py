@@ -131,7 +131,7 @@ def test_scan_lists_reads_every_page_without_stopping():
 def test_scan_lists_raises_on_list_error():
     import collect
     with pytest.raises(collect.ListFetchError):
-        collect.scan_lists(get=PagedGet(status=503), now=NOW)
+        collect.scan_lists(get=PagedGet(status=503), now=NOW, sleep=lambda sec: None)
 
 
 # ── 최종 검토 고침 ─────────────────────────────────────────────────────────
@@ -187,3 +187,44 @@ def test_list_requests_use_career_filter():
     get = PagedGet()
     collect.scan_lists(get=get, now=NOW)
     assert get.urls and all("exp_cd=1%2C2&exp_max=3&exp_none=y" in u for u in get.urls)
+
+
+# ── 목록 한 쪽이 늦으면 그 쪽만 다시(2026-11-04 사람인이 느려 8쪽에서 60초 초과 → 목록 전체를 처음부터 다시 하던 문제) ──
+class FlakyGet(PagedGet):
+    """처음 fail 번은 응답 없음(status=fail_status), 그다음부터는 PagedGet 과 같다."""
+
+    def __init__(self, fail=1, fail_status=None):
+        super().__init__()
+        self.fail, self.fail_status = fail, fail_status
+
+    def __call__(self, url, *a, **k):
+        if self.fail:
+            self.fail -= 1
+            self.urls.append(url)
+            return self.fail_status, "", b""
+        return super().__call__(url, *a, **k)
+
+
+def test_slow_page_is_retried_alone():
+    import collect
+    get, waits = FlakyGet(fail=2), []
+    listed = collect.scan_lists(get=get, now=NOW, sleep=waits.append)
+    assert len(listed) == 7 and len(get.urls) == 6            # 1쪽만 두 번 더(4쪽 + 2), 처음부터 다시 하지 않음
+    assert len(waits) == 2 and waits[0] < waits[1]            # 다시 할수록 조금 더 기다림
+
+
+def test_page_gives_up_after_three_tries():
+    import collect
+    get = FlakyGet(fail=99)
+    with pytest.raises(collect.ListFetchError, match="3번"):
+        collect.scan_lists(get=get, now=NOW, sleep=lambda sec: None)
+    assert len(get.urls) == 3
+
+
+def test_not_found_is_not_retried():
+    """404 처럼 다시 해도 같은 오류는 바로 멈춘다(429·5xx·응답 없음만 다시)."""
+    import collect
+    get, waits = FlakyGet(fail=99, fail_status=404), []
+    with pytest.raises(collect.ListFetchError, match="HTTP 404"):
+        collect.scan_lists(get=get, now=NOW, sleep=waits.append)
+    assert len(get.urls) == 1 and waits == []

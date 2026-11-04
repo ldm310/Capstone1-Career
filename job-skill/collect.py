@@ -17,6 +17,7 @@ import datetime as dt
 import html
 import os
 import re
+import time
 from zoneinfo import ZoneInfo
 
 import fetch_images
@@ -29,6 +30,8 @@ MAX_YEARS = 3
 # 사람인 경력 필터: 신입(exp_cd=1)·경력(2) 3년 이하(exp_max=3)·경력무관(exp_none=y) — 사용자 결정(사람인 필터를 믿음).
 # 교육생은 이 필터로 걸러지지 않아 eligible 이 따로 버린다.
 FILTER = "&exp_cd=1%2C2&exp_max=3&exp_none=y"
+PAGE_TRIES = 3    # 목록 한 쪽을 몇 번까지 받을지(응답 없음·429·5xx 일 때)
+PAGE_WAIT = 15    # 다시 받기 전 기다림(초) × 몇 번째
 _ITEM = re.compile(r'<div id="rec-(\d+)" class="list_item[^"]*">(.*?)<div class="similar_recruit">', re.S)
 _DATE = re.compile(r'<span class="date">\s*(.*?)\s*</span>', re.S)
 _AGO = re.compile(r'<span class="deadlines">\s*(.*?)\s*</span>', re.S)
@@ -112,18 +115,33 @@ def read_targets(run_dir: str) -> list[dict]:
         return list(csv.DictReader(f, delimiter="\t"))
 
 
-def _page_items(get, role: str, code: str, page_no: int) -> list[dict]:
-    """목록 한 쪽. HTTP 오류, 또는 1쪽인데 공고가 0개(화면이 바뀌었거나 막힘)면 ListFetchError — '목록 끝'으로 착각하지 않게."""
-    status, _, body = get(LIST.format(code=code, page=page_no) + FILTER)
-    if status != 200:
-        raise ListFetchError(f"{role} 목록 {page_no}쪽 HTTP {status}")
+def _retryable(status) -> bool:
+    """다시 하면 될 수 있는 응답: 응답 없음(연결 실패·시간 초과), 너무 잦음(429), 서버 오류(5xx)."""
+    return status is None or status == 429 or status >= 500
+
+
+def _page_items(get, role: str, code: str, page_no: int, sleep=time.sleep) -> list[dict]:
+    """목록 한 쪽. 응답이 없거나 서버 오류면 그 쪽만 PAGE_TRIES 번까지 다시 받는다(조금씩 더 기다리며) —
+    한 쪽이 늦다고 목록 전체를 처음부터 다시 하지 않게(2026-11-04 사람인이 느려 8쪽에서 60초 초과).
+    그래도 안 되거나 다시 해도 같은 오류(404 등), 또는 1쪽인데 공고가 0개(화면이 바뀌었거나 막힘)면 ListFetchError
+    — '목록 끝'으로 착각하지 않게."""
+    for attempt in range(1, PAGE_TRIES + 1):
+        status, _, body = get(LIST.format(code=code, page=page_no) + FILTER)
+        if status == 200:
+            break
+        if not _retryable(status):
+            raise ListFetchError(f"{role} 목록 {page_no}쪽 HTTP {status}")
+        if attempt == PAGE_TRIES:
+            raise ListFetchError(f"{role} 목록 {page_no}쪽 HTTP {status}({PAGE_TRIES}번 해도)")
+        sleep(PAGE_WAIT * attempt)
     items = parse_items(body.decode("utf-8", "replace"))
     if not items and page_no == 1:
         raise ListFetchError(f"{role} 목록 1쪽에 공고가 없음(화면이 바뀌었거나 막힘)")
     return items
 
 
-def scan_lists(get=fetch_images.get, max_pages: int = 40, now: dt.datetime | None = None) -> dict[str, dict]:
+def scan_lists(get=fetch_images.get, max_pages: int = 40, now: dt.datetime | None = None,
+               sleep=time.sleep) -> dict[str, dict]:
     """두 직무 목록을 경력 필터를 켜고 끝까지 본다(연속 멈춤 없음).
     {공고번호: 목록 항목 + role + updated_at(parse_updated)}. 겹친 공고는 먼저 본 직무.
     빈 쪽이나, 이 직무에서 이미 본 공고만 있는 쪽(끝을 넘겨 마지막 쪽을 되풀이)이 나오면 그 직무는 끝."""
@@ -132,7 +150,7 @@ def scan_lists(get=fetch_images.get, max_pages: int = 40, now: dt.datetime | Non
     for role, code in ROLES:
         seen: set[str] = set()
         for page_no in range(1, max_pages + 1):
-            items = _page_items(get, role, code, page_no)
+            items = _page_items(get, role, code, page_no, sleep)
             if not items or all(it["rec_idx"] in seen for it in items):
                 break
             for it in items:
