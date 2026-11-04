@@ -41,6 +41,40 @@ UNCONFIRMED = re.compile(
     r"동료가|팀원이|강사가|튜토리얼|"
     r"\b(?:not|never|plan|planned|planning|intend|want|wish|learn|learned|study|studied|should|would|could)\b", re.I)
 
+# Split only explicit clause boundaries; never assign an action to the nearest technology.
+CLAUSE_BOUNDARY = re.compile(r",|，|\b(?:and|while)\b|그리고|반면|또한|(?<=했고)\s+|(?<=했으며)\s+|(?<=하였고)\s+|(?<=하였으며)\s+", re.I)
+TECH_LIST = re.compile(r"사용\s*기술|기술\s*(?:스택|목록)|기술\s*[:：]|\b(?:technologies|tech\s*stack|stack)\s*:", re.I)
+TECH_EXCLUSION = re.compile(r"없이|제외|대신|\b(?:without|except|rather\s+than)\b", re.I)
+
+
+def _technologies(text):
+    return [tech for tech, pattern in TECH_PATTERNS.items() if pattern.search(text)]
+
+
+def _signals(text):
+    if UNCONFIRMED.search(text):
+        return set()
+    if not PROJECT_CONTEXT.search(text) and not _technologies(text):
+        return set()
+    return {name for name, pattern in SIGNAL_PATTERNS.items() if pattern.search(text)}
+
+
+def _technology_links(sentence, sentence_signals):
+    mentioned = set(_technologies(sentence))
+    if not mentioned or not sentence_signals or TECH_LIST.search(sentence) or TECH_EXCLUSION.search(sentence):
+        return {}
+    links = {}
+    for clause in CLAUSE_BOUNDARY.split(sentence):
+        technologies = _technologies(clause)
+        if not technologies:
+            continue
+        signals = _signals(clause) & sentence_signals
+        # Even a single ambiguous/list-only technology clause invalidates sentence-level attribution.
+        if len(technologies) != 1 or not signals:
+            return {}
+        links.setdefault(technologies[0], set()).update(signals)
+    return links if set(links) == mentioned else {}
+
 
 class TextOnly(HTMLParser):
     def __init__(self):
@@ -74,16 +108,17 @@ def technical_summary(source):
     parser = TextOnly()
     parser.feed(source)
     text = " ".join(parser.parts)
-    found = [tech for tech, pattern in TECH_PATTERNS.items() if pattern.search(text)]
+    found = _technologies(text)
     observed = set()
+    linked = {}
     for sentence in re.split(r"[.!?。！？](?:\s+|$)|[\n;]+", text):
-        if UNCONFIRMED.search(sentence):
-            continue
-        if not PROJECT_CONTEXT.search(sentence) and not any(p.search(sentence) for p in TECH_PATTERNS.values()):
-            continue
-        for name, pattern in SIGNAL_PATTERNS.items():
-            if pattern.search(sentence):
-                observed.add(name)
+        signals = _signals(sentence)
+        observed.update(signals)
+        for technology, technology_signals in _technology_links(sentence, signals).items():
+            linked.setdefault(technology, set()).update(technology_signals)
     return json.dumps({"technologies": found,
+                       "technologySignals": [
+                           {"technology": tech, "signals": [name for name in SIGNAL_PATTERNS if name in linked[tech]]}
+                           for tech in found if tech in linked],
                        "projectSignals": [name for name in SIGNAL_PATTERNS if name in observed]},
                       ensure_ascii=False, separators=(",", ":"))

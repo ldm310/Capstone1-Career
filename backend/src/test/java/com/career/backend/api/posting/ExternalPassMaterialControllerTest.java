@@ -156,4 +156,17 @@ class ExternalPassMaterialControllerTest {
         assertEquals(before, jdbc.queryForList("select * from job.requirement order by id"));
         assertEquals(0, jdbc.queryForObject("select count(*) from profile.successful_application", Integer.class));
     }
+
+    @Test void returnsStructuredTechnologySignalsAsExistingContentString() throws Exception {
+        collection("READY");
+        material(1, 1, "linkareer", "101", "IT_SW");
+        link(1, 1, 1);
+        String content = """
+                {"technologies":["Spring","Docker"],"technologySignals":[{"technology":"Spring","signals":["FEATURE_IMPLEMENTATION","TESTING"]},{"technology":"Docker","signals":["DEPLOYMENT"]}],"projectSignals":["FEATURE_IMPLEMENTATION","TESTING","DEPLOYMENT"]}
+                """.trim();
+        jdbc.update("update external_data.pass_material set content=? where id=1", content);
+        mvc.perform(get("/api/postings/1/external-pass-materials"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.materials.content[0].content").value(content));
+    }
 }

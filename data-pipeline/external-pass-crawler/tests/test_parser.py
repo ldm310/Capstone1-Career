@@ -38,7 +38,7 @@ class ParserTests(unittest.TestCase):
             parse_detail(self.html("detail.html"), "999")
 
     def test_technical_summary_is_allowlist_only(self):
-        self.assertEqual(json.loads(technical_summary("임의 이름과 연락처가 있는 자기소개")), {"technologies": [], "projectSignals": []})
+        self.assertEqual(json.loads(technical_summary("임의 이름과 연락처가 있는 자기소개")), {"technologies": [], "technologySignals": [], "projectSignals": []})
 
     def test_relations_prioritize_exact_then_family_then_it_domain(self):
         self.assertEqual(relation("백엔드 개발", "서버 개발자"), "EXACT_ROLE")
@@ -65,6 +65,10 @@ class ParserTests(unittest.TestCase):
                 material = parse_detail(self.html(fixture), "101")
                 serialized = technical_summary(material.content)
                 data = json.loads(serialized)
-                self.assertEqual(data, {"technologies": ["Spring", "Docker"], "projectSignals": signals})
+                self.assertEqual(data["technologies"], ["Spring", "Docker"])
+                self.assertEqual(data["projectSignals"], signals)
+                self.assertEqual(data["technologySignals"], [] if fixture == "detail_basic_use.html" else [
+                    {"technology": "Spring", "signals": ["FEATURE_IMPLEMENTATION", "TESTING"]},
+                    {"technology": "Docker", "signals": ["DEPLOYMENT"]}])
                 for private in ("가상작성자", "가상학교", "fictional@", "010-", "구현했습니다", "배포했습니다"):
                     self.assertNotIn(private, serialized)

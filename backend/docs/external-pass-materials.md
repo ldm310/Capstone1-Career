@@ -20,7 +20,7 @@ BE는 외부 자료를 조회하며, 별도 data-pipeline이 DB에 자료·공�
 
 `pass_material`은 IT·SW 자료만 수용하며 `job_family='IT_SW'` CHECK가 있다. 직무의 세부 표기는 `role_name`에 저장한다. 이는 표준 capability 또는 LV가 아니며 이 API에서는 역량 집계를 수행하지 않는다.
 
-`content`의 DB 타입은 기존 **TEXT NOT NULL**을 유지한다. 외부 크롤러는 `{"technologies":["Spring","Docker"],"projectSignals":["FEATURE_IMPLEMENTATION","TESTING","DEPLOYMENT"]}` 형태의 JSON을 직렬화한 문자열을 저장한다. BE API도 content를 문자열 그대로 반환하므로 소비자가 JSON을 파싱해 두 배열을 읽는다. 기존 일반 텍스트 데이터는 자동 변환하지 않으며 JSON 파싱 실패 시 텍스트로 처리한다. 원문·이름·학교·연락처·점수·LV는 구조화된 내용에 포함하지 않는다. projectSignals는 명시적으로 관찰된 수행 표현만 기록하며 실제 수행 사실을 인증하지 않는다. 저장 형식과 보수적 판별 기준은 [크롤러 문서](../../data-pipeline/external-pass-crawler/README.md)를 참고한다.
+`content`의 DB 타입은 기존 **TEXT NOT NULL**을 유지한다. 외부 크롤러는 `technologies`, `technologySignals`, `projectSignals`를 담은 JSON을 직렬화한 문자열을 저장한다. technologySignals의 항목은 `{"technology":"Spring","signals":["FEATURE_IMPLEMENTATION","TESTING"]}` 형태다. 같은 문장 또는 명확히 분리된 절에서 기술과 수행 표현의 연결을 확정할 수 있을 때만 생성한다. 여러 기술의 연결이 불명확하면 해당 수행은 projectSignals에만 남긴다. BE API는 content를 문자열 그대로 반환하므로 소비자가 JSON을 파싱해 읽는다. 기존 두 필드는 유지하며, technologySignals가 없는 과거 JSON은 해당 필드를 빈 배열로 처리한다. 기존 일반 텍스트 데이터는 자동 변환하지 않으며 JSON 파싱 실패 시 텍스트로 처리한다. 원문·이름·학교·연락처·점수·LV는 구조화된 내용에 포함하지 않는다. 수행 표현은 실제 수행 사실의 인증이 아니다. 저장 형식과 보수적 판별 기준은 [크롤러 문서](../../data-pipeline/external-pass-crawler/README.md)를 참고한다.
 
 출처 ID 중복은 `UNIQUE(source_platform, external_record_id)`로 차단한다. 플랫폼 키는 공백 없는 소문자 키(예: `example_platform`)를 합의해 사용한다. 외부 ID는 플랫폼 내 안정적인 원본 식별자이며 양끝 공백을 허용하지 않는다. 회사나 공고 ID를 중복 키에 넣지 않는다. 동일 플랫폼의 기존 레코드 회사는 변경할 수 없으므로 잘못된 회사 매핑은 별도로 검토해야 한다.
 
@@ -126,7 +126,7 @@ page는 0 이상, size는 1~100, postingId는 양수다. 존재하지 않는 공
       "jobFamily": "IT_SW",
       "roleName": "백엔드 개발자",
       "title": "개발 직군 합격 후기",
-      "content": "{\"technologies\":[\"Spring\",\"Docker\"],\"projectSignals\":[\"FEATURE_IMPLEMENTATION\",\"TESTING\",\"DEPLOYMENT\"]}",
+      "content": "{\"technologies\":[\"Spring\",\"Docker\"],\"technologySignals\":[{\"technology\":\"Spring\",\"signals\":[\"FEATURE_IMPLEMENTATION\",\"TESTING\"]},{\"technology\":\"Docker\",\"signals\":[\"DEPLOYMENT\"]}],\"projectSignals\":[\"FEATURE_IMPLEMENTATION\",\"TESTING\",\"DEPLOYMENT\"]}",
       "sourceUrl": "https://example.com/records/123",
       "publishedAt": null,
       "collectedAt": "2026-11-05T09:01:30+09:00",

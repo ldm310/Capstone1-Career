@@ -21,7 +21,7 @@ class RunnerTests(unittest.TestCase):
         self.assertEqual(result.foreign_company, 2)
         self.assertEqual(result.excluded, 1)
         self.assertNotIn("가상작성자", saved[0].content)
-        self.assertEqual(json.loads(saved[0].content), {"technologies": ["Python"], "projectSignals": []})
+        self.assertEqual(json.loads(saved[0].content), {"technologies": ["Python"], "technologySignals": [], "projectSignals": []})
         self.assertEqual(adapter.detail.call_count, 2)
 
     def test_limit_and_role_priority(self):

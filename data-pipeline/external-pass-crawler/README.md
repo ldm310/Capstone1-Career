@@ -111,16 +111,26 @@ aliases 예: `{"123": ["Example Company", "예시회사"]}`. 기본 회사 비�
 BE 계약의 기존 content 타입은 **TEXT NOT NULL**이다. 테이블·컬럼·저장 SQL을 변경하지 않고 아래 JSON을 직렬화한 문자열을 저장한다.
 
 ```json
-{"technologies":["Spring","Docker"],"projectSignals":["FEATURE_IMPLEMENTATION","TESTING","DEPLOYMENT"]}
+{
+  "technologies": ["Spring", "Docker"],
+  "technologySignals": [
+    {"technology": "Spring", "signals": ["FEATURE_IMPLEMENTATION", "TESTING"]},
+    {"technology": "Docker", "signals": ["DEPLOYMENT"]}
+  ],
+  "projectSignals": ["FEATURE_IMPLEMENTATION", "TESTING", "DEPLOYMENT"]
+}
 ```
 
 projectSignals의 허용값은 BASIC_USE, FEATURE_IMPLEMENTATION, INTEGRATION, TESTING, SECURITY_RELIABILITY, DEPLOYMENT, OPERATION, OPTIMIZATION, ARCHITECTURE다. 원문 인용·추가 자유 텍스트·이름·학교·연락처·점수·LV는 포함하지 않는다. 기술이나 신호가 없으면 해당 값은 빈 배열이다.
 
 - 단순 사용 경험은 BASIC_USE로만 기록한다. 기술명 나열이나 Docker 언급만으로 구현·테스트·배포를 추론하지 않는다.
+- technologySignals는 한 문장 또는 명확히 분리된 절에 기술이 하나이고 수행 표현이 확인될 때만 연결한다. 예시 입력은 “Spring으로 기능을 구현했습니다. Spring으로 단위 테스트를 작성했습니다. Docker로 서비스를 배포했습니다.”다.
+- 여러 기술이 있는 문장은 쉼표·접속사·완료형 연결어로 분리한 기술별 절이 모두 하나의 기술과 명시적 수행을 포함할 때만 연결한다. “Spring으로 구현했고, Docker로 배포했습니다”는 각각 연결하지만 “Spring과 Docker로 배포했습니다”, “Spring, Docker로 배포했습니다”는 연결하지 않는다.
+- 기술 목록의 뒤쪽 행동을 임의로 배분하거나 이전 문장의 기술을 이어받지 않는다. “Spring으로 구현했습니다. 단위 테스트를 작성했습니다.”의 TESTING은 projectSignals에만 남는다. 연결 불명확·기술 나열·부정·계획·학습 표현은 technologySignals에 넣지 않는다.
 - 기술/프로젝트 문맥에서 수행을 명시한 표현만 기록한다. 예: “기능을 구현했습니다”, “단위 테스트를 작성했습니다”, “서비스를 배포했습니다”.
 - 부정·계획·의향·요구·학습 표현, HTML 스크립트·인용 블록은 신호 근거로 사용하지 않는다.
 - 규칙은 privacy.py 한 곳에 있다. 문장 단위의 보수적 검사이므로 수행과 부정이 섞인 문장이나 미지원 표현은 누락될 수 있다. 누락을 LV 또는 확인되지 않은 신호로 보충하지 않는다.
-- BE API의 content 필드도 기존처럼 문자열이다. 소비자가 JSON을 파싱해 두 배열을 읽어야 한다. 기존 일반 요약문은 자동 변환하지 않으며, 이전 데이터 소비자는 JSON 파싱 실패를 처리해야 한다. 자료를 명시적으로 재수집/upsert할 때 새 형식으로 갱신된다.
+- BE API의 content 필드도 기존처럼 문자열이다. 소비자가 JSON을 파싱해 배열을 읽어야 한다. 기존 technologies와 projectSignals는 유지하며, technologySignals가 없는 과거 JSON은 빈 배열로 처리한다. 기존 일반 요약문은 자동 변환하지 않으며, 이전 데이터 소비자는 JSON 파싱 실패를 처리해야 한다. 자료를 명시적으로 재수집/upsert할 때 새 형식으로 갱신된다.
 
 ## 공개 접근 정책
 

@@ -39,7 +39,7 @@ class DatabaseTests(unittest.TestCase):
     def material(self):
         from external_pass_crawler.models import StoredMaterial
         from external_pass_crawler.privacy import technical_summary
-        return StoredMaterial(self.rid, "backend", technical_summary("Python과 Spring으로 API 기능을 구현했습니다."))
+        return StoredMaterial(self.rid, "backend", technical_summary("Python으로 기능을 구현했습니다. Spring으로 API 기능을 구현했습니다."))
 
     def task(self, minimum=1):
         self.repo.enqueue(self.c1)
@@ -55,7 +55,10 @@ class DatabaseTests(unittest.TestCase):
         stored = self.conn.execute("SELECT content, pg_typeof(content)::text AS content_type FROM external_data.pass_material WHERE company_id=%s", (self.c1,)).fetchone()
         self.assertEqual(stored["content_type"], "text")
         self.assertEqual(json.loads(stored["content"]), {
-            "technologies": ["Python", "Spring"], "projectSignals": ["FEATURE_IMPLEMENTATION"]})
+            "technologies": ["Python", "Spring"], "technologySignals": [
+                {"technology": "Python", "signals": ["FEATURE_IMPLEMENTATION"]},
+                {"technology": "Spring", "signals": ["FEATURE_IMPLEMENTATION"]}],
+            "projectSignals": ["FEATURE_IMPLEMENTATION"]})
         self.repo.enqueue(self.c1)
         self.assertIsNone(self.repo.claim(self.c1))
         links = self.conn.execute("""
