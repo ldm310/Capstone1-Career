@@ -133,6 +133,24 @@ macOS/Linux에서는 `./gradlew test`를 사용합니다. 결과 보고서는 `b
 
 ## 다음 작업과 확인 사항
 
+### 외부 합격자료 저장·조회 추가 (2026-11-05)
+
+별도 data-pipeline이 저장하고 BE가 조회하는 외부 합격자료 기능을 추가했습니다. 크롤러는 BE에 포함하지 않습니다.
+
+- API: `GET /api/postings/{postingId}/external-pass-materials?page=0&size=20`
+- 신규 SQL: `db/init/04-external-pass-material.sql` (기존 DB에 별도 적용 필요)
+- 저장 구조: `external_data.pass_material`, `company_collection`, `posting_pass_material`
+- 회사 ID별 수집 작업 1개를 공유하며, 같은 회사의 새 공고는 기존 자료를 재사용
+- `relation_type`은 공고-자료 연결에 저장: `EXACT_ROLE`, `SAME_JOB_FAMILY`, `SAME_IT_DOMAIN`, `EXCLUDED` (조회에서 제외)
+- 상태: `PENDING`, `RUNNING`, `READY`, `INSUFFICIENT`, `FAILED` (pipeline이 변경)
+- 중복 방지: `source_platform + external_record_id` UNIQUE, 공고-자료 연결 UNIQUE
+- 연결 기준: 동일 회사의 IT·SW 자료만 명시적으로 연결. 다른 회사의 동일 직무로 fallback하지 않음
+- 기존 내부 합격자 비교와 별도이며 기존 공고 수집·추출 테이블은 변경하지 않음
+
+파이프라인 저장 SQL, 상태 처리 계약, 응답 예시와 검증 방법은 [외부 합격자료 문서](backend/docs/external-pass-materials.md)를 참고하세요.
+
+### 기존 연동 과제
+
 - 실제 DB의 `job`/`public` 스키마 관계와 신규 SQL 적용 상태 확인
 - 표준 직무군·경력 구간 확정 및 모집 단위별 비교 기준 등록
 - 검증된 합격 이력 공급과 인증 증빙·검토 상태·검토자·검토 시각 관리 설계
