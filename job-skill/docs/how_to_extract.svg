@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1700" height="430" viewBox="0 0 1700 430">
+<style>
+  text { font-family: "Malgun Gothic", "Apple SD Gothic Neo", Arial, sans-serif; fill: #1a1a1a; dominant-baseline: central; text-anchor: middle; }
+  .title { font-size: 24px; font-weight: 700; text-anchor: start; }
+  .txt { font-size: 16px; }
+  .num { font-size: 14px; font-weight: 700; fill: #fff; }
+  .tag { font-size: 13px; font-weight: 700; fill: #444; }
+  .note { font-size: 13px; fill: #d0342c; }
+  .pt  { font-size: 11px; fill: #d0342c; text-anchor: start; }
+  .ln  { fill: none; stroke: #1a1a1a; stroke-width: 1.4; }
+</style>
+<defs><marker id="a" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#1a1a1a"/></marker></defs>
+<rect width="1700" height="430" fill="#fff"/>
+<rect x="20" y="20" width="1660" height="390" fill="none" stroke="#999" stroke-width="1"/>
+<text class="title" x="44" y="58">How to 추출</text>
+<rect x="100" y="100" width="260" height="280" rx="4" fill="#fff" stroke="#1a1a1a" stroke-width="1.3"/>
+<circle cx="124" cy="124" r="13" fill="#1a1a1a"/>
+<text class="num" x="124" y="125">1</text>
+<g transform="translate(210.0,128) scale(1.6666666666666667)" fill="none" stroke="#1a1a1a" stroke-width="1.02" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8v-2a2 2 0 0 1 2 -2h2" /><path d="M4 16v2a2 2 0 0 0 2 2h2" /><path d="M16 4h2a2 2 0 0 1 2 2v2" /><path d="M16 20h2a2 2 0 0 0 2 -2v-2" /><path d="M8 12h8" /><path d="M8 9h6" /><path d="M8 15h4" /></g>
+<text class="txt" x="230.0" y="208">OCR 텍스트 및</text>
+<text class="txt" x="230.0" y="233">좌표 추출</text>
+<text class="note" x="230.0" y="256">(글자마다 왼쪽 위,</text>
+<text class="note" x="230.0" y="275">오른쪽 아래 좌표를 줌)</text>
+<rect x="170.0" y="310" width="120.0" height="34" fill="none" stroke="#777" stroke-width="1.1" stroke-dasharray="4 3"/>
+<text class="txt" x="230.0" y="327.0" style="font-size:14px">자격요건</text>
+<circle cx="170.0" cy="310" r="4" fill="#d0342c"/>
+<circle cx="290.0" cy="344" r="4" fill="#d0342c"/>
+<text class="pt" x="164.0" y="299">(x1, y1)</text>
+<text class="pt" x="296.0" y="356" style="text-anchor:end">(x2, y2)</text>
+<rect x="410" y="100" width="260" height="280" rx="4" fill="#fff" stroke="#1a1a1a" stroke-width="1.3"/>
+<circle cx="434" cy="124" r="13" fill="#1a1a1a"/>
+<text class="num" x="434" y="125">2</text>
+<g transform="translate(520.0,128) scale(1.6666666666666667)" fill="none" stroke="#1a1a1a" stroke-width="1.02" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v2.172a2 2 0 0 1 -.586 1.414l-4.414 4.414v7l-6 2v-8.5l-4.48 -4.928a2 2 0 0 1 -.52 -1.345v-2.227z" /></g>
+<text class="txt" x="540.0" y="208">rule base로</text>
+<text class="txt" x="540.0" y="233">뺄 이미지 선정 후 제거</text>
+<rect x="720" y="100" width="260" height="280" rx="4" fill="#fff" stroke="#1a1a1a" stroke-width="1.3"/>
+<circle cx="744" cy="124" r="13" fill="#1a1a1a"/>
+<text class="num" x="744" y="125">3</text>
+<g transform="translate(830.0,128) scale(1.6666666666666667)" fill="none" stroke="#1a1a1a" stroke-width="1.02" stroke-linecap="round" stroke-linejoin="round"><path d="M11 6h9" /><path d="M11 12h9" /><path d="M12 18h8" /><path d="M4 16a2 2 0 1 1 4 0c0 .591 -.5 1 -1 1.5l-3 2.5h4" /><path d="M6 10v-6l-2 2" /></g>
+<text class="txt" x="850.0" y="208">제목 분류 및</text>
+<text class="txt" x="850.0" y="233">순서 정리</text>
+<rect x="828.0" y="328" width="44" height="28" rx="14" fill="#f2f2f2" stroke="#666" stroke-width="1"/>
+<text class="tag" x="850.0" y="342">코드</text>
+<rect x="1030" y="100" width="260" height="280" rx="4" fill="#fff" stroke="#1a1a1a" stroke-width="1.3"/>
+<circle cx="1054" cy="124" r="13" fill="#1a1a1a"/>
+<text class="num" x="1054" y="125">4</text>
+<g transform="translate(1140.0,128) scale(1.6666666666666667)" fill="none" stroke="#1a1a1a" stroke-width="1.02" stroke-linecap="round" stroke-linejoin="round"><path d="M11.217 19.384a3.501 3.501 0 0 0 6.783 -1.217v-5.167l-6 -3.35" /><path d="M5.214 15.014a3.501 3.501 0 0 0 4.446 5.266l4.34 -2.534v-6.946" /><path d="M6 7.63c-1.391 -.236 -2.787 .395 -3.534 1.689a3.474 3.474 0 0 0 1.271 4.745l4.263 2.514l6 -3.348" /><path d="M12.783 4.616a3.501 3.501 0 0 0 -6.783 1.217v5.067l6 3.45" /><path d="M18.786 8.986a3.501 3.501 0 0 0 -4.446 -5.266l-4.34 2.534v6.946" /><path d="M18 16.302c1.391 .236 2.787 -.395 3.534 -1.689a3.474 3.474 0 0 0 -1.271 -4.745l-4.308 -2.514l-5.955 3.42" /></g>
+<text class="txt" x="1160.0" y="208">필요부분만 고르기</text>
+<text class="txt" x="1160.0" y="233">모집 단위 나누기(신입/경력)</text>
+<text class="txt" x="1160.0" y="258">필수, 우대 스킬 정리</text>
+<rect x="1131.0" y="328" width="58" height="28" rx="14" fill="#f2f2f2" stroke="#666" stroke-width="1"/>
+<text class="tag" x="1160.0" y="342">LLM</text>
+<rect x="1340" y="100" width="260" height="280" rx="4" fill="#fff" stroke="#1a1a1a" stroke-width="1.3"/>
+<circle cx="1364" cy="124" r="13" fill="#1a1a1a"/>
+<text class="num" x="1364" y="125">5</text>
+<g transform="translate(1450.0,128) scale(1.6666666666666667)" fill="none" stroke="#1a1a1a" stroke-width="1.02" stroke-linecap="round" stroke-linejoin="round"><path d="M10 19h-6a1 1 0 0 1 -1 -1v-14a1 1 0 0 1 1 -1h6a2 2 0 0 1 2 2a2 2 0 0 1 2 -2h6a1 1 0 0 1 1 1v14a1 1 0 0 1 -1 1h-6a2 2 0 0 0 -2 2a2 2 0 0 0 -2 -2z" /><path d="M12 5v16" /><path d="M7 7h1" /><path d="M7 11h1" /><path d="M16 7h1" /><path d="M16 11h1" /><path d="M16 15h1" /></g>
+<text class="txt" x="1470.0" y="208">기술 이름 표준화</text>
+<rect x="1420.0" y="328" width="100" height="28" rx="14" fill="#f2f2f2" stroke="#666" stroke-width="1"/>
+<text class="tag" x="1470.0" y="342">표준화 사전</text>
+<path class="ln" d="M360,240.0 H410" marker-end="url(#a)"/>
+<path class="ln" d="M670,240.0 H720" marker-end="url(#a)"/>
+<path class="ln" d="M980,240.0 H1030" marker-end="url(#a)"/>
+<path class="ln" d="M1290,240.0 H1340" marker-end="url(#a)"/>
+</svg>

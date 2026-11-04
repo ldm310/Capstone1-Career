@@ -21,6 +21,7 @@ PR에는 변경 목적, API·DB 변경, 테스트 결과, 미완료 연동 사�
 | `backend/` | Java 21, Spring Boot 4.1.1, Spring Data JPA, Gradle 기반 API |
 | `frontend/` | Node.js 24 이상, Next.js 16, React 19, TypeScript 기반 웹서비스 |
 | `db/init/` | PostgreSQL 초기화 및 추가 테이블 SQL |
+| `data-pipeline/external-pass-crawler/` | 회사별 외부 합격자료 수집·분류·JSON 수행 신호 저장 CLI |
 | `compose.yaml` | PostgreSQL 17과 백엔드 실행 설정 |
 | `backend/docs/capability-comparison.md` | 역량 비교 API 상세, 응답 예시, 데이터 흐름과 한계 |
 
@@ -160,3 +161,27 @@ macOS/Linux에서는 `./gradlew test`를 사용합니다. 결과 보고서는 `b
 - 운영 PostgreSQL에서 마이그레이션과 조회 동작 검증
 
 현재 비교 기준이 없으면 `COMPARISON_TARGET_MISSING`, 표본이 부족하면 `INSUFFICIENT_SAMPLE`로 구분합니다. 원본 JSON이 없는 과거 추출의 `skipped`는 복구할 수 없어 `skippedAvailable=false`와 빈 배열을 반환합니다. 역량별 PDF 인용 근거는 현재 평가 DB에 저장되어 있지 않습니다.
+
+## 브랜치와 CI 규칙
+
+- **브랜치**: `main` = 배포용(AWS), `develop` = 로컬용. 작업은 `feature/…` 브랜치에서 하고 PR로 합친다.
+- **폴더**: 파트마다 맨 위 폴더 하나 — `job-skill/`(데이터 파이프라인), `backend/`, `frontend/`.
+- **CI**(`.github/workflows/ci.yml`): `main`·`develop`으로 오는 PR마다 **바뀐 폴더의 시험만** 돈다. 시험이 통과해야 합친다.
+- **CD**(`.github/workflows/cd.yml`): 합쳐지면 바뀐 파트만 배포한다. `develop` → `main` PR은 배포할 때 사람이 올린다.
+  - `develop` → 웹 **스테이징**(EC2 3001번, https://staging.15-164-137-78.sslip.io, 시험용 데이터)
+  - `main` → 웹 **운영**(EC2 3000번, https://15-164-137-78.sslip.io) + `job-skill`(RDS 마이그레이션 → 노트북 Airflow)
+  - 웹 배포(`deploy/web/deploy.sh`)는 판마다 따로 빌드한 뒤 한 번에 바꾸고, 안 뜨면 이전 판으로 되돌린다. 그 커밋에 `frontend/`가 없으면 웹을 건드리지 않는다.
+- **설정은 `.env`**: 주소·비밀번호·포트처럼 환경마다 다른 값은 코드에 넣지 않고 각 폴더의 `.env`에서 읽는다(`.env`가 로컬/운영 스위치).
+- **새 폴더를 합칠 때**: 그 파트가 `ci.yml`에 자기 잡을 더한다(자리와 예시는 파일 안 주석). 잡 안의 명령(버전·빌드·시험)은 그 파트가 정한다.
+
+## 관리자 설정 (저장소 주인 `ldm310`, 한 번)
+
+1. Settings → Secrets and variables → Actions → Secrets
+   - `RDS_HOST`, `RDS_PASSWORD`: RDS 주소와 마스터 암호(job-skill 마이그레이션)
+   - `EC2_SSH_KEY`: EC2(`ubuntu@15.164.137.78`)에 들어가는 개인 키 전체. 배포 전용 키를 새로 만들어 쓰는 것을 권한다
+     (`ssh-keygen -t ed25519 -f career-deploy -N ""` → `career-deploy.pub` 한 줄을 EC2 `~/.ssh/authorized_keys`에 추가 → `career-deploy` 내용을 Secret 에).
+2. Settings → Actions → Runners → New self-hosted runner(Windows)를 노트북에 설치, 라벨 `career-laptop`, 서비스로 실행
+3. Settings → Branches: `main`·`develop`에 "PR 필수 + 검사 통과 필수"(검사: `changes`, `job-skill`, `job-skill-dags`)
+
+EC2 스테이징 주소는 처음 한 번 만든다(여러 번 해도 안전, 운영은 건드리지 않음):
+`ssh -i <키> ubuntu@15.164.137.78 'bash -s' < deploy/web/setup_ec2.sh`

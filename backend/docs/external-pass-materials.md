@@ -18,7 +18,9 @@ BE는 외부 자료를 조회하며, 별도 data-pipeline이 DB에 자료·공�
 | `external_data.company_collection` | company_id PK로 회사별 작업 1개: status, minimum_sample_size(기본 5), attempt_count, requested_at, started_at, completed_at, updated_at, error_code, error_message |
 | `external_data.posting_pass_material` | posting_id, material_id, relation_type, linked_at; 공고와 자료의 다대다 연결 |
 
-`pass_material`은 IT·SW 자료만 수용하며 `job_family='IT_SW'` CHECK가 있다. 직무의 세부 표기는 `role_name`에 저장한다. 이는 표준 capability 또는 LV가 아니며 이 API에서는 역량 집계를 수행하지 않는다. content는 표시 가능한 텍스트로 저장하고 프론트에서는 텍스트로 렌더링한다.
+`pass_material`은 IT·SW 자료만 수용하며 `job_family='IT_SW'` CHECK가 있다. 직무의 세부 표기는 `role_name`에 저장한다. 이는 표준 capability 또는 LV가 아니며 이 API에서는 역량 집계를 수행하지 않는다.
+
+`content`의 DB 타입은 기존 **TEXT NOT NULL**을 유지한다. 외부 크롤러는 `{"technologies":["Spring","Docker"],"projectSignals":["FEATURE_IMPLEMENTATION","TESTING","DEPLOYMENT"]}` 형태의 JSON을 직렬화한 문자열을 저장한다. BE API도 content를 문자열 그대로 반환하므로 소비자가 JSON을 파싱해 두 배열을 읽는다. 기존 일반 텍스트 데이터는 자동 변환하지 않으며 JSON 파싱 실패 시 텍스트로 처리한다. 원문·이름·학교·연락처·점수·LV는 구조화된 내용에 포함하지 않는다. projectSignals는 명시적으로 관찰된 수행 표현만 기록하며 실제 수행 사실을 인증하지 않는다. 저장 형식과 보수적 판별 기준은 [크롤러 문서](../../data-pipeline/external-pass-crawler/README.md)를 참고한다.
 
 출처 ID 중복은 `UNIQUE(source_platform, external_record_id)`로 차단한다. 플랫폼 키는 공백 없는 소문자 키(예: `example_platform`)를 합의해 사용한다. 외부 ID는 플랫폼 내 안정적인 원본 식별자이며 양끝 공백을 허용하지 않는다. 회사나 공고 ID를 중복 키에 넣지 않는다. 동일 플랫폼의 기존 레코드 회사는 변경할 수 없으므로 잘못된 회사 매핑은 별도로 검토해야 한다.
 
@@ -124,7 +126,7 @@ page는 0 이상, size는 1~100, postingId는 양수다. 존재하지 않는 공
       "jobFamily": "IT_SW",
       "roleName": "백엔드 개발자",
       "title": "개발 직군 합격 후기",
-      "content": "프로젝트 경험과 준비 과정에 대한 외부 자료",
+      "content": "{\"technologies\":[\"Spring\",\"Docker\"],\"projectSignals\":[\"FEATURE_IMPLEMENTATION\",\"TESTING\",\"DEPLOYMENT\"]}",
       "sourceUrl": "https://example.com/records/123",
       "publishedAt": null,
       "collectedAt": "2026-11-05T09:01:30+09:00",
