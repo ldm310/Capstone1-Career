@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# CD(웹): EC2 의 웹을 그 커밋으로 바꾼다. GitHub Actions 가 ssh 로 부른다(.github/workflows/cd.yml).
+# CD(웹): EC2 의 웹을 그 커밋으로 바꾼다. EC2 에 설치한 러너(career-ec2)가 부른다(.github/workflows/cd.yml).
 #   staging    = 3001번, develop, 데이터 ~/career-data-staging
 #   production = 3000번, main,    데이터 ~/career-data(지금 운영 데이터 그대로)
 # 몇 번 돌려도 같은 결과(멱등):

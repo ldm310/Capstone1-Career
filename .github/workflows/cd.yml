@@ -2,7 +2,8 @@
 #   develop → 웹 스테이징(EC2 3001번, https://staging.15-164-137-78.sslip.io)
 #   main    → 웹 운영(EC2 3000번) + job-skill(RDS 마이그레이션 → 노트북 Airflow 전용 폴더)
 # 모두 몇 번 돌려도 같은 결과. 그 커밋에 웹 코드(frontend/)가 없으면 웹은 건드리지 않는다.
-# 관리자가 해 둘 것(job-skill/README 'CD'): Secrets RDS_HOST·RDS_PASSWORD·EC2_SSH_KEY, 노트북 러너(라벨 career-laptop).
+# 해 둘 것(맨 위 README '관리자 설정'): Secrets RDS_HOST·RDS_PASSWORD, 러너 두 대 — 노트북(career-laptop)·EC2(career-ec2).
+# EC2 웹은 EC2 에 설치한 러너가 직접 배포한다(러너가 GitHub 에 일을 받으러 감 — 밖에서 EC2 로 SSH 로 들어오지 않음).
 name: CD
 
 on:
@@ -13,9 +14,6 @@ on:
 concurrency:
   group: cd-${{ github.ref_name }}
   cancel-in-progress: false          # 배포는 하나씩, 도중에 끊지 않음
-
-env:
-  EC2_HOST: 15.164.137.78            # 비밀 아님(서버 키는 deploy/web/known_hosts 로 고정)
 
 jobs:
   changes:
@@ -45,19 +43,13 @@ jobs:
   web:
     needs: changes
     if: needs.changes.outputs.web == 'true'
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, career-ec2]   # EC2 에 설치한 러너(ubuntu 계정, 서비스)
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4      # 배포 스크립트만 쓰려고(웹은 deploy.sh 가 판마다 따로 받음)
       - name: EC2 웹 배포(develop → 스테이징, main → 운영)
         env:
-          EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
           TARGET: ${{ github.ref_name == 'main' && 'production' || 'staging' }}
-        run: |
-          if [ -z "$EC2_SSH_KEY" ]; then echo "::error::저장소 Secrets 에 EC2_SSH_KEY 가 없습니다(관리자 등록 필요)"; exit 1; fi
-          install -m 700 -d ~/.ssh
-          printf '%s\n' "$EC2_SSH_KEY" > ~/.ssh/ec2 && chmod 600 ~/.ssh/ec2
-          cp deploy/web/known_hosts ~/.ssh/known_hosts
-          ssh -i ~/.ssh/ec2 -o StrictHostKeyChecking=yes "ubuntu@$EC2_HOST" "bash -s -- $TARGET $GITHUB_SHA" < deploy/web/deploy.sh
+        run: bash deploy/web/deploy.sh "$TARGET" "$GITHUB_SHA"
 
   rds-migrate:
     needs: changes
