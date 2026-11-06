@@ -1,6 +1,6 @@
 -- 임시 사용자 역량 스키마
 -- 실행 순서: 01-job-schema.sql 실행 후 이 파일을 실행한다.
--- 별도의 skill 테이블을 만들지 않고 표준화 사전의 job.capability를 참조한다.
+-- 별도의 skill 테이블을 만들지 않고 표준화 사전의 public.capability를 참조한다.
 
 BEGIN;
 
@@ -49,7 +49,7 @@ CREATE TABLE IF NOT EXISTS profile.user_skill_evaluation (
     project_id       BIGINT NOT NULL
                      REFERENCES profile.project(project_id) ON DELETE CASCADE,
     capability_id    BIGINT NOT NULL
-                     REFERENCES job.capability(id) ON DELETE RESTRICT,
+                     REFERENCES public.capability(id) ON DELETE RESTRICT,
     confirmed_score  SMALLINT NOT NULL
                      CHECK (confirmed_score BETWEEN 0 AND 100),
     evaluated_at     TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,

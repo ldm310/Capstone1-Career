@@ -4,7 +4,7 @@ CREATE SCHEMA IF NOT EXISTS external_data;
 
 CREATE TABLE external_data.pass_material (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    company_id BIGINT NOT NULL REFERENCES job.company(id) ON DELETE RESTRICT,
+    company_id BIGINT NOT NULL REFERENCES public.company(id) ON DELETE RESTRICT,
     source_platform TEXT NOT NULL CHECK (source_platform = lower(btrim(source_platform)) AND source_platform <> ''),
     external_record_id TEXT NOT NULL CHECK (external_record_id = btrim(external_record_id) AND external_record_id <> ''),
     job_family TEXT NOT NULL DEFAULT 'IT_SW' CHECK (job_family = 'IT_SW'),
@@ -20,7 +20,7 @@ CREATE TABLE external_data.pass_material (
 CREATE INDEX pass_material_company_idx ON external_data.pass_material(company_id);
 
 CREATE TABLE external_data.company_collection (
-    company_id BIGINT PRIMARY KEY REFERENCES job.company(id) ON DELETE RESTRICT,
+    company_id BIGINT PRIMARY KEY REFERENCES public.company(id) ON DELETE RESTRICT,
     status TEXT NOT NULL DEFAULT 'PENDING'
         CHECK (status IN ('PENDING', 'RUNNING', 'READY', 'INSUFFICIENT', 'FAILED')),
     minimum_sample_size INTEGER NOT NULL DEFAULT 5 CHECK (minimum_sample_size > 0),
@@ -39,7 +39,7 @@ CREATE INDEX company_collection_queue_idx ON external_data.company_collection(st
 
 CREATE TABLE external_data.posting_pass_material (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    posting_id BIGINT NOT NULL REFERENCES job.posting(id) ON DELETE CASCADE,
+    posting_id BIGINT NOT NULL REFERENCES public.posting(id) ON DELETE CASCADE,
     material_id BIGINT NOT NULL REFERENCES external_data.pass_material(id) ON DELETE RESTRICT,
     relation_type TEXT NOT NULL
         CHECK (relation_type IN ('EXACT_ROLE', 'SAME_JOB_FAMILY', 'SAME_IT_DOMAIN', 'EXCLUDED')),
@@ -53,7 +53,7 @@ CREATE FUNCTION external_data.check_material_company() RETURNS trigger LANGUAGE 
 SECURITY DEFINER SET search_path = pg_catalog AS $$
 DECLARE posting_company BIGINT; material_company BIGINT;
 BEGIN
-    SELECT company_id INTO posting_company FROM job.posting WHERE id = NEW.posting_id FOR SHARE;
+    SELECT company_id INTO posting_company FROM public.posting WHERE id = NEW.posting_id FOR SHARE;
     SELECT company_id INTO material_company FROM external_data.pass_material WHERE id = NEW.material_id FOR SHARE;
     IF posting_company IS NULL OR material_company IS NULL OR posting_company <> material_company THEN
         RAISE EXCEPTION 'External material must belong to the posting company' USING ERRCODE = '23514';

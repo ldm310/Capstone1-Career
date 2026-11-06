@@ -1,0 +1,10 @@
+# Use together with compose.yaml through deploy/backend/use_rds.py.
+services:
+  backend:
+    env_file: !reset []
+    depends_on: !reset {}
+    environment:
+      SPRING_PROFILES_ACTIVE: docker,rds
+      JDBC_DATABASE_URL: jdbc:postgresql://${PGHOST}:${PGPORT:-5432}/${PGDATABASE}?sslmode=require&ApplicationName=career-backend
+      POSTGRES_USER: ${PGUSER}
+      POSTGRES_PASSWORD: ${PGPASSWORD}

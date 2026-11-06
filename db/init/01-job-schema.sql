@@ -1,22 +1,23 @@
+-- NEW EMPTY DATABASES ONLY. Never run against an existing public dataset.
+-- Contract source: job-skill/db/schema.sql (pipeline source is not modified).
 -- 채용공고 역량 추출 DB (PostgreSQL 17)
 -- 논리 설계: docs/erd.png · 물리 설계 설명: docs/physical-design.md
 -- 표·칸의 한글 이름은 COMMENT 로 DB 안에도 남긴다.
--- 모든 표는 스키마 job 안에 만든다. 같은 DB 를 쓰는 BE 표(기본 스키마 public)와 이름이 겹쳐도 부딪히지 않는다.
--- 다른 쪽에서 읽을 때는 job.posting 처럼 스키마 이름을 붙인다.
+-- 모든 표는 기본 스키마 public 에 만든다. BE 표도 같은 곳에 두고 바로 조인한다(BE 표 이름은 이 표들과 겹치지 않게).
 --
 -- 구역
 --   ① 수집        company, posting, posting_image
 --   ② 추출 결과    extraction_run, recruit_unit, unit_item, requirement, requirement_tech
---   ③ 표준화 사전  capability, tech, tech_capability, dictionary_version
+--   ③ 표준화 사전  capability, tech, tech_capability, exclude_word, dictionary_version
+--   ④ 사전 변경 기록 dictionary_change (사전 표 4개에 트리거)
 
 BEGIN;
 
-CREATE SCHEMA IF NOT EXISTS job;
-COMMENT ON SCHEMA job IS '채용공고 역량 추출 파이프라인 (수집·추출 결과·표준화 사전)';
-SET LOCAL search_path TO job;   -- 아래 표·색인은 모두 job 안에 만들어진다
+SET LOCAL search_path TO public;   -- 아래 표·색인은 모두 public 안에 만들어진다
 
 -- ============================================================ ③ 표준화 사전
--- 결과가 사전을 가리키므로 사전부터 만든다. 원본은 capabilities.json, DB 는 한 방향 복사본.
+-- 결과가 사전을 가리키므로 사전부터 만든다. 사전의 원본은 DB — 팀원이 SQL 로 고치고, 바뀐 줄은 dictionary_change 에 남는다.
+-- 빈 DB 는 db/seed_dictionary.sql(db_load.py export-dict 로 DB 에서 내려받은 것)로 채운다.
 
 CREATE TABLE capability (
     id           bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -51,21 +52,137 @@ COMMENT ON COLUMN tech.aliases   IS '별칭 목록 (예: 스프링 부트)';
 COMMENT ON COLUMN tech.is_active IS '사용 여부 (사전에서 빠지면 false, 지우지 않음)';
 
 CREATE TABLE tech_capability (
-    tech_id       bigint NOT NULL REFERENCES tech (id) ON DELETE CASCADE,
-    capability_id bigint NOT NULL REFERENCES capability (id) ON DELETE CASCADE,
+    tech_id       bigint  NOT NULL REFERENCES tech (id) ON DELETE CASCADE,
+    capability_id bigint  NOT NULL REFERENCES capability (id) ON DELETE CASCADE,
+    is_primary    boolean NOT NULL DEFAULT false,
     PRIMARY KEY (tech_id, capability_id)
 );
 COMMENT ON TABLE  tech_capability               IS '기술-능력 (MySQL -> 관계형 DB)';
 COMMENT ON COLUMN tech_capability.tech_id       IS '기술ID';
 COMMENT ON COLUMN tech_capability.capability_id IS '능력ID';
+COMMENT ON COLUMN tech_capability.is_primary    IS '대표 능력 (기술마다 최대 하나, LLM 이 ''기타: RDS''처럼 적으면 이 능력으로 잇는다. 없으면 능력ID 가 가장 작은 것)';
+
+CREATE TABLE exclude_word (
+    id    bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    word  text NOT NULL CONSTRAINT exclude_word_word_not_blank CHECK (btrim(word) <> ''),   -- 빈 낱말은 모든 이름에 들어 있음
+    kind  text NOT NULL CHECK (kind IN ('LLM 모델', '기술 아님', '일반 낱말')),
+    UNIQUE (kind, word)
+);
+COMMENT ON TABLE  exclude_word      IS '스킬이 아닌 낱말 (대소문자·공백 무시)';
+COMMENT ON COLUMN exclude_word.id   IS '낱말ID';
+COMMENT ON COLUMN exclude_word.word IS '낱말 (예: Claude, CTO, AI)';
+COMMENT ON COLUMN exclude_word.kind IS '종류 (LLM 모델 = 이름 안에 들어 있으면 뺌 / 기술 아님 = 직무명 등 / 일반 낱말 = 낱말만 빼고 요건은 남김)';
 
 CREATE TABLE dictionary_version (
-    version    text        PRIMARY KEY,
-    synced_at  timestamptz NOT NULL DEFAULT now()
+    version        text        PRIMARY KEY,
+    first_used_at  timestamptz NOT NULL DEFAULT now()
 );
-COMMENT ON TABLE  dictionary_version           IS '사전 버전 (JSON -> DB 동기화 기록, 최근 것이 현재 버전)';
-COMMENT ON COLUMN dictionary_version.version   IS '사전 버전 (capabilities.json 의 version)';
-COMMENT ON COLUMN dictionary_version.synced_at IS '동기화 시각';
+COMMENT ON TABLE  dictionary_version               IS '사전 판 (추출에 쓰인 사전 지문과 처음 쓴 시각)';
+COMMENT ON COLUMN dictionary_version.version       IS '사전 판 (사전 내용 지문 12자리, 2026-10-31 전에는 0.1.1 같은 번호)';
+COMMENT ON COLUMN dictionary_version.first_used_at IS '처음 쓴 시각';
+
+-- ============================================================ ④ 사전 변경 기록
+-- 사전 표 4개에 줄이 바뀔 때마다 트리거가 남긴다(누가 어떤 도구로 고치든). 팀원은 읽기만 한다.
+
+CREATE TABLE dictionary_change (
+    id          bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    changed_at  timestamptz NOT NULL DEFAULT now(),
+    changed_by  text        NOT NULL,
+    table_name  text        NOT NULL CHECK (table_name IN ('capability', 'tech', 'tech_capability', 'exclude_word')),
+    action      text        NOT NULL CHECK (action IN ('넣기', '고치기', '지우기')),
+    old_row     jsonb,
+    new_row     jsonb
+);
+COMMENT ON TABLE  dictionary_change            IS '사전 변경 기록';
+COMMENT ON COLUMN dictionary_change.id         IS '기록ID';
+COMMENT ON COLUMN dictionary_change.changed_at IS '바꾼 시각';
+COMMENT ON COLUMN dictionary_change.changed_by IS '바꾼 사람 (DB 접속 계정, 예: dongmin / 파이프라인은 career)';
+COMMENT ON COLUMN dictionary_change.table_name IS '표';
+COMMENT ON COLUMN dictionary_change.action     IS '동작 (넣기/고치기/지우기)';
+COMMENT ON COLUMN dictionary_change.old_row    IS '예전 값 (줄 전체, 넣기면 비움)';
+COMMENT ON COLUMN dictionary_change.new_row    IS '새 값 (줄 전체, 지우기면 비움)';
+
+-- 팀원(team)은 기록 표에 쓸 권한이 없으므로 주인(career) 권한으로 남긴다. 팀원이 public 에 만든 함수가 끼어들지 않게
+-- pg_catalog 를 먼저 찾고 기록 표는 public. 을 붙여 부른다. 바꾼 사람은 접속 계정(session_user — 팀원은 접속 뒤 team 이 됨).
+CREATE FUNCTION log_dictionary_change() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp AS $$
+BEGIN
+    IF TG_TABLE_SCHEMA <> 'public' THEN   -- 임시 표 등에 이 함수를 걸어 가짜 기록을 넣지 못하게
+        RAISE EXCEPTION '사전 변경 기록은 public 의 사전 표에서만 남깁니다(%.%)', TG_TABLE_SCHEMA, TG_TABLE_NAME;
+    END IF;
+    IF TG_OP = 'UPDATE' AND to_jsonb(OLD) = to_jsonb(NEW) THEN
+        RETURN NULL;   -- 값이 그대로인 고치기는 남기지 않는다
+    END IF;
+    INSERT INTO public.dictionary_change (changed_by, table_name, action, old_row, new_row)
+    VALUES (session_user, TG_TABLE_NAME,
+            CASE TG_OP WHEN 'INSERT' THEN '넣기' WHEN 'UPDATE' THEN '고치기' ELSE '지우기' END,
+            CASE WHEN TG_OP <> 'INSERT' THEN to_jsonb(OLD) END,
+            CASE WHEN TG_OP <> 'DELETE' THEN to_jsonb(NEW) END);
+    RETURN NULL;
+END $$;
+
+-- TRUNCATE 는 줄마다 걸리는 트리거를 거치지 않아 기록이 빠진다 → 막는다.
+CREATE FUNCTION block_dictionary_truncate() RETURNS trigger
+LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp AS $$
+BEGIN
+    RAISE EXCEPTION '사전 표는 TRUNCATE 할 수 없습니다(변경 기록이 남지 않음). DELETE 를 쓰세요.';
+END $$;
+
+CREATE TRIGGER dictionary_change_log AFTER INSERT OR UPDATE OR DELETE ON capability
+    FOR EACH ROW EXECUTE FUNCTION log_dictionary_change();
+CREATE TRIGGER dictionary_change_log AFTER INSERT OR UPDATE OR DELETE ON tech
+    FOR EACH ROW EXECUTE FUNCTION log_dictionary_change();
+CREATE TRIGGER dictionary_change_log AFTER INSERT OR UPDATE OR DELETE ON tech_capability
+    FOR EACH ROW EXECUTE FUNCTION log_dictionary_change();
+CREATE TRIGGER dictionary_change_log AFTER INSERT OR UPDATE OR DELETE ON exclude_word
+    FOR EACH ROW EXECUTE FUNCTION log_dictionary_change();
+CREATE TRIGGER dictionary_no_truncate BEFORE TRUNCATE ON capability
+    FOR EACH STATEMENT EXECUTE FUNCTION block_dictionary_truncate();
+CREATE TRIGGER dictionary_no_truncate BEFORE TRUNCATE ON tech
+    FOR EACH STATEMENT EXECUTE FUNCTION block_dictionary_truncate();
+CREATE TRIGGER dictionary_no_truncate BEFORE TRUNCATE ON tech_capability
+    FOR EACH STATEMENT EXECUTE FUNCTION block_dictionary_truncate();
+CREATE TRIGGER dictionary_no_truncate BEFORE TRUNCATE ON exclude_word
+    FOR EACH STATEMENT EXECUTE FUNCTION block_dictionary_truncate();
+
+-- 스킬이 아닌 낱말('기술 아님'·'일반 낱말')이 사용 중인 기술·능력의 이름·별칭과 같으면 막는다(대소문자·공백 무시).
+-- 같으면 그 이름이 영영 잡히지 않는다(2026-11-01 사용자 결정). 'LLM 모델' 낱말은 정확히 같은 이름을 가리지 않아 막지 않는다.
+CREATE FUNCTION block_hidden_dictionary_name() RETURNS trigger
+LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp AS $$
+DECLARE hit text;
+BEGIN
+    IF TG_TABLE_NAME = 'exclude_word' THEN
+        IF NEW.kind IN ('기술 아님', '일반 낱말') THEN
+            SELECT x.name INTO hit
+            FROM (SELECT name, aliases FROM public.tech WHERE is_active
+                  UNION ALL SELECT name, aliases FROM public.capability WHERE is_active) x
+            WHERE lower(regexp_replace(NEW.word, '\s+', '', 'g'))
+                  IN (SELECT lower(regexp_replace(a, '\s+', '', 'g')) FROM unnest(x.name || x.aliases) a WHERE a IS NOT NULL)
+            LIMIT 1;
+            IF hit IS NOT NULL THEN
+                RAISE EXCEPTION '낱말 ''%'' 이 사전의 ''%'' 을 가립니다(그 이름이 잡히지 않음). 먼저 그쪽을 끄거나 별칭을 고치세요.', NEW.word, hit;
+            END IF;
+        END IF;
+    ELSIF NEW.is_active THEN
+        SELECT w.word || ' (' || w.kind || ')' INTO hit
+        FROM public.exclude_word w
+        WHERE w.kind IN ('기술 아님', '일반 낱말')
+          AND lower(regexp_replace(w.word, '\s+', '', 'g'))
+              IN (SELECT lower(regexp_replace(a, '\s+', '', 'g')) FROM unnest(NEW.name || NEW.aliases) a WHERE a IS NOT NULL)
+        LIMIT 1;
+        IF hit IS NOT NULL THEN
+            RAISE EXCEPTION '''%'' 의 이름·별칭이 스킬이 아닌 낱말 % 과 같아 잡히지 않습니다. 먼저 exclude_word 에서 지우세요.', NEW.name, hit;
+        END IF;
+    END IF;
+    RETURN NEW;
+END $$;
+
+CREATE TRIGGER dictionary_no_hidden_name BEFORE INSERT OR UPDATE ON capability
+    FOR EACH ROW EXECUTE FUNCTION block_hidden_dictionary_name();
+CREATE TRIGGER dictionary_no_hidden_name BEFORE INSERT OR UPDATE ON tech
+    FOR EACH ROW EXECUTE FUNCTION block_hidden_dictionary_name();
+CREATE TRIGGER dictionary_no_hidden_name BEFORE INSERT OR UPDATE ON exclude_word
+    FOR EACH ROW EXECUTE FUNCTION block_hidden_dictionary_name();
 
 -- ============================================================ ① 수집
 
@@ -90,10 +207,11 @@ CREATE TABLE posting (
     kind              text        NOT NULL CHECK (kind IN ('글', '이미지', '섞임')),
     status            text        NOT NULL DEFAULT '진행' CHECK (status IN ('진행', '마감')),
     deadline          date,
-    raw_path          text        NOT NULL,
+    body_html         text,
     raw_hash          char(64)    NOT NULL,
     collected_at      timestamptz NOT NULL DEFAULT now(),
     last_checked_at   timestamptz NOT NULL DEFAULT now(),
+    recheck_due       boolean     NOT NULL DEFAULT false,
     UNIQUE (site, site_posting_no)
 );
 COMMENT ON TABLE  posting                   IS '공고';
@@ -109,29 +227,26 @@ COMMENT ON COLUMN posting.employment_type   IS '고용 형태 (예: 정규직)';
 COMMENT ON COLUMN posting.kind              IS '공고 형태 (글/이미지/섞임)';
 COMMENT ON COLUMN posting.status            IS '상태 (진행/마감)';
 COMMENT ON COLUMN posting.deadline          IS '마감일 (상시채용이면 비움)';
-COMMENT ON COLUMN posting.raw_path          IS '원본 위치 (본문 HTML 파일 경로)';
+COMMENT ON COLUMN posting.body_html         IS '본문 HTML (사람인 본문 칸, 스크립트 등은 뺌, 이미지 주소는 전체 주소 — 웹 상세 화면용. 본문이 없으면 비움)';
 COMMENT ON COLUMN posting.raw_hash          IS '원본 해시 (보이는 글에서 띄어쓰기·줄바꿈을 지우고 만든 SHA-256)';
 COMMENT ON COLUMN posting.collected_at      IS '수집 시각';
 COMMENT ON COLUMN posting.last_checked_at   IS '마지막 확인 시각 (3일마다 수정 확인)';
+COMMENT ON COLUMN posting.recheck_due       IS '다시 확인할 공고 (''수정''으로 골랐는데 아직 확인·다시 저장을 못 함 — 사람인 수정 표시가 하루 뒤 사라져도 다음 날 다시 고른다)';
 
 CREATE TABLE posting_image (
     id          bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     posting_id  bigint   NOT NULL REFERENCES posting (id) ON DELETE CASCADE,
     seq         smallint NOT NULL CHECK (seq >= 1),
     url         text     NOT NULL,
-    file_path   text     NOT NULL,
     kept        boolean,
-    ocr_path    text,
     UNIQUE (posting_id, seq)
 );
 COMMENT ON TABLE  posting_image            IS '공고 이미지';
 COMMENT ON COLUMN posting_image.id         IS '이미지ID';
 COMMENT ON COLUMN posting_image.posting_id IS '공고ID';
 COMMENT ON COLUMN posting_image.seq        IS '순서 (1, 2, 3…)';
-COMMENT ON COLUMN posting_image.url        IS '이미지 주소';
-COMMENT ON COLUMN posting_image.file_path  IS '파일 위치';
+COMMENT ON COLUMN posting_image.url        IS '이미지 주소 (원본 서버 — 웹은 이 주소로 띄운다)';
 COMMENT ON COLUMN posting_image.kept       IS '남김 여부 (rule base 결과, 판정 전이면 비움)';
-COMMENT ON COLUMN posting_image.ocr_path   IS 'OCR 결과 위치 (글자 + 좌표 JSON)';
 
 -- ============================================================ ② 추출 결과
 -- 추출 실행을 지우면 그 아래(모집 단위·항목·요건·요건 기술)도 함께 지워진다.
@@ -160,7 +275,7 @@ COMMENT ON COLUMN extraction_run.id             IS '실행ID';
 COMMENT ON COLUMN extraction_run.posting_id     IS '공고ID';
 COMMENT ON COLUMN extraction_run.model          IS '모델 (예: gpt-5.6-luna)';
 COMMENT ON COLUMN extraction_run.prompt_version IS '프롬프트 버전';
-COMMENT ON COLUMN extraction_run.dict_version   IS '사전 버전 (예: 0.1.1)';
+COMMENT ON COLUMN extraction_run.dict_version   IS '사전 판 (사전 내용 지문, 2026-10-31 전 결과는 0.1.1 같은 번호)';
 COMMENT ON COLUMN extraction_run.input_hash     IS '입력 해시 (같은 입력이면 다시 부르지 않음)';
 COMMENT ON COLUMN extraction_run.input_tokens   IS '입력 토큰 (다시 부름 포함 합계)';
 COMMENT ON COLUMN extraction_run.output_tokens  IS '출력 토큰 (다시 부름 포함 합계)';
@@ -259,6 +374,9 @@ CREATE INDEX ON requirement (capability_id);                   -- 능력별 통�
 CREATE INDEX ON requirement_tech (requirement_id);
 CREATE INDEX ON requirement_tech (tech_id);                    -- 기술별 통계·매칭
 CREATE INDEX ON tech_capability (capability_id);
+CREATE UNIQUE INDEX tech_capability_one_primary
+    ON tech_capability (tech_id) WHERE is_primary;             -- 기술마다 대표 능력은 최대 하나
+CREATE INDEX ON dictionary_change (changed_at);
 CREATE INDEX ON capability (parent_id);
 CREATE INDEX ON tech (parent_id);
 CREATE INDEX ON capability USING gin (aliases);                -- 별칭으로 찾기

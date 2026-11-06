@@ -5,7 +5,7 @@ import org.hibernate.annotations.Immutable;
 
 @Entity
 @Immutable
-@Table(schema = "job", name = "unit_item")
+@Table(schema = "public", name = "unit_item")
 public class UnitItem {
 
     public static final String REQUIRED = "필수";

@@ -4,10 +4,10 @@ BE는 외부 자료를 조회하며, 별도 data-pipeline이 DB에 자료·공�
 
 ## 기존 구조와 충돌 지점
 
-- 기존 공고의 회사 기준은 `job.posting.company_id → job.company.id`다. 회사 이름 문자열이나 직무 이름만으로 연결하지 않는다.
+- 기존 공고의 회사 기준은 `public.posting.company_id → public.company.id`다. 회사 이름 문자열이나 직무 이름만으로 연결하지 않는다.
 - `profile.successful_application`은 서비스 사용자와 역량 평가를 연결하는 내부 합격 이력이다. 외부 자료는 사용자 평가나 인증 완료 자료로 간주하지 않고 별도 `external_data` 스키마에 저장한다.
 - 기존 `/capability-comparison`의 시장 비교군 fallback은 새 API에서 호출하지 않는다. 다른 회사의 같은 직무 자료는 반환하지 않는다.
-- 추출 브랜치의 `public` 스키마와 BE의 `job` 스키마가 다를 수 있다. pipeline은 이 문서의 BE DB와 회사 ID를 사용해야 한다. 서로 다른 DB의 숫자 ID를 그대로 복사하면 안 된다.
+- 공고·회사·사전의 공식 스키마는 `public`이다. Backend와 외부 크롤러는 같은 public 회사·공고 ID를 사용한다. 서로 다른 DB의 숫자 ID를 그대로 복사하면 안 된다. 과거 로컬 DB의 전환은 [public 통합 절차](public-schema-integration.md)를 따른다.
 - 신규 SQL은 기존 공고 테이블에 컬럼·색인·트리거를 추가하지 않는다. 공고 회사가 나중에 정정되면 기존 연결을 파이프라인이 다시 구성해야 한다. 조회 시 현재 회사 ID를 재검사하므로 과거 연결의 타사 자료는 노출되지 않는다.
 
 ## 테이블
@@ -24,7 +24,7 @@ BE는 외부 자료를 조회하며, 별도 data-pipeline이 DB에 자료·공�
 
 출처 ID 중복은 `UNIQUE(source_platform, external_record_id)`로 차단한다. 플랫폼 키는 공백 없는 소문자 키(예: `example_platform`)를 합의해 사용한다. 외부 ID는 플랫폼 내 안정적인 원본 식별자이며 양끝 공백을 허용하지 않는다. 회사나 공고 ID를 중복 키에 넣지 않는다. 동일 플랫폼의 기존 레코드 회사는 변경할 수 없으므로 잘못된 회사 매핑은 별도로 검토해야 한다.
 
-연결은 `UNIQUE(posting_id, material_id)`이며, PostgreSQL 트리거가 공고 회사와 외부 자료 회사를 검사한다. 자료의 company_id 변경도 트리거가 차단한다. 연결의 posting_id는 기존 job.posting을 직접 참조한다. 공고 삭제 시 해당 연결만 삭제되며 회사 수집 작업과 공용 외부 자료는 보존된다. 연결된 자료의 삭제는 RESTRICT다.
+연결은 `UNIQUE(posting_id, material_id)`이며, PostgreSQL 트리거가 공고 회사와 외부 자료 회사를 검사한다. 자료의 company_id 변경도 트리거가 차단한다. 연결의 posting_id는 기존 public.posting을 직접 참조한다. 공고 삭제 시 해당 연결만 삭제되며 회사 수집 작업과 공용 외부 자료는 보존된다. 연결된 자료의 삭제는 RESTRICT다.
 
 `relation_type`은 외부 자료 자체가 아니라 **공고-자료 연결에만** 저장한다. 허용값은 EXACT_ROLE(동일 직무), SAME_JOB_FAMILY(동일 직무군), SAME_IT_DOMAIN(동일 IT 영역), EXCLUDED(비교 제외)다. 같은 자료를 공고 A에는 EXACT_ROLE, 공고 B에는 SAME_IT_DOMAIN 또는 EXCLUDED로 연결할 수 있다. NOT NULL과 CHECK로 값을 강제하므로 pipeline이 각 연결에 명시해야 한다. EXCLUDED는 DB에 남지만 일반 조회 목록과 전체 건수에서는 제외한다. SAME_IT_DOMAIN도 동일 회사 제약을 충족해야 한다.
 
@@ -50,7 +50,7 @@ RUNNING에는 started_at이 필요하고 completed_at은 비워야 한다. READY
 
 ```sql
 INSERT INTO external_data.company_collection(company_id)
-SELECT company_id FROM job.posting WHERE id=:posting_id
+SELECT company_id FROM public.posting WHERE id=:posting_id
 ON CONFLICT (company_id) DO NOTHING;
 ```
 
@@ -150,7 +150,7 @@ cd backend
 .\gradlew.bat test
 ```
 
-DB 사용자가 postgres가 아니면 명령의 사용자를 바꾼다. pipeline용 DB 사용자에게는 job.company/job.posting의 SELECT, external_data 스키마의 USAGE, 새 테이블의 SELECT/INSERT/UPDATE/DELETE와 identity sequence의 USAGE를 필요한 범위에서 부여한다. 회사 검사 트리거는 고정 search_path와 완전히 한정된 테이블명을 사용하는 SECURITY DEFINER 함수로 실행하므로 pipeline에 기존 공고의 UPDATE 권한을 줄 필요가 없다. 함수 소유자는 마이그레이션 관리 계정으로 유지한다. BE에는 SELECT만 부여하면 된다.
+DB 사용자가 postgres가 아니면 명령의 사용자를 바꾼다. pipeline용 DB 사용자에게는 public.company/public.posting의 SELECT, external_data 스키마의 USAGE, 새 테이블의 SELECT/INSERT/UPDATE/DELETE와 identity sequence의 USAGE를 필요한 범위에서 부여한다. 회사 검사 트리거는 고정 search_path와 완전히 한정된 테이블명을 사용하는 SECURITY DEFINER 함수로 실행하므로 pipeline에 기존 공고의 UPDATE 권한을 줄 필요가 없다. 함수 소유자는 마이그레이션 관리 계정으로 유지한다. BE에는 SELECT만 부여하면 된다.
 
 H2 API 테스트는 페이지 처리, 5개 상태, 미요청, 404/400, 중복, 다른 회사·비IT_SW 자료의 방어적 제외, 기존 추출 불변을 확인한다. PostgreSQL 고유 트리거와 CHECK는 `db/tests/04-external-pass-material.sql`로 따로 검증한다. 테스트 SQL은 init/01과 init/04를 적용한 격리 DB에서 실행하며 테스트 데이터는 rollback한다.
 

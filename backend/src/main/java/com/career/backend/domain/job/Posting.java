@@ -8,7 +8,7 @@ import java.time.OffsetDateTime;
 
 @Entity
 @Immutable
-@Table(schema = "job", name = "posting")
+@Table(schema = "public", name = "posting")
 public class Posting {
 
     public static final String OPEN = "진행";

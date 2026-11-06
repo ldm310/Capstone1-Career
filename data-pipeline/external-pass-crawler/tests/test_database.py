@@ -23,8 +23,8 @@ class DatabaseTests(unittest.TestCase):
         self.repo = Repository(self.conn)
         self.repo.check_contract()
         name = "테스트테크" + uuid.uuid4().hex[:10]
-        self.c1 = self.conn.execute("INSERT INTO job.company(name) VALUES(%s) RETURNING id", (name,)).fetchone()["id"]
-        self.c2 = self.conn.execute("INSERT INTO job.company(name) VALUES(%s) RETURNING id", (name + "타사",)).fetchone()["id"]
+        self.c1 = self.conn.execute("INSERT INTO public.company(name) VALUES(%s) RETURNING id", (name,)).fetchone()["id"]
+        self.c2 = self.conn.execute("INSERT INTO public.company(name) VALUES(%s) RETURNING id", (name + "타사",)).fetchone()["id"]
         self.p1 = self.posting(self.c1, "백엔드")
         self.p2 = self.posting(self.c1, "데이터 엔지니어")
         self.posting(self.c2, "백엔드")
@@ -32,7 +32,7 @@ class DatabaseTests(unittest.TestCase):
 
     def posting(self, company, role):
         return self.conn.execute("""
-            INSERT INTO job.posting(company_id,site_posting_no,title,site_job_category,kind,raw_path,raw_hash)
+            INSERT INTO public.posting(company_id,site_posting_no,title,site_job_category,kind,body_html,raw_hash)
             VALUES(%s,%s,%s,%s,'글','test',%s) RETURNING id
             """, (company, uuid.uuid4().hex, role + " 개발자", role, "0" * 64)).fetchone()["id"]
 
@@ -63,7 +63,7 @@ class DatabaseTests(unittest.TestCase):
         self.assertIsNone(self.repo.claim(self.c1))
         links = self.conn.execute("""
             SELECT p.company_id,l.relation_type FROM external_data.posting_pass_material l
-            JOIN job.posting p ON p.id=l.posting_id WHERE l.material_id IN
+            JOIN public.posting p ON p.id=l.posting_id WHERE l.material_id IN
               (SELECT id FROM external_data.pass_material WHERE company_id=%s) ORDER BY p.id
             """, (self.c1,)).fetchall()
         self.assertEqual([x["relation_type"] for x in links], ["EXACT_ROLE", "SAME_IT_DOMAIN"])
@@ -131,7 +131,7 @@ class DatabaseTests(unittest.TestCase):
         from external_pass_crawler.repository import Repository
         from external_pass_crawler.errors import ContractError
         with self.assertRaises(ContractError):
-            Repository(self.conn, "public").check_contract()
+            Repository(self.conn, "job").check_contract()
         with psycopg.connect(DSN, autocommit=True, row_factory=dict_row, options="-c default_transaction_read_only=on") as readonly:
             with self.assertRaises(psycopg.errors.ReadOnlySqlTransaction):
                 Repository(readonly).enqueue(self.c1)

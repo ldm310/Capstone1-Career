@@ -9,7 +9,7 @@
 1. 명시적으로 연결된 동일 회사 IT_SW 자료만 읽고 EXCLUDED 관계는 제외한다. 같은 회사라도 미연결 자료는 자동으로 포함하지 않는다. 페이지 제한 없이 전체 연결 자료를 집계한다.
 2. 기존 `pass_material.content` TEXT를 JSON으로 읽고 `technologies`의 문자열만 사용한다. projectSignals와 technologySignals는 비교에 사용하지 않으며 원본 content를 변경하지 않는다.
 3. 키워드와 사전 이름·alias에 `String.strip()`과 `toLowerCase(Locale.ROOT)`만 적용한다. 내부 공백, 하이픈, 구두점, 전각 문자 등을 바꾸지 않는다.
-4. `job.tech.name`의 정규화된 정확 일치를 먼저 찾는다. 정확한 이름이 없을 때만 기존 `job.tech.aliases` 배열을 조회한다. 부모 기술·유사 문자열·번역·퍼지 매칭은 사용하지 않는다.
+4. `public.tech.name`의 정규화된 정확 일치를 먼저 찾는다. 정확한 이름이 없을 때만 기존 `public.tech.aliases` 배열을 조회한다. 부모 기술·유사 문자열·번역·퍼지 매칭은 사용하지 않는다.
 5. 예를 들어 Spring Boot를 Spring으로 연결하려면 Spring의 aliases에 Spring Boot가 있어야 한다. Spring Boot 자체가 표준 name으로도 있으면 그 tech ID가 먼저 선택된다.
 6. 정규화 후 같은 이름 또는 alias가 여러 tech ID에 매칭되면 임의로 선택하지 않고 unmappedKeywords에 남긴다. 이름 충돌 시 alias로 재시도하지 않는다. 하나의 tech에 같은 alias가 반복된 것은 충돌이 아니다.
 7. 한 자료 안에서 name·alias·중복 키워드가 같은 tech ID로 연결되면 그 자료에서는 한 번만 센다. 자료가 다르면 각각 한 건이다.

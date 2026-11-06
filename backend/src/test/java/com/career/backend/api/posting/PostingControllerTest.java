@@ -119,7 +119,7 @@ class PostingControllerTest {
 
     @Test
     void 하위_능력만_평가됐으면_상위_요구_능력은_미평가로_본다() throws Exception {
-        jdbc.update("insert into job.capability (id, name, group_name, parent_id, is_active) values (5, 'MySQL 운영', '데이터', 1, true)");
+        jdbc.update("insert into public.capability (id, name, group_name, parent_id, is_active) values (5, 'MySQL 운영', '데이터', 1, true)");
         jdbc.update("insert into profile.app_user (user_id, email, name, created_at, updated_at) values (20, 'child@test.com', '나', current_timestamp, current_timestamp)");
         jdbc.update("insert into profile.project (project_id, user_id, project_name, created_at, updated_at) values (20, 20, 'A', current_timestamp, current_timestamp)");
         jdbc.update("insert into profile.user_skill_evaluation (project_id, capability_id, confirmed_score, evaluated_at) values (20, 5, 95, current_timestamp)");

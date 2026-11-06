@@ -5,7 +5,7 @@ import org.hibernate.annotations.Immutable;
 
 @Entity
 @Immutable
-@Table(schema = "job", name = "requirement")
+@Table(schema = "public", name = "requirement")
 public class Requirement {
 
     @Id

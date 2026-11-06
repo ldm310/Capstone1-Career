@@ -14,7 +14,7 @@ REQUIRED = {
 
 
 class Repository:
-    def __init__(self, connection, posting_schema="job"):
+    def __init__(self, connection, posting_schema="public"):
         if posting_schema not in ("job", "public"):
             raise ContractError("Posting schema must be job or public")
         self.conn, self.schema = connection, posting_schema

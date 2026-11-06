@@ -14,7 +14,7 @@ git show origin/feature/BE:db/init/04-external-pass-material.sql
 ```
 
 - 실제 저장 대상은 `external_data.company_collection`, `pass_material`, `posting_pass_material`이다.
-- 공고·회사 조회 기본 스키마는 BE 계약의 `job`이다. `--posting-schema public`은 **BE의 FK도 public을 참조하도록 이미 운영 계약이 정리된 DB에서만** 사용한다. 필수 테이블·컬럼과 실제 FK 참조 스키마를 쓰기 전에 검사한다. 둘이 다르면 `BE_CONTRACT_MISMATCH`로 종료한다. 스키마를 자동 복사·변경하지 않는다.
+- 공고·회사 조회 기본 스키마는 공식 계약인 `public`이다. `--posting-schema job`은 과거 격리 로컬 DB 진단용이며 Backend 통합 대상은 아니다. 필수 테이블·컬럼과 실제 FK 참조 스키마를 쓰기 전에 검사한다. 둘이 다르면 `BE_CONTRACT_MISMATCH`로 종료한다. 스키마를 자동 복사·변경하지 않는다.
 - SQL 04는 실행자가 해당 환경의 BE 절차에 따라 미리 적용해야 한다. CLI와 테스트 코드 자체에는 DDL이 없다.
 - `pass_material.job_family='IT_SW'` CHECK 때문에 비IT 자료를 저장할 수 없다. 비IT/직무 판별 불가 **원본**은 EXCLUDED로 분류해 제외 건수만 보고한다. 저장된 IT 자료가 비IT/불명확 **공고**에 연결될 때는 연결의 `relation_type=EXCLUDED`로 남긴다.
 - READY는 자료 1건을 찾았다는 뜻이 아니다. BE 계약의 회사 작업 `minimum_sample_size`(기본 5) 이상이면 READY, 미만이면 INSUFFICIENT다.
@@ -68,7 +68,7 @@ macOS/Linux는 `python3 -m venv .venv`와 `.venv/bin/python`으로 바꿔 실행
 | --timeout / EXTERNAL_TIMEOUT | 20초 | 각 공개 HTTP 요청의 타임아웃 |
 | --max-records / EXTERNAL_MAX_RECORDS | 100 | 회사별 검사할 검색 후보 상한 (타사/비IT 포함) |
 | --max-pages / EXTERNAL_MAX_PAGES | 5 | 회사별 검색 페이지 상한 |
-| --posting-schema | job | job/public 중 실제 BE FK 대상과 동일해야 함 |
+| --posting-schema | public | 공식 계약은 public. job은 과거 로컬 DB 진단용이며 실제 FK와 같아야 함 |
 | --aliases-file | 없음 | 명시적 회사 ID → 허용 회사명 배열 JSON |
 
 aliases 예: `{"123": ["Example Company", "예시회사"]}`. 기본 회사 비교는 법인 표기·공백·대소문자만 정규화한다. 부분 일치, 계열사 추론, 다른 회사 같은 직무 fallback은 하지 않는다. alias는 검색 결과의 회사 확인에 사용하며 회사 검색은 DB의 회사명으로 수행한다.

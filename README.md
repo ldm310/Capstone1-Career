@@ -25,7 +25,7 @@ PR에는 변경 목적, API·DB 변경, 테스트 결과, 미완료 연동 사�
 | `compose.yaml` | PostgreSQL 17과 백엔드 실행 설정 |
 | `backend/docs/capability-comparison.md` | 역량 비교 API 상세, 응답 예시, 데이터 흐름과 한계 |
 
-추출 파이프라인은 별도 `feature/job-skill` 브랜치에서 관리됩니다. 현재 BE는 `job` 스키마를 읽지만 확인한 추출 브랜치 로더는 `public` 스키마를 사용하므로, 실제 연동 전에 배포 DB의 스키마를 확인해야 합니다.
+추출 파이프라인은 별도 `feature/job-skill` 브랜치에서 관리됩니다. Backend, 외부 합격자료 기능, job-skill과 Airflow는 공고·사전의 공식 스키마 `public`을 사용합니다. 기존 public 데이터는 보존하며 job 스키마나 중복 공고 테이블을 만들지 않습니다. 설치·과거 로컬 FK 전환 절차는 [public 통합 문서](backend/docs/public-schema-integration.md)를 참고하세요.
 
 ## 개발 시 지켜야 할 데이터 기준
 
@@ -152,7 +152,7 @@ macOS/Linux에서는 `./gradlew test`를 사용합니다. 결과 보고서는 `b
 
 ### 기존 연동 과제
 
-- 실제 DB의 `job`/`public` 스키마 관계와 신규 SQL 적용 상태 확인
+- 기존 public 데이터 보존 및 profile/external_data의 public FK 적용 상태 확인
 - 표준 직무군·경력 구간 확정 및 모집 단위별 비교 기준 등록
 - 검증된 합격 이력 공급과 인증 증빙·검토 상태·검토자·검토 시각 관리 설계
 - 프론트 문자열 사용자 ID와 BE 숫자 사용자 ID 연결 및 접근 제어 정리

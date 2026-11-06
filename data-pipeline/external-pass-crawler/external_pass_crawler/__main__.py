@@ -13,7 +13,7 @@ def parser():
     p = argparse.ArgumentParser(description="Company-scoped public Linkareer collection; no DDL or login")
     p.add_argument("--company-id", type=int)
     p.add_argument("--dry-run", action="store_true", help="Read-only DB session; never enqueue, claim or persist")
-    p.add_argument("--posting-schema", choices=("job", "public"), default="job")
+    p.add_argument("--posting-schema", choices=("job", "public"), default="public")
     p.add_argument("--request-interval", type=float, default=float(os.getenv("EXTERNAL_REQUEST_INTERVAL", "2")))
     p.add_argument("--timeout", type=float, default=float(os.getenv("EXTERNAL_TIMEOUT", "20")))
     p.add_argument("--max-records", type=int, default=int(os.getenv("EXTERNAL_MAX_RECORDS", "100")))

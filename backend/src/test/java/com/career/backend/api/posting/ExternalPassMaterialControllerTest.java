@@ -129,7 +129,7 @@ class ExternalPassMaterialControllerTest {
         // A newly encountered posting from the same company must not create/requeue the company task.
         assertThrows(DataIntegrityViolationException.class, () -> jdbc.update("""
                 insert into external_data.company_collection(company_id,status,minimum_sample_size,attempt_count,requested_at,updated_at)
-                select company_id,'PENDING',5,0,current_timestamp,current_timestamp from job.posting where id=2
+                select company_id,'PENDING',5,0,current_timestamp,current_timestamp from public.posting where id=2
                 """));
         assertEquals("READY", jdbc.queryForObject("select status from external_data.company_collection where company_id=1", String.class));
     }
@@ -150,10 +150,10 @@ class ExternalPassMaterialControllerTest {
         assertEquals("EXCLUDED", jdbc.queryForObject("select relation_type from external_data.posting_pass_material where id=1", String.class));
     }
     @Test void externalReadLeavesOriginalExtractionAndInternalComparisonsUntouched() throws Exception {
-        var before = jdbc.queryForList("select * from job.requirement order by id");
+        var before = jdbc.queryForList("select * from public.requirement order by id");
         collection("PENDING");
         mvc.perform(get("/api/postings/1/external-pass-materials")).andExpect(status().isOk());
-        assertEquals(before, jdbc.queryForList("select * from job.requirement order by id"));
+        assertEquals(before, jdbc.queryForList("select * from public.requirement order by id"));
         assertEquals(0, jdbc.queryForObject("select count(*) from profile.successful_application", Integer.class));
     }
 

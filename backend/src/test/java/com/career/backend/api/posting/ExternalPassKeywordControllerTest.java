@@ -29,18 +29,18 @@ class ExternalPassKeywordControllerTest {
         tech(15, "Docker", "도커");
         tech(21, "Kubernetes", "K8s");
         tech(40, "SignalOnly");
-        jdbc.update("update job.requirement_tech set tech_id=10 where id=1");
-        jdbc.update("update job.requirement_tech set tech_id=15 where id=2");
-        jdbc.update("insert into job.requirement_tech(id,requirement_id,tech_id,written_name) values(3,2,10,'스프링')");
-        jdbc.update("insert into job.requirement_tech(id,requirement_id,tech_id,written_name) values(4,3,10,'Spring')");
-        jdbc.update("insert into job.unit_item(id,unit_id,category,seq,text,quote) values(4,1,'업무',1,'운영','운영')");
-        jdbc.update("insert into job.requirement(id,item_id,capability_id,other_name,relation) values(4,4,2,'','모두')");
-        jdbc.update("insert into job.requirement_tech(id,requirement_id,tech_id,written_name) values(5,4,21,'Kubernetes')");
+        jdbc.update("update public.requirement_tech set tech_id=10 where id=1");
+        jdbc.update("update public.requirement_tech set tech_id=15 where id=2");
+        jdbc.update("insert into public.requirement_tech(id,requirement_id,tech_id,written_name) values(3,2,10,'스프링')");
+        jdbc.update("insert into public.requirement_tech(id,requirement_id,tech_id,written_name) values(4,3,10,'Spring')");
+        jdbc.update("insert into public.unit_item(id,unit_id,category,seq,text,quote) values(4,1,'업무',1,'운영','운영')");
+        jdbc.update("insert into public.requirement(id,item_id,capability_id,other_name,relation) values(4,4,2,'','모두')");
+        jdbc.update("insert into public.requirement_tech(id,requirement_id,tech_id,written_name) values(5,4,21,'Kubernetes')");
     }
 
     void tech(long id, String name, String... aliases) {
         jdbc.update(connection -> {
-            var statement = connection.prepareStatement("insert into job.tech(id,name,aliases) values(?,?,?)");
+            var statement = connection.prepareStatement("insert into public.tech(id,name,aliases) values(?,?,?)");
             statement.setLong(1, id); statement.setString(2, name);
             statement.setArray(3, connection.createArrayOf("VARCHAR", aliases));
             return statement;
@@ -115,15 +115,15 @@ class ExternalPassKeywordControllerTest {
     }
 
     @Test void onlyCurrentExtractionIdsAreUsedAndNullTechIdIsNeverResolvedFromWrittenName() throws Exception {
-        jdbc.update("update job.requirement_tech set tech_id=null, written_name='Docker' where id=2");
+        jdbc.update("update public.requirement_tech set tech_id=null, written_name='Docker' where id=2");
         jdbc.update("""
-                insert into job.extraction_run(id,posting_id,model,dict_version,is_current,run_at)
+                insert into public.extraction_run(id,posting_id,model,dict_version,is_current,run_at)
                 values(2,1,'old','test',false,current_timestamp)
                 """);
-        jdbc.update("insert into job.recruit_unit(id,run_id,seq,name,is_it,career,years_text) values(3,2,1,'과거',true,'신입','')");
-        jdbc.update("insert into job.unit_item(id,unit_id,category,seq,text,quote) values(5,3,'필수',1,'과거','과거')");
-        jdbc.update("insert into job.requirement(id,item_id,capability_id,other_name,relation) values(5,5,2,'','모두')");
-        jdbc.update("insert into job.requirement_tech(id,requirement_id,tech_id,written_name) values(6,5,15,'Docker')");
+        jdbc.update("insert into public.recruit_unit(id,run_id,seq,name,is_it,career,years_text) values(3,2,1,'과거',true,'신입','')");
+        jdbc.update("insert into public.unit_item(id,unit_id,category,seq,text,quote) values(5,3,'필수',1,'과거','과거')");
+        jdbc.update("insert into public.requirement(id,item_id,capability_id,other_name,relation) values(5,5,2,'','모두')");
+        jdbc.update("insert into public.requirement_tech(id,requirement_id,tech_id,written_name) values(6,5,15,'Docker')");
         material(1, 1, "EXACT_ROLE", "{\"technologies\":[\"Docker\"]}");
         mvc.perform(get("/api/postings/1/external-pass-keywords"))
                 .andExpect(jsonPath("$.requiredOverlap", hasSize(0)))
@@ -134,12 +134,12 @@ class ExternalPassKeywordControllerTest {
     @Test void keywordQueryDoesNotModifySourcesDictionaryOrOriginalPostingOutput() throws Exception {
         material(1, 1, "EXACT_ROLE", "{\"technologies\":[\"Spring Boot\",\"new-tech\"],\"projectSignals\":[\"DEPLOYMENT\"]}");
         var beforeMaterials = jdbc.queryForList("select id,content from external_data.pass_material order by id");
-        var beforeRequirements = jdbc.queryForList("select * from job.requirement_tech order by id");
-        int dictionaryCount = jdbc.queryForObject("select count(*) from job.tech", Integer.class);
+        var beforeRequirements = jdbc.queryForList("select * from public.requirement_tech order by id");
+        int dictionaryCount = jdbc.queryForObject("select count(*) from public.tech", Integer.class);
         mvc.perform(get("/api/postings/1/external-pass-keywords")).andExpect(status().isOk());
         assertEquals(beforeMaterials, jdbc.queryForList("select id,content from external_data.pass_material order by id"));
-        assertEquals(beforeRequirements, jdbc.queryForList("select * from job.requirement_tech order by id"));
-        assertEquals(dictionaryCount, jdbc.queryForObject("select count(*) from job.tech", Integer.class));
+        assertEquals(beforeRequirements, jdbc.queryForList("select * from public.requirement_tech order by id"));
+        assertEquals(dictionaryCount, jdbc.queryForObject("select count(*) from public.tech", Integer.class));
     }
 
     @Test void keywordQueryHasNoTwentyMaterialPageLimit() throws Exception {

@@ -7,7 +7,7 @@ import java.time.OffsetDateTime;
 
 @Entity
 @Immutable
-@Table(schema = "job", name = "extraction_run")
+@Table(schema = "public", name = "extraction_run")
 public class ExtractionRun {
 
     @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)

@@ -4,18 +4,20 @@ BEGIN;
 DO $$
 DECLARE c1 BIGINT; c2 BIGINT; p1 BIGINT; p2 BIGINT; p3 BIGINT; m1 BIGINT; m2 BIGINT; state TEXT;
 BEGIN
-    INSERT INTO job.company(name) VALUES ('external-test-company-1') RETURNING id INTO c1;
-    INSERT INTO job.company(name) VALUES ('external-test-company-2') RETURNING id INTO c2;
-    INSERT INTO job.posting(company_id,site_posting_no,title,kind,raw_path,raw_hash)
+    INSERT INTO public.company(name) VALUES ('external-test-company-1') RETURNING id INTO c1;
+    INSERT INTO public.company(name) VALUES ('external-test-company-2') RETURNING id INTO c2;
+    INSERT INTO public.posting(company_id,site_posting_no,title,kind,body_html,raw_hash)
         VALUES(c1,'external-test-1','IT SW','글','test',repeat('0',64)) RETURNING id INTO p1;
-    INSERT INTO job.posting(company_id,site_posting_no,title,kind,raw_path,raw_hash)
+    INSERT INTO public.posting(company_id,site_posting_no,title,kind,body_html,raw_hash)
         VALUES(c2,'external-test-2','IT SW','글','test',repeat('1',64)) RETURNING id INTO p2;
-    INSERT INTO job.posting(company_id,site_posting_no,title,kind,raw_path,raw_hash)
+    INSERT INTO public.posting(company_id,site_posting_no,title,kind,body_html,raw_hash)
         VALUES(c1,'external-test-3','Other IT role','글','test',repeat('2',64)) RETURNING id INTO p3;
+    INSERT INTO public.posting(company_id,site_posting_no,title,kind,body_html,raw_hash)
+        VALUES(c1,'external-test-privileges','Permission fixture','글','test',repeat('3',64));
     INSERT INTO external_data.company_collection(company_id) VALUES(c1),(c2);
     -- Multiple postings from the same company resolve to one work item.
     INSERT INTO external_data.company_collection(company_id)
-        SELECT company_id FROM job.posting WHERE id IN (p1,p3)
+        SELECT company_id FROM public.posting WHERE id IN (p1,p3)
         ON CONFLICT(company_id) DO NOTHING;
     IF (SELECT count(*) FROM external_data.company_collection WHERE company_id=c1) <> 1 THEN
         RAISE EXCEPTION 'Duplicate company collection task';
@@ -98,14 +100,21 @@ END;
 $$;
 -- The pipeline does not need UPDATE privileges on existing posting tables.
 CREATE ROLE external_material_test_writer NOLOGIN;
-GRANT USAGE ON SCHEMA job, external_data TO external_material_test_writer;
-GRANT SELECT ON job.posting, external_data.pass_material TO external_material_test_writer;
+GRANT USAGE ON SCHEMA public, external_data TO external_material_test_writer;
+GRANT SELECT ON public.posting, external_data.pass_material TO external_material_test_writer;
 GRANT SELECT, INSERT ON external_data.posting_pass_material TO external_material_test_writer;
 GRANT USAGE ON ALL SEQUENCES IN SCHEMA external_data TO external_material_test_writer;
 SET LOCAL ROLE external_material_test_writer;
+DO $$
+DECLARE affected integer;
+BEGIN
 INSERT INTO external_data.posting_pass_material(posting_id,material_id,relation_type)
-SELECT p.id,m.id,'EXACT_ROLE' FROM job.posting p JOIN external_data.pass_material m ON m.company_id=p.company_id
-WHERE p.site_posting_no='external-test-1' AND m.source_platform='test' AND m.external_record_id='same-id'
+SELECT p.id,m.id,'EXACT_ROLE' FROM public.posting p JOIN external_data.pass_material m ON m.company_id=p.company_id
+WHERE p.site_posting_no='external-test-privileges' AND m.source_platform='test' AND m.external_record_id='same-id'
 ON CONFLICT(posting_id,material_id) DO NOTHING;
+GET DIAGNOSTICS affected = ROW_COUNT;
+IF affected <> 1 THEN RAISE EXCEPTION 'Expected one link inserted without posting UPDATE privileges'; END IF;
+END;
+$$;
 RESET ROLE;
 ROLLBACK;
