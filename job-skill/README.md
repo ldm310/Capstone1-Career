@@ -191,7 +191,7 @@ docker compose -f docker-compose.airflow.yml exec airflow-scheduler python -m py
 - 사전이 통째로 망가지면(사용 중인 능력 0개, `기타` 없음) 그날 추출이 멈추고 Slack 실패 알림에 이유가 온다. 별칭 겹침 같은 작은 어긋남은 결과 알림의 "사전 확인 필요"로 온다.
 - 가끔 `py -3.12 db_load.py export-dict`로 RDS 사전을 `db/seed_dictionary.sql`에 내려받아 커밋한다(테스트·CI·새 DB가 이 사전으로 채워짐, Git에 사전 변화가 남음).
 
-**매일 어제 AWS 비용 Slack 리포트** (노트북과 상관없이 AWS 안에서)
+**매일 그저께 AWS 비용 Slack 리포트** (어제 몫은 아직 덜 정리돼 있어 하루 늦게, 그 달 누적도 그저께까지) (노트북과 상관없이 AWS 안에서)
 - Lambda `aws-cost-report`(서울, Python 3.13, 제한 시간 30초)에 [aws/cost_report_lambda.py](aws/cost_report_lambda.py)를 그대로 붙여 넣는다.
   - 환경변수 `SLACK_WEBHOOK_URL`, 실행 역할에 인라인 정책 `ce:GetCostAndUsage`(비용 조회만)
 - EventBridge 스케줄러 `aws-cost-report-daily`: cron `0 9 * * ? *`, 시간대 Asia/Seoul → 매일 09:00(AWS 하루 = UTC 0~24시 = 한국 시간 어제 09:00~오늘 09:00)
