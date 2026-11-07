@@ -7,7 +7,6 @@ import { LoadingSpinner } from "@/components/shared/loading-spinner";
 import { currentFindings } from "@/lib/workspace-selectors";
 import type { Workspace } from "@/types/workspace";
 import type { PublicJob } from "@/types/public-job";
-import { OriginalLink } from "@/components/jobs/original-link";
 
 // 실제 공고 본문을 분석해 필수, 우대 기술별로 내 근거가 있는지 보여준다.
 export function JobSkillComparison({ job }: { job: PublicJob }) {
@@ -136,11 +135,6 @@ export function JobSkillComparison({ job }: { job: PublicJob }) {
               자료가 없어요. <Link href="/my-data">자료 추가 →</Link>
             </p>
           )}
-          <OriginalLink
-            job={job}
-            className="job-compare-source"
-            label="분석한 공고 원문 보기"
-          />
         </>
       )}
     </section>

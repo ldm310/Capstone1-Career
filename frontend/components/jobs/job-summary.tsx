@@ -11,7 +11,6 @@ import {
 import { unknownLocation, type PublicJob } from "@/types/public-job";
 import { experienceLabels, jobExperience } from "@/lib/job-filters";
 import { useSavedJobs } from "@/lib/saved-jobs";
-import { OriginalLink } from "./original-link";
 
 const dayMs = 86400000;
 // 마감까지 남은 날짜. 마감일이 없으면 null, 지났으면 "마감".
@@ -48,7 +47,7 @@ function Rows({ rows }: { rows: [string, string | undefined | null][] }) {
   );
 }
 
-// 공고 상세 맨 위 요약: 회사, 제목, 저장, 지원 버튼과 핵심 조건 표.
+// 공고 상세 맨 위 요약: 회사, 제목, 저장 버튼과 핵심 조건 표.
 export function JobSummary({ job }: { job: PublicJob }) {
   const saved = useSavedJobs();
   const [message, setMessage] = useState("");
@@ -86,11 +85,6 @@ export function JobSummary({ job }: { job: PublicJob }) {
                 {left}
               </b>
             )}
-            <OriginalLink
-              job={job}
-              className="job-original-link"
-              label={d.applyMethod ?? "원문에서 지원"}
-            />
           </div>
         </div>
       </div>

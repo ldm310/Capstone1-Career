@@ -2,7 +2,6 @@
 import { useEffect, useState } from "react";
 import { LoadingSpinner } from "@/components/shared/loading-spinner";
 import type { PostingSection, PublicJob } from "@/types/public-job";
-import { OriginalLink } from "@/components/jobs/original-link";
 
 // 공고 본문을 섹션별로 보여준다. 본문이 없는 실제 공고는 원문에서 불러온다.
 export function JobPosting({
@@ -35,7 +34,6 @@ export function JobPosting({
     return (
       <section className="study-requirements">
         <p role="alert">{error}</p>
-        <OriginalLink job={job} />
       </section>
     );
   if (!sections) return <LoadingSpinner inline />;

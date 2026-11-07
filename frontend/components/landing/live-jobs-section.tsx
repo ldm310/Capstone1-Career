@@ -19,7 +19,6 @@ import type { PublicJob, PublicJobsResponse } from "@/types/public-job";
 import { isSupportedRole } from "@/lib/roles";
 import { roleLabels } from "@/lib/korean";
 import { LoadingSpinner } from "@/components/shared/loading-spinner";
-import { OriginalLink } from "@/components/jobs/original-link";
 import { PassedGap } from "@/components/jobs/passed-gap";
 import { useSavedJobs } from "@/lib/saved-jobs";
 export function LiveJobsSection({
@@ -240,10 +239,6 @@ export function LiveJobsSection({
                 />
               </button>
             </div>
-            <OriginalLink
-              job={job}
-              className="public-job-source public-job-original"
-            />
             <Link
               className="public-job-source"
               href={`/jobs?job=${encodeURIComponent(job.id)}&view=compare`}
