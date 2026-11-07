@@ -1,4 +1,4 @@
-"""aws/cost_report_lambda.py — 매일 어제 AWS 비용 Slack 리포트(가짜 비용 탐색기 응답, 진짜 AWS·Slack 에 요청하지 않음)."""
+"""aws/cost_report_lambda.py — 매일 그저께 AWS 비용 Slack 리포트(가짜 비용 탐색기 응답, 진짜 AWS·Slack 에 요청하지 않음)."""
 from __future__ import annotations
 
 import datetime as dt
@@ -40,31 +40,37 @@ NOW = dt.datetime(2026, 10, 30, 0, 5, tzinfo=dt.timezone.utc)   # 한국 시간 
 
 
 def test_report_message():
+    """10/30 09:05 에는 그저께(10/28) 하루와 10월 1~28일 누적 — 어제(10/29) 몫은 아직 덜 정리돼 넣지 않는다
+    (2026-11-07 사용자: 9시에 어제 비용을 보면 일부만 잡혀 하루 비용 합과 누적이 안 맞았음)."""
     import cost_report_lambda as c
     sent = []
     c.lambda_handler({}, None, client=FakeCE(), send=sent.append, now=NOW)
-    assert sent == ["☁️ 10월 29일 AWS 비용 $0.54 (RDS $0.31 · 공인 IP $0.12 · EC2 $0.09 · 기타 $0.01) "
-                    "· 이번 달 누적 $1.04 · 프리 플랜 크레딧에서 차감"]
+    assert sent == ["☁️ 10월 28일(그저께) AWS 비용 $0.50 (RDS $0.40 · EC2 $0.10) "
+                    "· 10월 누적(1~28일) $0.50 · 프리 플랜 크레딧에서 차감"]
 
 
-def test_one_query_for_yesterday_and_month():
-    """조회는 한 번($0.01): 이번 달 1일 ~ 오늘(UTC), 하루 단위·서비스별, 크레딧·환불은 빼고."""
+def test_one_query_for_two_days_ago_and_month():
+    """조회는 한 번($0.01): 그 달 1일 ~ 그저께(UTC, End 는 다음 날), 하루 단위·서비스별, 크레딧·환불은 빼고."""
     import cost_report_lambda as c
     ce = FakeCE()
     c.lambda_handler({}, None, client=ce, send=lambda t: None, now=NOW)
-    assert ce.kw["TimePeriod"] == {"Start": "2026-10-01", "End": "2026-10-30"}
+    assert ce.kw["TimePeriod"] == {"Start": "2026-10-01", "End": "2026-10-29"}
     assert ce.kw["Granularity"] == "DAILY" and ce.kw["GroupBy"] == [{"Type": "DIMENSION", "Key": "SERVICE"}]
     assert ce.kw["Filter"] == {"Not": {"Dimensions": {"Key": "RECORD_TYPE", "Values": ["Credit", "Refund"]}}}
 
 
-def test_first_day_of_month_reports_last_month():
-    """11월 1일 오전 9시에는 10월 31일 하루와 10월 누적을 보낸다."""
+def test_first_days_of_month():
+    """11/2 에는 10/31 하루와 10월 전체, 11/3 에는 11/1 하루와 11월 1일 누적."""
     import cost_report_lambda as c
     ce = FakeCE({"ResultsByTime": [day("2026-10-31", {"Amazon Relational Database Service": 0.3})]})
     sent = []
-    c.lambda_handler({}, None, client=ce, send=sent.append, now=dt.datetime(2026, 11, 1, 0, 5, tzinfo=dt.timezone.utc))
+    c.lambda_handler({}, None, client=ce, send=sent.append, now=dt.datetime(2026, 11, 2, 0, 5, tzinfo=dt.timezone.utc))
     assert ce.kw["TimePeriod"] == {"Start": "2026-10-01", "End": "2026-11-01"}
-    assert sent[0].startswith("☁️ 10월 31일 AWS 비용 $0.30 (RDS $0.30)")
+    assert sent[0].startswith("☁️ 10월 31일(그저께) AWS 비용 $0.30 (RDS $0.30) · 10월 누적(1~31일) $0.30")
+    ce = FakeCE({"ResultsByTime": [day("2026-11-01", {"Amazon Relational Database Service": 0.2})]})
+    c.lambda_handler({}, None, client=ce, send=sent.append, now=dt.datetime(2026, 11, 3, 0, 5, tzinfo=dt.timezone.utc))
+    assert ce.kw["TimePeriod"] == {"Start": "2026-11-01", "End": "2026-11-02"}
+    assert "· 11월 누적(1일) $0.20 ·" in sent[1]
 
 
 def test_query_failure_is_reported():
