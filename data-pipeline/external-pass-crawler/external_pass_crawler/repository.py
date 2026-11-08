@@ -1,6 +1,7 @@
 from psycopg import sql
 from .errors import ContractError, IdentityConflict, StaleTask
 from .classification import relation
+from .storage import detect,owned,public_sql,TABLES
 
 REQUIRED = {
     "company": {"id", "name"},
@@ -17,17 +18,19 @@ class Repository:
     def __init__(self, connection, posting_schema="public"):
         if posting_schema not in ("job", "public"):
             raise ContractError("Posting schema must be job or public")
-        self.conn, self.schema = connection, posting_schema
+        self.conn, self.schema = detect(connection), posting_schema
 
     def _query(self, statement):
-        return sql.SQL(statement).format(schema=sql.Identifier(self.schema))
+        return sql.SQL(public_sql(statement) if owned(self.conn) else statement).format(schema=sql.Identifier(self.schema))
 
     def check_contract(self):
         for table, columns in REQUIRED.items():
-            schema = self.schema if table in ("company", "posting") else "external_data"
+            pipeline=table in ("company","posting")
+            schema = self.schema if pipeline else ("public" if owned(self.conn) else "external_data")
+            physical=TABLES[table] if not pipeline and owned(self.conn) else table
             rows = self.conn.execute(
                 "SELECT column_name FROM information_schema.columns WHERE table_schema=%s AND table_name=%s",
-                (schema, table)).fetchall()
+                (schema, physical)).fetchall()
             if not columns <= {r["column_name"] for r in rows}:
                 raise ContractError("Required BE tables/columns are missing")
         # Require the source IDs to be from the exact company/posting tables used by the BE FKs.
@@ -38,8 +41,8 @@ class Repository:
                 FROM pg_constraint c
                 JOIN pg_class s ON s.oid=c.conrelid JOIN pg_namespace sn ON sn.oid=s.relnamespace
                 JOIN pg_class t ON t.oid=c.confrelid JOIN pg_namespace n ON n.oid=t.relnamespace
-                WHERE c.contype='f' AND sn.nspname='external_data' AND s.relname=%s AND t.relname=%s
-                """, (source, target)).fetchall()
+                WHERE c.contype='f' AND sn.nspname=%s AND s.relname=%s AND t.relname=%s
+                """, ("public" if owned(self.conn) else "external_data",TABLES[source] if owned(self.conn) else source,target)).fetchall()
             if not rows or any(r["schema_name"] != self.schema for r in rows):
                 raise ContractError("BE foreign keys do not match the selected posting schema")
 
@@ -55,9 +58,14 @@ class Repository:
 
     def enqueue(self, company_id=None):
         return self.conn.execute(self._query("""
-            INSERT INTO external_data.company_collection(company_id)
-            SELECT DISTINCT p.company_id FROM {schema}.posting p
+            INSERT INTO external_data.company_collection(company_id,status,completed_at)
+            SELECT p.company_id,
+                CASE WHEN count(m.id)>=5 THEN 'READY' WHEN count(m.id)>0 THEN 'INSUFFICIENT' ELSE 'PENDING' END,
+                CASE WHEN count(m.id)>0 THEN now() ELSE NULL END
+            FROM (SELECT DISTINCT company_id FROM {schema}.posting) p
+            LEFT JOIN external_data.pass_material m ON m.company_id=p.company_id AND m.job_family='IT_SW'
             WHERE (%s::bigint IS NULL OR p.company_id=%s)
+            GROUP BY p.company_id
             ON CONFLICT(company_id) DO NOTHING
             """), (company_id, company_id)).rowcount
 
@@ -77,6 +85,10 @@ class Repository:
             SELECT claimed.*, company.name FROM claimed
             JOIN {schema}.company company ON company.id=claimed.company_id
             """), (company_id, company_id)).fetchone()
+
+    def platform_restricted(self):
+        return self.conn.execute("""SELECT EXISTS(SELECT 1 FROM external_data.company_collection
+            WHERE status='FAILED' AND error_code='ACCESS_RESTRICTED') AS blocked""").fetchone()["blocked"]
 
     def postings(self, company_id):
         return self.conn.execute(self._query("""

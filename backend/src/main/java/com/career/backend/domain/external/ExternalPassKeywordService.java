@@ -18,18 +18,22 @@ public class ExternalPassKeywordService {
     private final TechRepository techs;
     private final RequirementTechRepository requirements;
     private final ObjectMapper json;
+    private final PublicExternalPassRepository publicStore;
 
     public ExternalPassKeywordService(PostingRepository postings, ExternalPassMaterialRepository materials,
-            TechRepository techs, RequirementTechRepository requirements, ObjectMapper json) {
+            TechRepository techs, RequirementTechRepository requirements, ObjectMapper json,PublicExternalPassRepository publicStore) {
         this.postings = postings; this.materials = materials; this.techs = techs;
         this.requirements = requirements; this.json = json;
+        this.publicStore=publicStore;
     }
 
     public ExternalPassKeywordResponse get(Long postingId) {
         if (!postings.existsById(postingId)) throw new NotFoundException("채용공고를 찾을 수 없습니다.");
         // One material is one source, regardless of repeated keywords or requirement links.
-        Map<Long, ExternalPassMaterial> sources = new LinkedHashMap<>();
-        materials.findAllLinkedForKeywords(postingId).forEach(m -> sources.putIfAbsent(m.getId(), m));
+        Map<Long, PublicExternalPassRepository.Source> sources = new LinkedHashMap<>();
+        if(publicStore.available())publicStore.keywordSources(postingId).forEach(m->sources.putIfAbsent(m.id(),m));
+        else materials.findAllLinkedForKeywords(postingId).forEach(m -> sources.putIfAbsent(m.getId(),
+                new PublicExternalPassRepository.Source(m.getId(),m.getContent())));
         if (sources.isEmpty()) return new ExternalPassKeywordResponse(postingId, 0,
                 List.of(), List.of(), List.of(), List.of());
 
@@ -46,7 +50,7 @@ public class ExternalPassKeywordService {
         Map<String, String> unmapped = new TreeMap<>();
         for (var material : sources.values()) {
             Set<Long> materialTechs = new HashSet<>();
-            for (String keyword : keywords(material.getContent())) {
+            for (String keyword : keywords(material.content())) {
                 var matched = mapper.match(keyword);
                 if (matched.isPresent()) materialTechs.add(matched.get().id());
                 else unmapped.merge(TechKeywordMapper.normalize(keyword), keyword,
