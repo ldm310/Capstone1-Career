@@ -15,6 +15,18 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class ComparisonCandidatesOpenApiTest {
     @Autowired WebApplicationContext context;
 
+    @Test void collectionStatusApiIsReadOnlyAndDocumentsErrorsAndFields() throws Exception {
+        var response=MockMvcBuilders.webAppContextSetup(context).build().perform(get("/v3/api-docs"))
+                .andExpect(status().isOk()).andReturn().getResponse();
+        var document=new ObjectMapper().readTree(response.getContentAsString());
+        var operation=document.path("paths").path("/api/postings/{postingId}/recruit-units/{recruitUnitId}/external-pass-collection-status").path("get");
+        assertTrue(operation.path("description").asText().contains("읽기 전용"));
+        for(String code:new String[]{"200","400","404","409"})assertTrue(operation.path("responses").has(code));
+        var schema=resolve(document,operation.path("responses").path("200").path("content").path("application/json").path("schema"));
+        for(String key:new String[]{"collectionStatus","highCandidateCount","materialCount","safeErrorCode","retryable","policyVersion"})
+            assertTrue(schema.path("properties").has(key));
+    }
+
     @Test void generatedOpenApiExposesDedicatedSchemaDescriptionsExamplesAndAllHttpStatuses() throws Exception {
         var mapper=new ObjectMapper();
         var response=MockMvcBuilders.webAppContextSetup(context).build().perform(get("/v3/api-docs"))
