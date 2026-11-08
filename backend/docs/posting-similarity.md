@@ -126,4 +126,6 @@ coverage = null                  (|T| = 0)
 
 ### 검증 기록
 
+후보의 회사·모집 단위·confidence·근거·정책을 별도 Python 배치에 전달하는 [외부자료 수집 연결](external-pass-collection.md)이 추가됐다. 유사도 계산은 이 Java 서비스에만 있으며 Python에서 재구현하지 않는다. 타사 자료의 출처는 별도 요청 테이블에 남기고 기존 동일 회사 자료 연결 제약은 유지한다.
+
 선정 v2의 전수 통계·수동 점검·v1 대비 변화·잔여 위험은 [공고 유사도 검증 보고서](verification/posting-similarity-verification.md)에 기록한다. 후속 HTTP API·Swagger·팀 DB READ ONLY 및 전후 불변 검증은 [API 검증 보고서](verification/comparison-candidates-api-verification.md)로 구분한다. 선정률을 정확도로 표현하지 않는다.

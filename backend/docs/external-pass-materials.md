@@ -1,5 +1,7 @@
 # 외부 합격자료 저장·조회 계약
 
+새 팀 DB 배포는 `public.external_pass_*` 신규 소유 테이블을 사용한다. 기존 공고 테이블에는 SELECT·REFERENCES만 사용하고 쓰지 않는다. 아래 `external_data` 이름은 과거 초기화 SQL의 논리 계약·회귀 호환 설명이며 새 팀 환경에 해당 스키마를 생성하지 않는다. 물리 테이블 매핑과 유일한 신규 설치 진입점은 [수집 연결 문서](external-pass-collection.md)를 참고한다. 기존 자료·키워드 API의 응답 형식은 유지한다.
+
 BE는 외부 자료를 조회하며, 별도 data-pipeline이 DB에 자료·공고 연결·수집 상태를 저장한다. BE에는 크롤러, 외부 플랫폼 HTTP 호출, 수집 시작/수정 API를 추가하지 않았다. 기존 공고 수집·추출 테이블과 내부 합격자 비교 API는 변경하지 않는다.
 
 ## 기존 구조와 충돌 지점
@@ -166,6 +168,6 @@ H2 API 테스트는 페이지 처리, 5개 상태, 미요청, 404/400, 중복, �
 - `api/posting/ExternalPassMaterialControllerTest.java` (test): API 통합 테스트
 - 루트 README: 기능 안내
 
-동일 회사 외부자료 크롤러는 [크롤러 README](../../data-pipeline/external-pass-crawler/README.md)의 계약으로 연동한다. 타사 참고 후보의 자동 수집·기존 동일 회사 연결로의 자동 저장은 구현 범위에 포함하지 않는다. 외부 자료를 내부 사용자 평가·capability LV로 자동 변환하지 않는다.
+동일 회사 외부자료 크롤러는 [크롤러 README](../../data-pipeline/external-pass-crawler/README.md)의 계약으로 연동한다. 타사 참고 후보는 [별도 수집 요청·상태 API](external-pass-collection.md)로 관리하며, 타사 자료를 목표 공고의 기존 동일 회사 연결에 직접 저장하지 않는다. 외부 자료를 내부 사용자 평가·capability LV로 자동 변환하지 않는다.
 
 최종 로컬 수집·재실행·두 API·Swagger 검증과 당시 환경의 한계는 [외부 합격자료 통합 검증 보고서](verification/external-pass-materials-verification.md)에 기록한다.

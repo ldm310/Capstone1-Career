@@ -6,6 +6,8 @@
 
 ## 자동 테스트
 
+아래 145건은 비교 후보 API 도입 시점의 결과다. 후속 public 소유 저장소·수집 상태 API를 포함한 전체 161건 결과는 [수집 연결 검증 보고서](external-pass-collection-verification.md)에 기록한다.
+
 Java 21, 격리 PostgreSQL 18 합성 fixture 환경에서 Backend 전체 **145건 통과**, 실패·오류·skip 0건. 기존 128건에 Controller 13건, 실제 생성 OpenAPI 경로·전용 schema·예시 검증 1건, PostgreSQL GET 검증 3건을 추가했다. 전체 테스트는 캐시 없이 실행했으며 이 실행에서는 팀 DB에 연결하지 않았다.
 
 최종 성공 기록: 자동 테스트 결과 (`work/comparison-candidates-api-tests-1f49dedc4f324314bf5d664434c0fbc6/verification.json`; 로컬 검증 산출물, 커밋 제외). 중간 실패 실행은 최종 결과에 합산하지 않는다.
