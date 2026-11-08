@@ -4,7 +4,7 @@ import math
 import os
 import sys
 from dataclasses import asdict
-from .errors import CrawlerError
+from .errors import CrawlerError, ContractError, AccessRestricted
 from .platforms.linkareer import LinkareerAdapter, PublicHttp
 from .runner import collect, run_task
 
@@ -26,8 +26,8 @@ def parser():
 def main(argv=None):
     p = parser()
     args = p.parse_args(argv)
-    if not all(math.isfinite(x) for x in (args.request_interval, args.timeout)) or args.request_interval < 1 or args.timeout <= 0 or min(args.max_records, args.max_pages, args.max_companies) < 1 or (args.company_id is not None and args.company_id < 1):
-        p.error("Interval >= 1, positive timeout/limits/company ID are required")
+    if not all(math.isfinite(x) for x in (args.request_interval, args.timeout)) or args.request_interval < 2 or args.timeout <= 0 or not (1 <= args.max_records <= 100 and 1 <= args.max_pages <= 5 and 1 <= args.max_companies <= 3) or (args.company_id is not None and args.company_id < 1):
+        p.error("Interval >= 2, pages <= 5, records <= 100, companies <= 3 and positive IDs are required")
     # Use a dedicated BE-compatible DATABASE_URL. Never import job-skill modules or silently choose RDS.
     dsn = os.getenv("DATABASE_URL")
     if not dsn:
@@ -46,6 +46,10 @@ def main(argv=None):
         with psycopg.connect(dsn, autocommit=True, row_factory=dict_row, options=options, connect_timeout=10) as conn:
             repo = Repository(conn, args.posting_schema)
             repo.check_contract()
+            if not conn.execute("SELECT pg_try_advisory_lock(703114,2) AS locked").fetchone()["locked"]:
+                raise ContractError("Another external crawler is running")
+            if repo.platform_restricted():
+                raise AccessRestricted("Platform restriction requires manual review")
             companies = repo.companies(args.company_id)
             if args.company_id and not companies:
                 p.error("Company has no postings in the selected BE database")
@@ -60,17 +64,21 @@ def main(argv=None):
                                         args.max_records, args.max_pages, aliases.get(str(company["id"]), ()))
                     print(json.dumps({"company_id": company["id"], "dry_run": True, **asdict(result)}))
                 return 0
-            repo.enqueue(args.company_id)
-            repo.relink_existing(args.company_id)
+            selected = companies[:args.max_companies]
+            for company in selected:
+                repo.enqueue(company["id"])
+                repo.relink_existing(company["id"])
             failed = False
-            for _ in range(args.max_companies):
-                task = repo.claim(args.company_id)
+            for company in selected:
+                task = repo.claim(company["id"])
                 if task is None:
                     break
                 result = run_task(repo, adapter, task, args.max_records, args.max_pages,
                                   aliases.get(str(task["company_id"]), ()))
                 print(json.dumps(result))
                 failed |= result["status"] == "FAILED"
+                if result.get("error_code") == "ACCESS_RESTRICTED":
+                    raise AccessRestricted()
             return 1 if failed else 0
     except Exception as exc:
         # Deliberately do not print DSNs, SQL arguments, upstream text or personal data.

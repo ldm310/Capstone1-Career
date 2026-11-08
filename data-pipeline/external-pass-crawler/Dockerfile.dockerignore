@@ -1,0 +1,14 @@
+**
+!data-pipeline/
+!data-pipeline/external-pass-crawler/
+!data-pipeline/external-pass-crawler/requirements.txt
+!data-pipeline/external-pass-crawler/external_pass_crawler/
+!data-pipeline/external-pass-crawler/external_pass_crawler/**
+!db/
+!db/init/
+!db/init/04-external-pass-material.sql
+!db/migrations/
+!db/migrations/07-external-pass-collection-requests.sql
+**/__pycache__/**
+**/*.pyc
+**/.env*

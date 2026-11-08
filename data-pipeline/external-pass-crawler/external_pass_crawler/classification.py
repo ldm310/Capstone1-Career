@@ -41,7 +41,7 @@ def relation(posting_role, material_role):
 
 def canonical_role(text):
     found = roles(text)
-    return sorted(r for r, _ in found)[0] if found else None
+    return next(iter(found))[0] if len(found) == 1 else None
 
 
 def company_key(value):
