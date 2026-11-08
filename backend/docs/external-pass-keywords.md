@@ -50,3 +50,5 @@ sourceMaterialCount는 비교 대상에 연결된 고유 자료 수다. 과거 �
 cd backend
 .\gradlew.bat test
 ```
+
+실제 수집 자료에 대한 독립 집계 대조, 두 API 조회 전후 DB 불변, 테스트 수와 검증 환경은 [외부 합격자료 통합 검증 보고서](verification/external-pass-materials-verification.md)를 참고한다.

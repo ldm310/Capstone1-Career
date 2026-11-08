@@ -142,7 +142,7 @@ page는 0 이상, size는 1~100, postingId는 양수다. 존재하지 않는 공
 
 ## 적용과 테스트
 
-`db/init/04-external-pass-material.sql`을 기존 BE DB에 한 번 적용한다. 아직 운영에 적용하지 않은 로컬 초안을 수정한 것이므로 별도 후속 마이그레이션은 추가하지 않았다. 이전 공고 단위 초안을 다른 환경에 적용했다면 이 파일을 재실행하지 말고 회사별 상태 병합과 기존 연결의 관계 분류를 위한 별도 데이터 마이그레이션이 필요하다. 새 Docker DB에는 init 마운트로 자동 적용되지만 기존 볼륨에는 다시 실행되지 않는다. 기존 데이터를 삭제할 필요는 없다. 이번 작업에서는 운영 DB에 적용하지 않았다.
+`db/init/04-external-pass-material.sql`을 기존 BE DB에 한 번 적용한다. 이 SQL은 신규 환경의 초기화 정의이며 기존 환경에 자동 재적용하지 않는다. 이전 공고 단위 초안을 다른 환경에 적용했다면 이 파일을 재실행하지 말고 회사별 상태 병합과 기존 연결의 관계 분류를 위한 별도 데이터 마이그레이션이 필요하다. 새 Docker DB에는 init 마운트로 자동 적용되지만 기존 볼륨에는 다시 실행되지 않는다. 기존 데이터를 삭제할 필요는 없다. 운영 환경의 적용 여부와 적용 절차는 배포 대상별로 확인해야 한다.
 
 ```powershell
 Get-Content -Raw -Encoding utf8 db/init/04-external-pass-material.sql | docker compose exec -T db psql -U postgres -d career -v ON_ERROR_STOP=1
@@ -166,4 +166,6 @@ H2 API 테스트는 페이지 처리, 5개 상태, 미요청, 404/400, 중복, �
 - `api/posting/ExternalPassMaterialControllerTest.java` (test): API 통합 테스트
 - 루트 README: 기능 안내
 
-프론트 연결과 크롤링은 이번 범위에 포함하지 않는다. 외부 자료를 내부 사용자 평가·capability LV로 자동 변환하지 않는다.
+동일 회사 외부자료 크롤러는 [크롤러 README](../../data-pipeline/external-pass-crawler/README.md)의 계약으로 연동한다. 타사 참고 후보의 자동 수집·기존 동일 회사 연결로의 자동 저장은 구현 범위에 포함하지 않는다. 외부 자료를 내부 사용자 평가·capability LV로 자동 변환하지 않는다.
+
+최종 로컬 수집·재실행·두 API·Swagger 검증과 당시 환경의 한계는 [외부 합격자료 통합 검증 보고서](verification/external-pass-materials-verification.md)에 기록한다.

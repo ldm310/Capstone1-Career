@@ -2,7 +2,7 @@
 
 ## 범위와 호출
 
-`PostingCandidateSelectionService.select(postingId)`는 현재 공고의 IT 모집 단위별로 타사 후보 공고를 선정한다. HTTP endpoint, 외부 사이트 호출, 결과 저장은 없다. 기존 외부자료 API·연결·trigger와 독립적이며 public 스키마에 SELECT만 실행한다. 서비스는 `@Transactional(readOnly=true)`다.
+`PostingCandidateSelectionService.select(postingId)`는 현재 공고의 IT 모집 단위별로 타사 후보 공고를 선정한다. 선정 서비스 자체는 외부 사이트 호출이나 결과 저장을 하지 않는다. HTTP 조회는 [Comparison Candidates API](comparison-candidates-api.md)가 이 서비스를 호출한다. 기존 외부자료 API·연결·trigger와 독립적이며 public 스키마에 SELECT만 실행한다. 서비스는 `@Transactional(readOnly=true)`다.
 
 ## 조회 계약
 
@@ -22,7 +22,7 @@
 
 ## 직무 매핑과 근거
 
-직무 코드·직무군·정규식의 유일한 원본은 `src/main/resources/posting-similarity.properties`다. Java에는 같은 매핑을 재작성하지 않는다. 테스트도 같은 리소스를 읽는다. 이는 공인 직무 분류가 아닌 버전 있는 MVP 내부 분류다.
+직무 코드·직무군·정규식의 유일한 원본은 `backend/src/main/resources/posting-similarity.properties`다. Java에는 같은 매핑을 재작성하지 않는다. 테스트도 같은 리소스를 읽는다. 이는 공인 직무 분류가 아닌 버전 있는 MVP 내부 분류다.
 
 판별 순서는 모집 단위명 → 공고 직무 분류 → 공고 제목이다. 앞선 입력에서 직무를 하나 찾았으면 이후 입력으로 바꾸지 않는다. 한 입력에서 여러 직무가 발견되면 `AMBIGUOUS`로 제외하고 metadata fallback도 하지 않는다. 어떤 입력에서도 찾지 못하면 `UNKNOWN`이다. metadata를 사용하더라도 공고의 특징 집합을 모집 단위에 합치지 않는다.
 
@@ -113,7 +113,7 @@ coverage = null                  (|T| = 0)
 
 `PostingSimilarityScorer`가 계산 인터페이스이고 현재 구현체는 `KeywordPostingSimilarityScorer` 하나다. 향후 다른 방식의 점수를 추가해도 필수 자격 검사·단계 확장·회사 제한은 선정 서비스에 남겨야 한다. 임베딩 저장, 모델 호출, 의존성은 없다. 대규모 데이터에서는 전체 타사 특징을 메모리로 읽는 MVP 조회를 직무별 색인/특징 캐시 등으로 개선할 필요가 있다.
 
-다음 단계의 API는 이 DTO를 노출하는 읽기 전용 controller와 요청 검증을 추가하면 된다. 크롤러 연결은 후보 공고 ID·회사 ID·직무 코드·선정 단계·정책 버전을 수집 대상으로 전달하는 별도 작업이다. 기존 same-company trigger와 Repository 조건은 그대로이므로 지금 결과를 기존 posting_pass_material에 바로 INSERT하면 안 된다. 자료 provenance·직무별 수집 상태·새 연결 제약은 별도 승인된 변경이 필요하다.
+현재 [Comparison Candidates API](comparison-candidates-api.md)는 읽기 전용 controller와 요청 검증을 통해 지정 모집 단위의 결과를 노출한다. 크롤러 연결은 후보 공고 ID·회사 ID·직무 코드·선정 단계·정책 버전을 수집 대상으로 전달하는 별도 작업이다. 기존 same-company trigger와 Repository 조건은 그대로이므로 지금 결과를 기존 posting_pass_material에 바로 INSERT하면 안 된다. 자료 provenance·직무별 수집 상태·새 연결 제약은 별도 승인된 변경이 필요하다.
 
 ## 검증
 
@@ -124,8 +124,6 @@ coverage = null                  (|T| = 0)
 - 데이터 오류 테스트 2개는 격리 fixture DB의 트랜잭션 안에서만 unique index를 임시 해제해 손상 상태를 재현하고 항상 rollback한다. 운영·팀·기존 로컬 DB의 index와 trigger에는 접근하지 않는다.
 - 정상 Repository/선정 검증은 실제 READ ONLY 트랜잭션과 public 전체 테이블 행 수·해시 전후 비교로 쓰기가 없음을 확인한다.
 
-### 구현 시 검증 결과
+### 검증 기록
 
-v1에서는 109건을 검증했다. v2에서는 통과 조건·희소 근거·보조 비교·확장 금지·ML 명칭 테스트를 추가하고, 변경된 정책의 기존 테스트 기대값을 조정했다. 단위·PostgreSQL 테스트의 최종 실행 수와 실제 데이터 재검증 결과는 별도 검증 보고서에 기록한다. 테스트는 별도 PostgreSQL 18 합성 fixture DB 두 개에서 실행하며 기존 DB·Backend 컨테이너를 보존한다. 합성 테스트 준비에는 팀 DB 접속정보 파일을 사용하지 않는다.
-
-v2 최종 검증은 128건 통과, 실패·오류·skip 0건이다(기존 회귀 52, 계산기 9, 직무 매핑 25, 선정 서비스 20, 통과 조건 15, PostgreSQL Repository 7). 팀 DB는 별도 READ ONLY 검증에서 공고 1,945개·IT 모집 단위 2,602개를 확인했다. 선정 대상 2,185개, 비교 불가 347개, 후보 없음 70개이며 필수 tech 교집합 0인 선정 쌍과 직무군 확장은 모두 0건이다. FALLBACK_FEATURES는 443개 대상, LOW_EVIDENCE는 131개 대상이다. 수동 점검 20건과 전후 수치·잔여 위험은 `work/posting-similarity-quality-v2-20261107.md`에 기록한다. 성공률을 정확도로 표현하지 않는다.
+선정 v2의 전수 통계·수동 점검·v1 대비 변화·잔여 위험은 [공고 유사도 검증 보고서](verification/posting-similarity-verification.md)에 기록한다. 후속 HTTP API·Swagger·팀 DB READ ONLY 및 전후 불변 검증은 [API 검증 보고서](verification/comparison-candidates-api-verification.md)로 구분한다. 선정률을 정확도로 표현하지 않는다.
