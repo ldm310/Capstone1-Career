@@ -14,12 +14,14 @@ class CollectionResult:
     truncated: bool = False
 
 
-def collect(adapter, company, postings, max_records, max_pages, aliases=(), *, preserve_text=False):
+def collect(adapter, company, postings, max_records, max_pages, aliases=(), *, preserve_text=False, search_company=None):
+    if search_company is not None and not same_company(company, search_company, aliases):
+        raise ValueError('Search company must be the company or an explicit alias')
     result, saved, seen = CollectionResult(), [], set()
     priority = {"EXACT_ROLE": 0, "SAME_JOB_FAMILY": 1, "SAME_IT_DOMAIN": 2, "EXCLUDED": 3}
     targets = [(p["site_job_category"] or "") + " " + p["title"] for p in postings]
     for page in range(1, max_pages + 1):
-        listing = adapter.search(company, page)
+        listing = adapter.search(search_company or company, page)
         if not listing.candidates:
             break
         ordered = sorted(listing.candidates, key=lambda c: min(

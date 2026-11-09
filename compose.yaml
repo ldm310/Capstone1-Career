@@ -41,6 +41,9 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: docker
       JDBC_DATABASE_URL: jdbc:postgresql://db:5432/career
+      POSTING_EMBEDDING_MODE: ${POSTING_EMBEDDING_MODE:-SHADOW_MODE}
+      OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
+      OPENAI_EMBEDDING_DIMENSIONS: ${OPENAI_EMBEDDING_DIMENSIONS:-1536}
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       # app.storage.project-file-dir (프로젝트 설명 PDF 저장 위치)

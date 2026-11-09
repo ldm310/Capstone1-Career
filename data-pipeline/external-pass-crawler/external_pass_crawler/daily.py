@@ -107,7 +107,7 @@ class DailyRepository(Repository):
             return result
 
 
-def process(repo, adapter, targets, max_records, max_pages):
+def process(repo, adapter, targets, max_records, max_pages, company_search_name=None):
     outcomes=[]
     for company in targets:
         task=repo.daily_claim(company['id'])
@@ -115,10 +115,14 @@ def process(repo, adapter, targets, max_records, max_pages):
             continue
         try:
             materials,counters=collect(adapter,task['name'],repo.postings(company['id']),
-                                       max_records,max_pages,preserve_text=True)
+                                       max_records,max_pages,
+                                       (company_search_name,) if company_search_name else (),
+                                       preserve_text=True,search_company=company_search_name)
             status,total=repo.finish(task,materials)
             outcomes.append({'company_id':company['id'],'status':status,'accepted':counters.accepted,
-                             'total_materials':total,'truncated':counters.truncated})
+                             'total_materials':total,'truncated':counters.truncated,
+                             'examined':counters.examined,'foreign_company':counters.foreign_company,
+                             'excluded':counters.excluded})
         except Exception as exc:
             code=getattr(exc,'code','COLLECTION_FAILED')
             repo.fail(task,code)
@@ -155,7 +159,8 @@ def run_once(conn, args, adapter=None):
         if repo.platform_restricted():
             report.update(status='BLOCKED',error_code='ACCESS_RESTRICTED',outcomes=[])
         else:
-            outcomes,blocked=process(repo,adapter or LinkareerAdapter(PublicHttp()),targets,args.max_records,args.max_pages)
+            outcomes,blocked=process(repo,adapter or LinkareerAdapter(PublicHttp()),targets,args.max_records,args.max_pages,
+                                     getattr(args,'company_search_name',None))
             report.update(status='BLOCKED' if blocked else 'FAILED' if any(r['status']=='FAILED' for r in outcomes) else 'SUCCEEDED',outcomes=outcomes)
         if tracked:
             conn.execute("""UPDATE public.external_pass_daily_run SET status=%s,completed_at=now(),report=%s::jsonb
@@ -189,7 +194,12 @@ def main(argv=None):
     p.add_argument('--max-records',type=int,default=40)
     p.add_argument('--max-pages',type=int,default=2)
     p.add_argument('--company-id',type=int,help='Limit a one-time initial backfill to a company')
+    p.add_argument('--company-search-name',help='Verified alternate name for this company only; also accepted as an exact company alias')
     args=p.parse_args(argv)
+    if args.company_search_name is not None:
+        args.company_search_name=args.company_search_name.strip()
+        if not args.company_id or not args.company_search_name or args.serve:
+            p.error('--company-search-name requires --company-id and a nonempty verified name')
     if not 0<=args.hour<=23 or not 1<=args.max_companies<=100 or not 1<=args.max_records<=100 or not 1<=args.max_pages<=5 or (args.company_id is not None and args.company_id<1) or (args.serve and (args.dry_run or args.company_id)):
         p.error('Invalid daily limits or incompatible serve options')
     if args.serve:

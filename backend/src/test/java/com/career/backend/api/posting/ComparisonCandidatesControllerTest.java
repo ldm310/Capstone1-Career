@@ -2,6 +2,7 @@ package com.career.backend.api.posting;
 
 import com.career.backend.api.common.GlobalExceptionHandler;
 import com.career.backend.domain.posting.similarity.*;
+import com.career.backend.domain.posting.embedding.*;
 import com.career.backend.domain.posting.similarity.RecruitUnitFeatures.*;
 import com.career.backend.domain.posting.similarity.RecruitUnitRoleResolver.RoleMatch;
 import com.career.backend.domain.posting.similarity.RecruitUnitRoleResolver.Evidence;
@@ -104,6 +105,28 @@ class ComparisonCandidatesControllerTest {
                 .andExpect(jsonPath("$.candidates[0].requiredEvidenceCount").value(0))
                 .andExpect(jsonPath("$.candidates[0].supportingEvidenceCount").value(2))
                 .andExpect(jsonPath("$.candidates[0].evidenceFlags").value(org.hamcrest.Matchers.contains("LOW_CONFIDENCE")));
+    }
+    @Test void shadowScoresCannotChangeAnyExistingResponseFieldOrCandidateOrder() throws Exception {
+        var a=candidate(3,2,31,false);var b=candidate(5,3,51,false);
+        details(a,b);result(Status.SELECTED,List.of(unit(11,Status.SELECTED,Reason.NONE,List.of(a,b))));
+        var taxonomy=new RoleTaxonomy();taxonomy.setVersion("roles-mvp-2");
+        var baseline=new ComparisonCandidatesQueryService(selection,metadata,taxonomy).get(1,11);
+        var shadow=mock(ShadowEmbeddingService.class);
+        when(shadow.score(any(),anyList())).thenReturn(Map.of(
+                31L,new EmbeddingShadowResult("READY","text-embedding-3-small","semantic-shadow-v1",-1.,null,null,1),
+                51L,new EmbeddingShadowResult("READY","text-embedding-3-small","semantic-shadow-v1",1.,null,null,1)));
+        var enriched=new ComparisonCandidatesQueryService(selection,metadata,taxonomy,shadow).get(1,11);
+        assertEquals(List.of(31L,51L),enriched.candidates().stream().map(ComparisonCandidatesResponse.Candidate::recruitUnitId).toList());
+        var mapper=new ObjectMapper();var before=mapper.valueToTree(baseline);var after=mapper.valueToTree(enriched);
+        for(int i=0;i<after.get("candidates").size();i++) {
+            var object=(tools.jackson.databind.node.ObjectNode)after.get("candidates").get(i);
+            var original=(tools.jackson.databind.node.ObjectNode)before.get("candidates").get(i);
+            for(String field:List.of("embeddingStatus","embeddingModel","embeddingPolicyVersion","requiredSemanticSimilarity",
+                    "preferredSemanticSimilarity","dutiesSemanticSimilarity","semanticMatchedRequirementCount")) {
+                object.remove(field);original.remove(field);
+            }
+        }
+        assertEquals(before,after);assertEquals("HIGH",enriched.confidence());
     }
     @Test void noCandidatesIs200EvenWhenAnotherUnitWasSelected() throws Exception {
         var missing=unit(11,Status.NO_CANDIDATES,Reason.NO_ELIGIBLE_CANDIDATE,List.of());

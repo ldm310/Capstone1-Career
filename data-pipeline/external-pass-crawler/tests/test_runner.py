@@ -9,6 +9,26 @@ POSTINGS = [{"id": 1, "title": "백엔드 개발", "site_job_category": "백엔�
 
 
 class RunnerTests(unittest.TestCase):
+    def test_verified_search_alias_keeps_company_and_subsidiary_checks(self):
+        adapter = Mock()
+        adapter.search.return_value = SearchPage((Candidate('1', 'NHN', '백엔드'),
+                                                   Candidate('2', 'NHN AD', '백엔드'),
+                                                   Candidate('3', 'NHN', '백엔드')), 3)
+        adapter.detail.side_effect = [PublicMaterial('1', 'NHN', '백엔드', 'Python'),
+                                      PublicMaterial('3', 'NHN AD', '백엔드', 'Python')]
+        saved, result = collect(adapter, '엔에이치엔(주)', POSTINGS, 10, 2,
+                                ('NHN',), search_company='NHN', preserve_text=True)
+        adapter.search.assert_called_once_with('NHN', 1)
+        self.assertEqual([m.external_id for m in saved], ['1'])
+        self.assertEqual(result.foreign_company, 2)
+        self.assertEqual(saved[0].body_text, 'Python')
+
+    def test_unverified_search_alias_never_requests_upstream(self):
+        adapter = Mock()
+        with self.assertRaises(ValueError):
+            collect(adapter, '회사', POSTINGS, 10, 2, search_company='타사')
+        adapter.search.assert_not_called()
+
     def test_foreign_company_non_it_and_detail_mismatch_are_not_stored(self):
         adapter = Mock()
         adapter.search.return_value = SearchPage((

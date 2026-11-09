@@ -10,6 +10,16 @@ import static com.career.backend.domain.posting.similarity.RecruitUnitRoleResolv
 
 class RecruitUnitRoleResolverTest {
     private final RecruitUnitRoleResolver resolver=resolver();
+    @Test void pythonAndJavaUseSameRoleContract() throws Exception {
+        var file=new org.springframework.core.io.ClassPathResource("embedding-role-contract.json");
+        var rows=new tools.jackson.databind.ObjectMapper().readTree(file.getContentAsString(java.nio.charset.StandardCharsets.UTF_8));
+        for(var row:rows) {
+            var input=unit(1,1,1,row.get("unit_name").asText(),row.get("site_job_category").asText(),
+                    row.get("posting_title").asText(),IdSets.empty(),IdSets.empty(),IdSets.empty());
+            var expected=row.get("role").isNull()?null:row.get("role").asText();
+            assertEquals(expected,resolver.resolve(input).roleCode());
+        }
+    }
     @ParameterizedTest
     @CsvSource({"백엔드 개발자,backend,software", "서버 개발자,backend,software", "프론트엔드 개발자,frontend,software",
             "풀스택,fullstack,software", "iOS 개발자,mobile,software", "임베디드,embedded,software",
