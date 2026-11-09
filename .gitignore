@@ -1,3 +1,9 @@
 .env
 node_modules
-/work/local-public-migration-*/career-before.dump
+/work/
+/.next/
+/.career-data/
+/.vscode/
+/next-env.d.ts
+/tsconfig.tsbuildinfo
+/gitignore.backup-*.txt

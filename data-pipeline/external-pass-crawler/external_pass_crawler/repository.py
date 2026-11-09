@@ -2,6 +2,7 @@ from psycopg import sql
 from .errors import ContractError, IdentityConflict, StaleTask
 from .classification import relation
 from .storage import detect,owned,public_sql,TABLES
+from .policy import MINIMUM_SAMPLE_SIZE
 
 REQUIRED = {
     "company": {"id", "name"},
@@ -58,16 +59,16 @@ class Repository:
 
     def enqueue(self, company_id=None):
         return self.conn.execute(self._query("""
-            INSERT INTO external_data.company_collection(company_id,status,completed_at)
+            INSERT INTO external_data.company_collection(company_id,status,completed_at,minimum_sample_size)
             SELECT p.company_id,
-                CASE WHEN count(m.id)>=5 THEN 'READY' WHEN count(m.id)>0 THEN 'INSUFFICIENT' ELSE 'PENDING' END,
-                CASE WHEN count(m.id)>0 THEN now() ELSE NULL END
+                CASE WHEN count(m.id)>=%s THEN 'READY' WHEN count(m.id)>0 THEN 'INSUFFICIENT' ELSE 'PENDING' END,
+                CASE WHEN count(m.id)>0 THEN now() ELSE NULL END,%s
             FROM (SELECT DISTINCT company_id FROM {schema}.posting) p
             LEFT JOIN external_data.pass_material m ON m.company_id=p.company_id AND m.job_family='IT_SW'
             WHERE (%s::bigint IS NULL OR p.company_id=%s)
             GROUP BY p.company_id
             ON CONFLICT(company_id) DO NOTHING
-            """), (company_id, company_id)).rowcount
+            """), (MINIMUM_SAMPLE_SIZE, MINIMUM_SAMPLE_SIZE, company_id, company_id)).rowcount
 
     def claim(self, company_id=None):
         # Autocommit connection: this one statement commits RUNNING before any network access.

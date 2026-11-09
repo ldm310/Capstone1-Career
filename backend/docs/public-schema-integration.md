@@ -6,6 +6,8 @@
 
 2026-11-06 실제 확인: RDS에는 job 테이블이 없고 public 공고 1,945건이 있다. 로컬 career-db에는 데이터가 없는 옛 job 테이블 12개가 있었으며, 백업·복제 검증 후 `06`으로 public에 이동했다. 로컬의 job 참조 FK는 0개다. 8080 Backend는 RDS public 조회를 유지한다. RDS에는 아직 profile/external_data 테이블이 없으므로 로컬 확장 테이블을 전환한 것과 RDS의 외부 합격자료 기능 활성화는 별개다.
 
+2026-11-09 갱신: RDS는 `external_data` 스키마 대신 합격자료 전용 `public.external_pass_*` 저장소를 사용한다. public-08로 최소 표본 2건과 일일 본문·시도·실행 기록 테이블을 추가했다. 로컬 Docker 크롤러가 링커리어를 수집해 RDS에 저장한다. 실제 결과는 [합격자료 수집 검증](verification/external-pass-collection-verification.md)에 통합했다. 위 11월 6일 내용은 당시 상태 기록이다.
+
 ## 컬럼 계약
 
 이번 변경에서는 팀 DB에 SQL을 실행하지 않는다. 비교 기준은 기존 조사 결과와 저장소의 현재 `job-skill/db/schema.sql`이다. 실제 운영 컬럼 전체를 다시 조회한 결과는 아니므로 운영 적용 전 별도 확인이 필요하다.

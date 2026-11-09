@@ -1,7 +1,7 @@
 from dataclasses import dataclass, asdict
 from .classification import canonical_role, relation, same_company
 from .models import StoredMaterial
-from .privacy import technical_summary
+from .privacy import technical_summary, prose_text
 from .errors import CrawlerError, ParseError
 
 
@@ -14,7 +14,7 @@ class CollectionResult:
     truncated: bool = False
 
 
-def collect(adapter, company, postings, max_records, max_pages, aliases=()):
+def collect(adapter, company, postings, max_records, max_pages, aliases=(), *, preserve_text=False):
     result, saved, seen = CollectionResult(), [], set()
     priority = {"EXACT_ROLE": 0, "SAME_JOB_FAMILY": 1, "SAME_IT_DOMAIN": 2, "EXCLUDED": 3}
     targets = [(p["site_job_category"] or "") + " " + p["title"] for p in postings]
@@ -47,7 +47,10 @@ def collect(adapter, company, postings, max_records, max_pages, aliases=()):
             if role is None:
                 result.excluded += 1
                 continue
-            saved.append(StoredMaterial(detail.external_id, role, technical_summary(detail.content)))
+            body = prose_text(detail.content) if preserve_text else None
+            if preserve_text and (not body or len(body) > 200_000):
+                raise ParseError("Public essay text is empty or too large")
+            saved.append(StoredMaterial(detail.external_id, role, technical_summary(detail.content), body))
             result.accepted += 1
         if result.examined >= max_records or len(seen) >= listing.total:
             result.truncated = len(seen) < listing.total

@@ -9,6 +9,7 @@ from .comparison_requests import RequestRepository, validate_selection
 from .errors import AccessRestricted, ContractError
 from .platforms.linkareer import LinkareerAdapter, PublicHttp
 from .runner import run_task
+from .policy import MINIMUM_SAMPLE_SIZE
 
 
 class NoRedirect(HTTPRedirectHandler):
@@ -28,7 +29,7 @@ def selection(base, posting_id, unit_id):
         return validate_selection(json.loads(raw), posting_id, unit_id)
 
 
-def low_allowed(repo, candidate, rows, minimum=5):
+def low_allowed(repo, candidate, rows, minimum=MINIMUM_SAMPLE_SIZE):
     high = [r for r in rows if r["request_id"] == candidate["request_id"] and r["confidence"] == "HIGH"]
     ids = set()
     for row in high:

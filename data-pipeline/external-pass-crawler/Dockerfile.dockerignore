@@ -9,6 +9,7 @@
 !db/init/04-external-pass-material.sql
 !db/migrations/
 !db/migrations/07-external-pass-collection-requests.sql
+!db/migrations/08-external-pass-daily.sql
 **/__pycache__/**
 **/*.pyc
 **/.env*

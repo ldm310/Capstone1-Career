@@ -93,6 +93,18 @@ class ExternalPassCollectionStatusTest {
         registered(row(3,31,2,"HIGH","INSUFFICIENT",Set.of(1L)));
         var result=service.get(1,11);assertEquals("INSUFFICIENT",result.collectionStatus());assertFalse(result.retryable());
     }
+    @Test void twoDirectSamplesAreReadyButOneIsInsufficient() {
+        when(repository.directIds(1,"backend")).thenReturn(Set.of(1L,2L));
+        assertEquals("READY",service.get(1,11).collectionStatus());
+        when(repository.directIds(1,"backend")).thenReturn(Set.of(1L));
+        assertEquals("INSUFFICIENT",service.get(1,11).collectionStatus());
+    }
+    @Test void twoHighSamplesAreEnoughWithoutLowFallback() {
+        selected("SELECTED",candidate(3,31,2,"HIGH"),candidate(5,52,3,"LOW"));
+        registered(row(3,31,2,"HIGH","READY",Set.of(1L,2L)),row(5,52,3,"LOW","READY",Set.of(3L)));
+        var result=service.get(1,11);
+        assertEquals("READY",result.collectionStatus());assertEquals(2,result.materialCount());
+    }
     @Test void failureOnlyExposesAnAllowlistedSafeCode() throws Exception {
         registered(row(3,31,2,"HIGH","FAILED",Set.of()));
         var response=mvc.perform(get(PATH,1,11)).andExpect(status().isOk())

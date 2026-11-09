@@ -71,7 +71,8 @@ def main():
                'postgres:18',env={**os.environ,'POSTGRES_PASSWORD':password})
         created=True
         for _ in range(60):
-            p=subprocess.run(['docker','exec',name,'pg_isready','-U','postgres','-d',similarity],capture_output=True)
+            # The init server accepts Unix sockets before the final TCP server is ready.
+            p=subprocess.run(['docker','exec',name,'pg_isready','-h','127.0.0.1','-U','postgres','-d',similarity],capture_output=True)
             if p.returncode==0:break
             time.sleep(1)
         else:raise RuntimeError('Disposable DB readiness timeout')

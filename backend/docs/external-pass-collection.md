@@ -8,7 +8,7 @@
 2. 별도 배치가 명시한 대상 모집 단위 또는 `--since` 이후의 **커밋된 현재 IT 모집 단위**를 읽는다.
 3. Backend 비교 후보 GET을 호출하고 ID·정책·confidence·featureMode·근거·회사 제한을 검증한다.
 4. 동일 회사·동일 표준 직무로 현재 공고에 직접 연결된 자료가 있으면 우선 사용한다.
-5. 없으면 선정된 타사 후보의 출처를 저장하고 HIGH 회사부터 처리한다. HIGH가 모두 완료된 뒤 실제 동일 직무 자료가 5건 미만일 때만 LOW를 처리한다.
+5. 없으면 선정된 타사 후보의 출처를 저장하고 HIGH 회사부터 처리한다. HIGH가 모두 완료된 뒤 실제 동일 직무 자료가 2건 미만일 때만 LOW를 처리한다.
 6. 이미 READY·INSUFFICIENT·FAILED인 회사는 재크롤링하지 않는다. 기존 자료를 후보 회사의 공고와 재연결한다. RUNNING은 대기하고 PENDING은 행 잠금으로 한 번만 획득한다.
 7. 실제 자료는 자료 회사의 후보 공고에 연결한다. 타사 자료를 목표 공고의 기존 동일 회사 연결 테이블에 직접 삽입하지 않는다.
 8. 프론트의 상태 GET은 읽기만 한다. 등록·재시도·크롤링은 별도 배치에만 있다.
@@ -68,7 +68,7 @@ python -m external_pass_crawler.migrate
 
 ## 개인정보와 저장 내용
 
-기존 Linkareer Adapter·Parser·privacy 모듈을 재사용한다. 원본 HTML과 원문은 메모리에서만 읽는다. DB·로그에는 자소서 원문, 이름, 학교, 이메일, 전화번호, 프로필을 남기지 않는다. 저장 content는 TEXT 타입의 JSON 문자열이며 기술명·technologySignals·projectSignals만 포함한다. 제목은 표준 직무로 생성하고 source_url은 공개 원문 확인용 URL이다.
+링커리어 Adapter·Parser가 공통 privacy 모듈을 사용한다. 기존 회사 CLI와 후보 배치는 원문을 메모리에서만 처리하고 content에 기술명·technologySignals·projectSignals를 담은 JSON 문자열을 저장한다. 이름·학교·연락처·프로필은 이 요약에 포함하지 않는다. 제목은 표준 직무로 생성하고 source_url은 링커리어 공개 원문 확인용 URL이다. 아래 일일 수집은 별도 본문 저장 경로를 사용한다.
 
 ```json
 {
@@ -142,7 +142,41 @@ READ ONLY·REPEATABLE READ로 선정 결과·요청·회사 상태·자료 수�
 }
 ```
 
-예시는 합성 값이다. 상태는 NOT_REQUESTED → PENDING → RUNNING → READY/INSUFFICIENT/FAILED 순이다. READY 등은 해당 회사의 전체 자료 상태이고 API 최상위 READY는 실제 해당 직무의 자료가 5건 이상 준비됐다는 뜻이다. HIGH가 미요청·대기·실행 중이면 이전 LOW 자료로 준비 완료를 선언하지 않는다. `retryable=false`는 API가 자동 재시도를 제공하지 않는다는 뜻이다.
+예시는 합성 값이다. 상태는 NOT_REQUESTED → PENDING → RUNNING → READY/INSUFFICIENT/FAILED 순이다. READY 등은 해당 회사의 전체 자료 상태이고 API 최상위 READY는 실제 해당 직무의 자료가 2건 이상 준비됐다는 뜻이다. HIGH가 미요청·대기·실행 중이면 이전 LOW 자료로 준비 완료를 선언하지 않는다. `retryable=false`는 API가 자동 재시도를 제공하지 않는다는 뜻이다.
+
+## 로컬 일일 수집
+
+수집은 로컬 Docker, 저장은 기존 RDS에서 수행한다. 매일 **KST 09:00**에 실행하며 PC와 Docker가 켜져 있어야 한다. 9시 이전 시작 시 정시까지 기다리고, 9시 이후 시작 시 당일 누락 실행을 보완한다. 당일 종료한 배치는 재시작해도 중복 실행하지 않는다.
+
+1. 진행 중인 공고의 현재 IT 모집 단위를 전체 스캔한다. 과거 공고도 포함한다.
+2. 링커리어 자료 연결 없음, 회사 자료 2건 미만, 기존 자료 본문 누락 중 하나에 해당하면 회사별로 묶는다.
+3. 본문 보완 → 신규 회사 → 가장 오래 확인한 회사 순으로 처리한다. 실제 요청은 회사별 KST 하루 한 번이다.
+4. 공개 검색·상세의 회사·직무를 확인하고, 본문·기술 요약·공고 연결·완료 상태를 한 트랜잭션에서 저장한다.
+5. 자료가 없거나 부족하면 다음 날 다시 확인한다. 일일 작업 소유 RUNNING이 6시간 넘게 중단됐을 때만 회수한다. 다른 CLI 작업은 회수하지 않는다.
+
+기본 한도는 하루 30개 회사, 회사당 2페이지·후보 40건이다. 미처리 대상은 다음 날 순환한다. `remaining_backlog=true`는 회사 한도, `truncated=true`는 페이지·후보 상한을 뜻한다. 접근 제한 즉시 중단과 전체 크롤러 공통 advisory lock은 유지한다. API의 `retryable=false`는 사용자 요청에 의한 재시도가 없다는 뜻이며 일일 배치의 다음 날 재확인과 구분한다.
+
+| 추가 테이블 | 역할 |
+|---|---|
+| `public.external_pass_material_body` | material ID별 줄글·SHA-256·추출 상태·시각 |
+| `public.external_pass_daily_company` | 출처·회사별 실제 시도 시각 |
+| `public.external_pass_daily_run` | KST 날짜별 실행 상태·안전한 집계 |
+
+본문은 HTML·스크립트와 직접 연락처·식별번호 형태를 제거·마스킹하고 `PENDING`으로 저장한다. 별도 작성자 프로필은 수집하지 않는다. 완전한 익명화는 아니므로 서술에 포함된 경력·학교명 등은 남을 수 있다. 본문은 기존 API·로그에 노출하지 않는다. 동일 해시면 추출 상태를 유지하고, 본문이 바뀌면 다시 PENDING으로 설정한다. 임베딩 추출은 이후 단계다.
+
+기존 회사 전체 READY 기준과 비교 API의 최소 표본은 **2건 이상**이다. 비교 API는 동일 표준 직무 자료만 세므로 서로 다른 직무 두 건을 같은 직무 두 건으로 보지 않는다. 기존 SQL 04·07은 checksum을 유지하고 public-08로 전환한다.
+
+```powershell
+python deploy/external-pass/manage_daily.py --env-file <비공개-env-파일> build
+python deploy/external-pass/manage_daily.py --env-file <비공개-env-파일> migrate
+python deploy/external-pass/manage_daily.py --env-file <비공개-env-파일> scan
+python deploy/external-pass/manage_daily.py --env-file <비공개-env-파일> once --company-id 1721
+python deploy/external-pass/manage_daily.py --env-file <비공개-env-파일> start
+python deploy/external-pass/manage_daily.py --env-file <비공개-env-파일> status
+python deploy/external-pass/manage_daily.py --env-file <비공개-env-파일> logs
+```
+
+env 파일은 `DATABASE_URL` 또는 `EXTERNAL_DATABASE_URL`을 제공한다. 비밀값은 인자·로그·커밋에 포함하지 않는다. `migrate`만 DDL을 수행하며 GET·서비스 시작은 자동 migration을 하지 않는다. `scan`은 DB 읽기만 하고 크롤링·저장을 수행하지 않는다. 서비스는 비root·읽기 전용 파일시스템·`restart: unless-stopped`로 실행한다.
 
 400은 잘못된 ID·소속 불일치, 404는 공고·모집 단위 없음, 409는 선정 데이터 오류·미적용 스키마·현재 선정과 불일치하는 오래된 요청이다. 후보 없음과 비교 불가는 200이며 candidateSelectionStatus와 userMessage로 설명한다. 모든 응답은 Swagger에 등록한다.
 

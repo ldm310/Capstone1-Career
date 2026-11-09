@@ -13,7 +13,7 @@ class PublicMaterial:
     external_id: str
     company: str
     role: str
-    content: str  # Ephemeral parser value. Never log or persist this field.
+    content: str  # Parser value: never log; only daily collection stores cleaned prose separately.
 
 
 @dataclass(frozen=True)
@@ -27,3 +27,4 @@ class StoredMaterial:
     external_id: str
     role: str
     content: str
+    body_text: str | None = None

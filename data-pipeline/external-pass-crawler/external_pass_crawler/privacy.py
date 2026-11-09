@@ -2,7 +2,7 @@ import json
 import re
 from html.parser import HTMLParser
 
-# All persisted strings come from these allowlists, never from source sentences or profiles.
+# Summary JSON uses these allowlists. Daily prose is stored separately by explicit policy.
 TECHS = ("Python", "Java", "Kotlin", "JavaScript", "TypeScript", "C++", "C#", "Go",
          "Spring", "React", "Vue", "Node.js", "Django", "FastAPI", "MySQL", "PostgreSQL",
          "Redis", "MongoDB", "Docker", "Kubernetes", "AWS", "Azure", "GCP", "Git",
@@ -122,3 +122,17 @@ def technical_summary(source):
                            for tech in found if tech in linked],
                        "projectSignals": [name for name in SIGNAL_PATTERNS if name in observed]},
                       ensure_ascii=False, separators=(",", ":"))
+
+
+def prose_text(source):
+    """Retain essay paragraphs for later extraction, without HTML or direct contact details.
+
+    This is not full anonymization. Applicant profile fields are never passed to this function.
+    """
+    parser = TextOnly()
+    parser.feed(source)
+    text = "".join(parser.parts)
+    text = re.sub(r"[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}", "[이메일 삭제]", text)
+    text = re.sub(r"(?<!\d)(?:\+82[- .]?)?0?1[016789][- .]?\d{3,4}[- .]?\d{4}(?!\d)", "[연락처 삭제]", text)
+    text = re.sub(r"(?<!\d)\d{6}[- ]?[1-4]\d{6}(?!\d)", "[식별번호 삭제]", text)
+    return "\n".join(line.strip() for line in text.splitlines() if line.strip())

@@ -10,6 +10,7 @@ import static com.career.backend.api.posting.ExternalPassCollectionStatusReposit
 @Service
 @Transactional(readOnly=true,isolation=Isolation.REPEATABLE_READ)
 public class ExternalPassCollectionStatusService {
+    private static final int MINIMUM_SAMPLE_SIZE = 2;
     private final ComparisonCandidatesQueryService selection;
     private final ExternalPassCollectionStatusRepository repository;
     private static final Set<String> SAFE_ERRORS=Set.of("ACCESS_RESTRICTED","FETCH_FAILED","HTML_LAYOUT_CHANGED",
@@ -21,7 +22,7 @@ public class ExternalPassCollectionStatusService {
         var selected=selection.get(postingId,unitId); // Same 400/404/409 checks and unchanged Java similarity policy.
         repository.ensureInstalled();
         var direct=repository.directIds(postingId,selected.roleCode());
-        if(!direct.isEmpty())return response(selected,"DIRECT",direct.size()>=5?"READY":"INSUFFICIENT",
+        if(!direct.isEmpty())return response(selected,"DIRECT",direct.size()>=MINIMUM_SAMPLE_SIZE?"READY":"INSUFFICIENT",
                 direct,List.of(),null,null,null,null);
         var request=repository.request(postingId,unitId,selected.policyVersion());
         List<Row> rows=request.map(r->repository.rows(r.id())).orElse(List.of());
@@ -47,12 +48,12 @@ public class ExternalPassCollectionStatusService {
         // Even if LOW was requested in an earlier batch, sufficient HIGH data takes precedence now.
         boolean highSettled=current.stream().filter(r->r.confidence().equals("HIGH"))
                 .allMatch(r->r.requested()&&Set.of("READY","INSUFFICIENT","FAILED").contains(r.status()==null?"":r.status()));
-        boolean useLow=highIds.size()<5&&highSettled;
+        boolean useLow=highIds.size()<MINIMUM_SAMPLE_SIZE&&highSettled;
         Set<Long> ids=new HashSet<>(highIds);
         if(useLow)current.stream().filter(r->r.confidence().equals("LOW")&&r.requested()).forEach(r->ids.addAll(r.materialIds()));
         var active=current.stream().filter(r->r.requested()&&(useLow||r.confidence().equals("HIGH"))).toList();
         String status;
-        if(ids.size()>=5)status="READY";
+        if(ids.size()>=MINIMUM_SAMPLE_SIZE)status="READY";
         else if(active.stream().anyMatch(r->"RUNNING".equals(r.status())))status="RUNNING";
         else if(active.stream().anyMatch(r->r.status()==null||"PENDING".equals(r.status())))status="PENDING";
         else if(active.stream().anyMatch(r->"FAILED".equals(r.status())))status="FAILED";

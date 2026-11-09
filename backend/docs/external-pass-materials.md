@@ -17,10 +17,12 @@ BE는 외부 자료를 조회하며, 별도 data-pipeline이 DB에 자료·공�
 | 테이블 | 역할·주요 컬럼 |
 | --- | --- |
 | `external_data.pass_material` | 회사 ID, source_platform, external_record_id, job_family, role_name, title, content, source_url, published_at, collected_at, updated_at |
-| `external_data.company_collection` | company_id PK로 회사별 작업 1개: status, minimum_sample_size(기본 5), attempt_count, requested_at, started_at, completed_at, updated_at, error_code, error_message |
+| `external_data.company_collection` | company_id PK로 회사별 작업 1개: status, minimum_sample_size(현재 정책 2), attempt_count, requested_at, started_at, completed_at, updated_at, error_code, error_message |
 | `external_data.posting_pass_material` | posting_id, material_id, relation_type, linked_at; 공고와 자료의 다대다 연결 |
 
 `pass_material`은 IT·SW 자료만 수용하며 `job_family='IT_SW'` CHECK가 있다. 직무의 세부 표기는 `role_name`에 저장한다. 이는 표준 capability 또는 LV가 아니며 이 API에서는 역량 집계를 수행하지 않는다.
+
+2026-11-09부터 신규 public 배포는 migration 08로 최소 표본 2건을 적용한다. 과거 초기화 SQL의 기본값 5는 적용 이력 checksum 보존을 위해 유지한다. [일일 수집](external-pass-collection.md#로컬-일일-수집)은 이후 추출을 위한 줄글을 별도 `public.external_pass_material_body`에 저장하며 기존 자료·키워드 API는 이 본문을 반환하지 않는다.
 
 `content`의 DB 타입은 기존 **TEXT NOT NULL**을 유지한다. 외부 크롤러는 `technologies`, `technologySignals`, `projectSignals`를 담은 JSON을 직렬화한 문자열을 저장한다. technologySignals의 항목은 `{"technology":"Spring","signals":["FEATURE_IMPLEMENTATION","TESTING"]}` 형태다. 같은 문장 또는 명확히 분리된 절에서 기술과 수행 표현의 연결을 확정할 수 있을 때만 생성한다. 여러 기술의 연결이 불명확하면 해당 수행은 projectSignals에만 남긴다. BE API는 content를 문자열 그대로 반환하므로 소비자가 JSON을 파싱해 읽는다. 기존 두 필드는 유지하며, technologySignals가 없는 과거 JSON은 해당 필드를 빈 배열로 처리한다. 기존 일반 텍스트 데이터는 자동 변환하지 않으며 JSON 파싱 실패 시 텍스트로 처리한다. 원문·이름·학교·연락처·점수·LV는 구조화된 내용에 포함하지 않는다. 수행 표현은 실제 수행 사실의 인증이 아니다. 저장 형식과 보수적 판별 기준은 [크롤러 문서](../../data-pipeline/external-pass-crawler/README.md)를 참고한다.
 
