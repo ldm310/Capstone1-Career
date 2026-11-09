@@ -15,7 +15,9 @@ import xml.etree.ElementTree as ET
 sys.dont_write_bytecode=True
 ROOT=Path(__file__).resolve().parents[2]
 CRAWLER=ROOT/'data-pipeline/external-pass-crawler'
+EMBEDDINGS=ROOT/'data-pipeline/requirement-embeddings'
 sys.path.insert(0,str(CRAWLER))
+sys.path.insert(0,str(EMBEDDINGS))
 
 
 def module(name,path):
@@ -66,6 +68,7 @@ def main():
         similarity='extcrawler_test_similarity_'+suffix
         legacy='extcrawler_test_public_'+suffix
         external='extcrawler_test_external_'+suffix
+        embedding='extcrawler_test_embedding_'+suffix
         docker('run','-d','--name',name,'--mount','type=tmpfs,destination=/var/lib/postgresql',
                '-p',f'127.0.0.1:{port}:5432','-e','POSTGRES_PASSWORD','-e','POSTGRES_DB='+similarity,
                'postgres:18',env={**os.environ,'POSTGRES_PASSWORD':password})
@@ -78,12 +81,22 @@ def main():
         else:raise RuntimeError('Disposable DB readiness timeout')
         config={'host':'127.0.0.1','port':port,'dbname':similarity,'user':'postgres','password':password}
         with psycopg.connect(**config,autocommit=True,row_factory=dict_row) as conn:
-            for db in (legacy,external):conn.execute(sql.SQL('CREATE DATABASE {}').format(sql.Identifier(db)))
+            for db in (legacy,external,embedding):conn.execute(sql.SQL('CREATE DATABASE {}').format(sql.Identifier(db)))
             conn.execute((ROOT/'db/init/01-job-schema.sql').read_text(encoding='utf-8'))
             conn.execute((ROOT/'backend/src/test/resources/posting-similarity-fixtures.sql').read_text(encoding='utf-8'))
             install=migrate_public if args.owned_public else migrate
             report['migration']=install(conn)
             report['migration_repeat']=install(conn)
+            from requirement_embeddings.migrate import migrate as migrate_embeddings
+            from requirement_embeddings.batch import run as run_embeddings
+            from requirement_embeddings.config import Config as EmbeddingConfig
+            report['embedding_migration']=migrate_embeddings(conn)
+            class SyntheticEmbeddings:
+                def create(self,texts):
+                    return {'model':'text-embedding-3-small','data':[
+                        {'index':i,'embedding':[1.,float(i+1),0.]} for i in range(len(texts))],
+                        'usage':{'prompt_tokens':len(texts)*2}}
+            report['embedding_fixture']=run_embeddings(conn,EmbeddingConfig(dimensions=3),SyntheticEmbeddings(),apply=True,count_tokens=lambda text:2)
             if args.owned_public:conn=OwnedConnection(conn)
             request=conn.execute("""INSERT INTO external_data.collection_request(target_posting_id,target_recruit_unit_id,
                 standard_role_code,policy_version,selection_status,request_source)
@@ -101,6 +114,10 @@ def main():
                         'https://example.invalid/fixture') RETURNING id""",(company,f'{company}-{number}')).fetchone()['id']
                     conn.execute("INSERT INTO external_data.posting_pass_material(posting_id,material_id,relation_type) VALUES(%s,%s,'EXACT_ROLE')",(posting,material))
         env={**os.environ,'PYTHONDONTWRITEBYTECODE':'1','PYTHONIOENCODING':'utf-8'}
+        # The ordinary verifier must never activate paid API tests, even if the parent opted in.
+        env.pop('RUN_OPENAI_EMBEDDING_SMOKE',None)
+        env.pop('OPENAI_API_KEY',None)
+        env['EMBEDDING_TEST_DSN']=make_conninfo(**{**config,'dbname':embedding})
         os.environ['PUBLIC_SCHEMA_TEST_DSN']=make_conninfo(**{**config,'dbname':legacy})
         helper=module('external_verify_public_fixtures',ROOT/'db/tests/test_public_schema_integration.py')
         with psycopg.connect(**{**config,'dbname':legacy},autocommit=True) as conn:
@@ -114,6 +131,13 @@ def main():
                     'PUBLIC_SCHEMA_TEST_USER':'postgres','PUBLIC_SCHEMA_TEST_PASSWORD':password})
         print('Fresh PostgreSQL fixtures and repeatable public migration prepared.',flush=True)
         if not args.http_smoke_only:
+            p=subprocess.run([sys.executable,'-m','unittest','discover','-s','tests','-v'],cwd=EMBEDDINGS,env=env,capture_output=True)
+            output=sanitized(p.stdout+p.stderr)
+            count=re.search(r'Ran (\d+) tests',output)
+            report['embedding_tests']=int(count.group(1)) if count else 0
+            report['embedding_skips']=len(re.findall(r'\.\.\. skipped ',output))
+            if p.returncode:print(output[-16000:],flush=True)
+            assert p.returncode==0 and report['embedding_tests']>=18 and report['embedding_skips']==1
             p=subprocess.run([sys.executable,'-m','unittest','discover','-s','tests','-v'],cwd=CRAWLER,env=env,capture_output=True)
             output=sanitized(p.stdout+p.stderr)
             report['crawler_exit']=p.returncode

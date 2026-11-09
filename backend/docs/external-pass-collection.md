@@ -171,12 +171,17 @@ python deploy/external-pass/manage_daily.py --env-file <비공개-env-파일> bu
 python deploy/external-pass/manage_daily.py --env-file <비공개-env-파일> migrate
 python deploy/external-pass/manage_daily.py --env-file <비공개-env-파일> scan
 python deploy/external-pass/manage_daily.py --env-file <비공개-env-파일> once --company-id 1721
+python deploy/external-pass/manage_daily.py --env-file <비공개-env-파일> once --company-id <확인한-회사-ID> --company-search-name NHN
 python deploy/external-pass/manage_daily.py --env-file <비공개-env-파일> start
 python deploy/external-pass/manage_daily.py --env-file <비공개-env-파일> status
 python deploy/external-pass/manage_daily.py --env-file <비공개-env-파일> logs
 ```
 
 env 파일은 `DATABASE_URL` 또는 `EXTERNAL_DATABASE_URL`을 제공한다. 비밀값은 인자·로그·커밋에 포함하지 않는다. `migrate`만 DDL을 수행하며 GET·서비스 시작은 자동 migration을 하지 않는다. `scan`은 DB 읽기만 하고 크롤링·저장을 수행하지 않는다. 서비스는 비root·읽기 전용 파일시스템·`restart: unless-stopped`로 실행한다.
+
+`--company-search-name`은 공식 자료로 확인한 동일 법인의 검색용 별칭을 단일 회사 실행에 명시하는 옵션이다. 회사 ID는 환경별로 확인해야 한다. 별칭은 검색어와 회사 정확 일치 허용 목록에 함께 쓰며, 검색 결과와 상세의 회사가 원래 회사 또는 지정 별칭과 일치해야 한다. `NHN AD`, `NHN클라우드` 등 계열사는 `NHN`과 일치하지 않는다. 자동 별칭 추론·일일 서비스의 전체 회사 별칭 적용은 제공하지 않는다. 회사별 당일 재시도 제한·페이지/후보 상한·접근 차단 중단은 그대로 적용한다. `--dry-run`은 DB 대상 스캔만 하므로 별칭 검색의 실제 결과를 미리 조회하지 않는다.
+
+일일 수집 결과에 `examined`(검색 후보 검사), `foreign_company`(검색 또는 상세의 타사), `excluded`(비IT·모호한 직무)를 추가했다. `accepted`와 함께 자료 부족이 검색 결과 부재인지 회사/직무 제외인지 구분하는 데 사용한다. 기존 일일 기록에는 새 집계가 없을 수 있다.
 
 400은 잘못된 ID·소속 불일치, 404는 공고·모집 단위 없음, 409는 선정 데이터 오류·미적용 스키마·현재 선정과 불일치하는 오래된 요청이다. 후보 없음과 비교 불가는 200이며 candidateSelectionStatus와 userMessage로 설명한다. 모든 응답은 Swagger에 등록한다.
 

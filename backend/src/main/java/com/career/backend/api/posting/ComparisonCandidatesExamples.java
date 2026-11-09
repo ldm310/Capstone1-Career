@@ -15,6 +15,8 @@ final class ComparisonCandidatesExamples {
     static final String CANDIDATE="""
             "rank":1,"postingId":3,"companyId":2,"companyName":"예시 기업","postingTitle":"백엔드 개발",
             "recruitUnitId":31,"recruitUnitName":"백엔드 개발자",
+            "embeddingStatus":"NOT_GENERATED","embeddingModel":"text-embedding-3-small","embeddingPolicyVersion":"semantic-shadow-v1",
+            "requiredSemanticSimilarity":null,"preferredSemanticSimilarity":null,"dutiesSemanticSimilarity":null,"semanticMatchedRequirementCount":0,
             """;
     static final String SELECTED="{"+COMMON+CRITERIA+","+"""
             "selectionStatus":"SELECTED","reason":"NONE","confidence":"HIGH","featureMode":"REQUIRED",

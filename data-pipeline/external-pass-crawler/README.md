@@ -1,8 +1,10 @@
-# 링커리어 합격자료 크롤러
+# 외부 합격자료 수집기
 
 로컬 Docker에서 공개 합격자료를 수집해 기존 RDS에 저장한다. 기존 `job-skill` 파이프라인과 분리된 Python CLI다.
 
 정책·DB 계약·일일 운영 방법은 [수집 문서](../../backend/docs/external-pass-collection.md), 실제 확인 결과는 [수집 검증](../../backend/docs/verification/external-pass-collection-verification.md)에 모았다.
+
+공고 회사·직무 연결 전 원자료를 대량 확보하려면 [본문·이미지·대학 PDF 보관함](../../backend/docs/pass-evidence-archive.md)을 사용한다. 잡코리아·링커리어 본문과 검토한 대학 공식 수기집을 별도 로컬 보관함에 저장한다.
 
 ## 로컬 일일 수집
 

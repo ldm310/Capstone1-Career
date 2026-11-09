@@ -3,6 +3,8 @@ package com.career.backend.api.posting;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
+import com.career.backend.domain.posting.embedding.EmbeddingShadowResult;
+import com.career.backend.domain.posting.embedding.EmbeddingShadowProperties;
 
 /** API-owned DTOs. Domain records/enums and raw exclusion records are never serialized directly. */
 @JsonInclude(JsonInclude.Include.ALWAYS)
@@ -43,7 +45,31 @@ public record ComparisonCandidatesResponse(
             @Schema(nullable=true) Double preferredTechCoverage,
             @Schema(nullable=true) Double dutiesCapabilityCoverage,
             @Schema(nullable=true) Double dutiesTechCoverage,
-            Intersections intersections,List<String> evidenceFlags) {
+            Intersections intersections,List<String> evidenceFlags,
+            @Schema(description="관찰 전용 임베딩 상태. 후보 판정·순위에는 반영하지 않습니다.",
+                    allowableValues={"DISABLED","NOT_GENERATED","READY","PARTIAL","STALE","UNAVAILABLE"}) String embeddingStatus,
+            String embeddingModel,String embeddingPolicyVersion,
+            @Schema(nullable=true) Double requiredSemanticSimilarity,
+            @Schema(nullable=true) Double preferredSemanticSimilarity,
+            @Schema(nullable=true) Double dutiesSemanticSimilarity,
+            @Schema(description="임계값 통과 수가 아닌 비교 가능한 대상 요건 수") int semanticMatchedRequirementCount) {
         public Candidate { evidenceFlags=List.copyOf(evidenceFlags); }
+        public Candidate(int rank,long postingId,long companyId,String companyName,String postingTitle,
+                long recruitUnitId,String recruitUnitName,String confidence,String featureMode,
+                int evidenceCount,int requiredEvidenceCount,int supportingEvidenceCount,
+                Double requiredCapabilityCoverage,Double requiredTechCoverage,Double preferredCapabilityCoverage,
+                Double preferredTechCoverage,Double dutiesCapabilityCoverage,Double dutiesTechCoverage,
+                Intersections intersections,List<String> evidenceFlags) {
+            this(rank,postingId,companyId,companyName,postingTitle,recruitUnitId,recruitUnitName,confidence,featureMode,
+                    evidenceCount,requiredEvidenceCount,supportingEvidenceCount,requiredCapabilityCoverage,requiredTechCoverage,
+                    preferredCapabilityCoverage,preferredTechCoverage,dutiesCapabilityCoverage,dutiesTechCoverage,intersections,evidenceFlags,
+                    "NOT_GENERATED",EmbeddingShadowProperties.DEFAULT_MODEL,EmbeddingShadowProperties.POLICY_VERSION,null,null,null,0);
+        }
+        public Candidate withEmbedding(EmbeddingShadowResult e) {
+            return new Candidate(rank,postingId,companyId,companyName,postingTitle,recruitUnitId,recruitUnitName,confidence,featureMode,
+                    evidenceCount,requiredEvidenceCount,supportingEvidenceCount,requiredCapabilityCoverage,requiredTechCoverage,
+                    preferredCapabilityCoverage,preferredTechCoverage,dutiesCapabilityCoverage,dutiesTechCoverage,intersections,evidenceFlags,
+                    e.status(),e.model(),e.policyVersion(),e.required(),e.preferred(),e.duties(),e.matchedCount());
+        }
     }
 }

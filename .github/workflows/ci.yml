@@ -37,7 +37,7 @@ jobs:
             if echo "$files" | grep -qE "^($part/|\.github/workflows/ci\.yml)"; then v=true; else v=false; fi
             echo "${part//-/_}=$v" >> "$GITHUB_OUTPUT"
           done
-          external_files='^(data-pipeline/external-pass-crawler/|deploy/external-pass/|db/|backend/|compose\.external-pass\.yaml|\.github/workflows/ci\.yml)'
+          external_files='^(data-pipeline/(external-pass-crawler|requirement-embeddings)/|deploy/external-pass/|db/|backend/|compose(\.external-pass|\.rds)?\.yaml|\.github/workflows/ci\.yml)'
           if echo "$files" | grep -qE "$external_files"; then v=true; else v=false; fi
           echo "external_pass=$v" >> "$GITHUB_OUTPUT"
           # DAG 와 Airflow 단계 코드가 바뀌었을 때만 Airflow 를 깔고 DAG 시험(1~2분 더 걸림)
@@ -120,13 +120,15 @@ jobs:
         with:
           python-version: '3.12'
           cache: pip
-          cache-dependency-path: data-pipeline/external-pass-crawler/requirements.txt
+          cache-dependency-path: |
+            data-pipeline/external-pass-crawler/requirements.txt
+            data-pipeline/requirement-embeddings/requirements.txt
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '21'
           cache: gradle
-      - run: python -m pip install -r data-pipeline/external-pass-crawler/requirements.txt
+      - run: python -m pip install -r data-pipeline/external-pass-crawler/requirements.txt -r data-pipeline/requirement-embeddings/requirements.txt
       - name: Crawler, Backend and HTTP contracts on isolated PostgreSQL
         run: python db/tests/verify_external_collection.py --owned-public --with-http-smoke --java-home "$JAVA_HOME"
 

@@ -29,6 +29,10 @@ def verify(root,config,java_home):
          'SPRING_DATASOURCE_USERNAME':config['user'],'SPRING_DATASOURCE_PASSWORD':config['password'],
          'SPRING_JPA_HIBERNATE_DDL_AUTO':'none','SPRING_SQL_INIT_MODE':'never',
          'SERVER_ADDRESS':'127.0.0.1','SERVER_PORT':str(port),'LOGGING_LEVEL_ROOT':'WARN','SPRING_MAIN_BANNER_MODE':'off'}
+    env.pop('OPENAI_API_KEY',None)
+    env['OPENAI_EMBEDDING_MODEL']='text-embedding-3-small'
+    env['OPENAI_EMBEDDING_DIMENSIONS']='3'
+    env['POSTING_EMBEDDING_MODE']='SHADOW_MODE'
     process=subprocess.Popen([java,'-jar',str(jars[0])],env=env,cwd=root/'backend',
                              stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
     logs=[]
@@ -65,6 +69,8 @@ def verify(root,config,java_home):
             def detail(self,external_id):raise AssertionError('No detail request expected')
         with psycopg.connect(**config,autocommit=True,row_factory=dict_row) as conn:
             data=selection(base,1,11)
+            assert any(c['requiredSemanticSimilarity'] is not None for c in data['candidates'])
+            assert all(c['embeddingModel']=='text-embedding-3-small' for c in data['candidates'])
             repo=RequestRepository(conn);repo.check_contract();request=repo.register(data)
             # No website is contacted; the fixture simulates an empty result for any new company.
             consume(repo,EmptyPublicFixture(),[request])
@@ -91,6 +97,7 @@ def verify(root,config,java_home):
             return {'http_statuses':[200,400,404,409],'backend_candidate_count':len(data['candidates']),
                     'material_count':result['materialCount'],'public_and_external_unchanged_by_get':True,
                     'network_fixture_only':True,'swagger_registered':True,
+                    'shadow_fields_http':True,'shadow_model':'text-embedding-3-small',
                     'materials_http':material_status,'keywords_http':keyword_status}
     finally:
         process.terminate()

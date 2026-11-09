@@ -1,0 +1,12 @@
+[
+  {"unit_name":"백엔드 개발자","site_job_category":"프론트엔드","posting_title":"분석","role":"backend"},
+  {"unit_name":"백엔드 프론트엔드","site_job_category":"백엔드","posting_title":"서버 개발","role":null},
+  {"unit_name":"담당자","site_job_category":"데이터 엔지니어","posting_title":"채용","role":"data_engineer"},
+  {"unit_name":"담당자","site_job_category":"일반","posting_title":"머신러닝 엔지니어","role":"ml_engineer"},
+  {"unit_name":"ｂａｃｋｅｎｄ","site_job_category":"","posting_title":"","role":"backend"},
+  {"unit_name":"iOS 개발","site_job_category":"","posting_title":"","role":"mobile"},
+  {"unit_name":"QA 엔지니어","site_job_category":"","posting_title":"","role":"qa"},
+  {"unit_name":"인프라 운영","site_job_category":"","posting_title":"","role":"devops"},
+  {"unit_name":"정보보안","site_job_category":"","posting_title":"","role":"security"},
+  {"unit_name":"기획 담당","site_job_category":"일반","posting_title":"기획","role":null}
+]

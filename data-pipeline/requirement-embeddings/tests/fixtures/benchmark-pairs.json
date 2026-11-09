@@ -1,0 +1,8 @@
+[
+  {"type":"same_meaning","a":"Spring Boot로 REST API를 구현했습니다.","b":"Spring Boot 기반 HTTP API 개발 경험이 있습니다."},
+  {"type":"different_level","a":"관계형 데이터베이스에서 SQL을 작성했습니다.","b":"대규모 데이터베이스의 실행 계획을 분석하고 쿼리를 튜닝했습니다."},
+  {"type":"unrelated","a":"프론트엔드 화면을 React로 구현했습니다.","b":"네트워크 방화벽 정책을 운영했습니다."},
+  {"type":"java_javascript","a":"Java 기반 서버 기능을 개발했습니다.","b":"JavaScript 기반 브라우저 기능을 개발했습니다."},
+  {"type":"docker_use_operation","a":"Docker로 개발 환경을 실행했습니다.","b":"Docker 서비스 배포와 장애 복구를 운영했습니다."},
+  {"type":"planned_actual","a":"Docker 서비스 배포를 학습할 예정입니다.","b":"Docker 서비스를 배포하고 운영했습니다."}
+]

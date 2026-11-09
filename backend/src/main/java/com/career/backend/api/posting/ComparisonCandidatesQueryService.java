@@ -7,6 +7,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 import java.util.*;
+import org.springframework.beans.factory.annotation.Autowired;
+import com.career.backend.domain.posting.embedding.ShadowEmbeddingService;
 
 @Service
 @Transactional(readOnly=true,isolation=Isolation.REPEATABLE_READ)
@@ -14,9 +16,15 @@ public class ComparisonCandidatesQueryService {
     private final PostingCandidateSelectionService selection;
     private final ComparisonCandidateMetadataRepository metadata;
     private final RoleTaxonomy taxonomy;
+    private final ShadowEmbeddingService shadow;
     public ComparisonCandidatesQueryService(PostingCandidateSelectionService selection,
             ComparisonCandidateMetadataRepository metadata,RoleTaxonomy taxonomy) {
-        this.selection=selection;this.metadata=metadata;this.taxonomy=taxonomy;
+        this(selection,metadata,taxonomy,null);
+    }
+    @Autowired
+    public ComparisonCandidatesQueryService(PostingCandidateSelectionService selection,
+            ComparisonCandidateMetadataRepository metadata,RoleTaxonomy taxonomy,ShadowEmbeddingService shadow) {
+        this.selection=selection;this.metadata=metadata;this.taxonomy=taxonomy;this.shadow=shadow;
     }
 
     public ComparisonCandidatesResponse get(long postingId,long recruitUnitId) {
@@ -45,6 +53,12 @@ public class ComparisonCandidatesQueryService {
         var details=unit.candidates().isEmpty()?Map.<Long,ComparisonCandidateMetadataRepository.CandidateDetails>of():
                 metadata.findCandidateDetails(unit.candidates().stream().map(PostingCandidateSelectionResponse.Candidate::unitId).toList());
         var candidates=unit.candidates().stream().map(c->candidate(c,details.get(c.unitId()))).toList();
+        // Enrich only AFTER keyword admission, ordering and company/posting limits are final.
+        if(shadow!=null&&!candidates.isEmpty()) {
+            var semantic=shadow.score(new ShadowEmbeddingService.UnitRef(unit.unitId(),unit.extractionRunId(),unit.role().roleCode()),
+                    unit.candidates().stream().map(c->new ShadowEmbeddingService.UnitRef(c.unitId(),c.extractionRunId(),c.role().roleCode())).toList());
+            candidates=candidates.stream().map(c->c.withEmbedding(semantic.get(c.recruitUnitId()))).toList();
+        }
         Set<String> reasons=new LinkedHashSet<>();unit.exclusionReasons().forEach(r->reasons.add(r.name()));
         if(candidates.isEmpty())unit.exclusions().forEach(ex->ex.exclusionReasons().forEach(r->reasons.add(r.name())));
         var first=candidates.isEmpty()?null:candidates.getFirst();

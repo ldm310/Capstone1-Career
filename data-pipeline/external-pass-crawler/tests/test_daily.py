@@ -11,6 +11,32 @@ from external_pass_crawler.errors import AccessRestricted
 
 
 class DailyTests(unittest.TestCase):
+    def test_search_name_requires_single_company_and_cannot_change_service(self):
+        from external_pass_crawler.daily import main
+        for args in (['--company-search-name', 'NHN'],
+                     ['--company-id', '27', '--company-search-name', '  '],
+                     ['--serve', '--company-id', '27', '--company-search-name', 'NHN']):
+            with self.assertRaises(SystemExit) as exc:
+                main(args)
+            self.assertEqual(exc.exception.code, 2)
+
+    def test_daily_reports_search_rejections_and_passes_explicit_alias(self):
+        repo=Mock(); repo.daily_claim.return_value={'company_id':27,'name':'엔에이치엔(주)'}
+        repo.postings.return_value=[{'title':'백엔드','site_job_category':'백엔드'}]
+        repo.finish.return_value=('INSUFFICIENT',1)
+        adapter=Mock()
+        adapter.search.return_value=SearchPage((Candidate('1','NHN','백엔드'),
+                                               Candidate('2','NHN AD','백엔드'),
+                                               Candidate('3','NHN','영업')),3)
+        adapter.detail.return_value=PublicMaterial('1','NHN','백엔드','Python 구현')
+        outcomes,blocked=process(repo,adapter,[{'id':27}],10,2,'NHN')
+        self.assertFalse(blocked)
+        self.assertEqual(outcomes[0]['examined'],3)
+        self.assertEqual(outcomes[0]['foreign_company'],1)
+        self.assertEqual(outcomes[0]['excluded'],1)
+        self.assertEqual(outcomes[0]['accepted'],1)
+        adapter.search.assert_called_once_with('NHN',1)
+
     def test_service_started_before_nine_waits_before_collecting(self):
         from external_pass_crawler.daily import main
         fixed=dt.datetime.fromisoformat('2026-11-09T08:00:00+09:00')
