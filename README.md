@@ -178,10 +178,19 @@ macOS/Linux에서는 `./gradlew test`를 사용합니다. 결과 보고서는 `b
 
 1. Settings → Secrets and variables → Actions → Secrets
    - `RDS_HOST`, `RDS_PASSWORD`: RDS 주소와 마스터 암호(job-skill 마이그레이션)
-   - `EC2_SSH_KEY`: EC2(`ubuntu@15.164.137.78`)에 들어가는 개인 키 전체. 배포 전용 키를 새로 만들어 쓰는 것을 권한다
-     (`ssh-keygen -t ed25519 -f career-deploy -N ""` → `career-deploy.pub` 한 줄을 EC2 `~/.ssh/authorized_keys`에 추가 → `career-deploy` 내용을 Secret 에).
-2. Settings → Actions → Runners → New self-hosted runner(Windows)를 노트북에 설치, 라벨 `career-laptop`, 서비스로 실행
+2. Settings → Actions → Runners → New self-hosted runner — 러너 두 대(토큰은 1시간이면 만료)
+   - 노트북(Windows): 라벨 `career-laptop`, 서비스로 실행(사용자 계정 — Docker·git·py 를 씀) → 노트북 Airflow 배포
+   - EC2(Linux, `ubuntu` 계정): 라벨 `career-ec2` → 웹 배포. 러너가 GitHub 에 일을 받으러 가서, 밖에서 EC2 로 SSH 를 열 필요가 없다
+     ```bash
+     mkdir -p ~/actions-runner && cd ~/actions-runner
+     curl -o runner.tar.gz -L https://github.com/actions/runner/releases/download/v2.338.2/actions-runner-linux-x64-2.338.2.tar.gz
+     tar xzf runner.tar.gz
+     ./config.sh --url https://github.com/ldm310/Capstone1-Career --token <토큰> --name career-ec2 --labels career-ec2 --unattended
+     sudo ./svc.sh install ubuntu && sudo ./svc.sh start
+     ```
 3. Settings → Branches: `main`·`develop`에 "PR 필수 + 검사 통과 필수"(검사: `changes`, `job-skill`, `job-skill-dags`)
+4. Settings → Actions → General → Fork pull request workflows: **"Require approval for all external contributors"**
+   — 공개 저장소라, 남이 PR 로 워크플로를 고쳐 우리 러너(노트북·EC2)에서 코드를 돌리지 못하게 한다
 
 EC2 스테이징 주소는 처음 한 번 만든다(여러 번 해도 안전, 운영은 건드리지 않음):
-`ssh -i <키> ubuntu@15.164.137.78 'bash -s' < deploy/web/setup_ec2.sh`
+`ssh -i <키> ubuntu@15.164.137.78 'bash -s' < deploy/web/setup_ec2.sh` (2026-11-03 해 둠)
