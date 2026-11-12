@@ -102,6 +102,7 @@
 | 순서 | `seq` | smallint | NOT NULL, UNIQUE(run_id, seq) |
 | 이름 | `name` | text | NOT NULL |
 | IT 직무 | `is_it` | boolean | NOT NULL |
+| 직무 | `job` | text | 백엔드/데이터 엔지니어/그 외, 비면 아직 모름 |
 | 경력 구분 | `career` | text | NOT NULL, 신입/경력/신입·경력/언급없음 |
 | 연수 | `years_text` | text | NOT NULL, 기본값 '' |
 | 최소 연수 | `min_years` | smallint | 0~50 |
@@ -222,6 +223,7 @@ SELECT changed_at, changed_by, table_name, action, old_row, new_row FROM diction
 | 0~3년 공고만 수집, 교육생 제외 | 수집 코드 (`sample_random.py`의 `min_years`) |
 | 원본 해시가 바뀌면 다시 추출 | 수정 확인 코드 (아직 없음) |
 | IT 아닌 자리는 항목 없음 | 저장 코드 (`it_job=false`면 빈 목록) |
+| 백엔드·데이터 엔지니어가 아닌 자리('그 외')는 항목 없음 (2026-11-12 결정) | 추출 코드 `guard`·저장 코드 (`target_job`) |
 | "능력만"이면 요건 기술 없음 | 저장 코드 |
 | 기타 이름은 능력이 '기타'일 때만 | 저장 코드 |
 
@@ -280,7 +282,7 @@ PostgreSQL은 FK 칸에 색인을 자동으로 만들지 않는다. 그래서 �
 ```sql
 SELECT c.name, count(DISTINCT e.posting_id) AS 공고수
 FROM extraction_run e
-JOIN recruit_unit u ON u.run_id = e.id AND u.is_it
+JOIN recruit_unit u ON u.run_id = e.id AND u.job IN ('백엔드', '데이터 엔지니어')
 JOIN unit_item i    ON i.unit_id = u.id AND i.category = '필수'
 JOIN requirement r  ON r.item_id = i.id
 JOIN capability c   ON c.id = r.capability_id

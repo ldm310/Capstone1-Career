@@ -292,6 +292,7 @@ CREATE TABLE recruit_unit (
     seq         smallint NOT NULL CHECK (seq >= 1),
     name        text     NOT NULL,
     is_it       boolean  NOT NULL,
+    job         text     CHECK (job IN ('백엔드', '데이터 엔지니어', '그 외')),
     career      text     NOT NULL CHECK (career IN ('신입', '경력', '신입·경력', '언급없음')),
     years_text  text     NOT NULL DEFAULT '',
     min_years   smallint CHECK (min_years BETWEEN 0 AND 50),
@@ -305,6 +306,7 @@ COMMENT ON COLUMN recruit_unit.run_id     IS '실행ID';
 COMMENT ON COLUMN recruit_unit.seq        IS '순서 (LLM 답의 순서)';
 COMMENT ON COLUMN recruit_unit.name       IS '이름 (예: 서버 개발자 (경력))';
 COMMENT ON COLUMN recruit_unit.is_it      IS 'IT 직무 (false 면 이름·경력만, 항목 없음)';
+COMMENT ON COLUMN recruit_unit.job        IS '직무 (백엔드/데이터 엔지니어/그 외 — 그 외는 이름·경력만, 항목 없음. 업무 내용으로 판단. 2026-11-12 전에 추출한 자리는 fill_unit_job.py 로 채움, 비면 아직 모름)';
 COMMENT ON COLUMN recruit_unit.career     IS '경력 구분 (신입/경력/신입·경력/언급없음)';
 COMMENT ON COLUMN recruit_unit.years_text IS '연수 (공고에 적힌 글 그대로, 예: 3년 이상)';
 COMMENT ON COLUMN recruit_unit.min_years  IS '최소 연수 (매칭용 숫자, 없으면 비움)';

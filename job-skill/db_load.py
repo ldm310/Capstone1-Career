@@ -35,7 +35,7 @@ from psycopg.types.json import Jsonb
 
 from capdict import OTHER
 from common import IMG_DIR, OUT_DIR, PAGE_DIR, load_targets
-from extract_skills import CATS, PRICES, llm_input, review_reasons, sha256
+from extract_skills import CATS, PRICES, llm_input, review_reasons, sha256, target_job
 from fetch_images import RELAY, image_urls
 from html_text import BODY, html_text
 from sample_random import min_years
@@ -427,6 +427,13 @@ def cmd_migrate_body_html() -> None:
         print(" · ".join(f"{k} {v}" for k, v in migrate_body_html(conn).items()))
 
 
+def unit_job(pos: dict) -> str | None:
+    """자리의 직무 칸. job 칸이 없는 옛 결과는 IT 가 아니면 '그 외', IT 면 모름(비움 — fill_unit_job.py 가 채운다)."""
+    if pos.get("it_job") is False:
+        return "그 외"
+    return pos.get("job")
+
+
 def insert_run(conn, posting_id: int, r: dict, inp: dict | None, path: str, cap_id: dict, tech_id: dict) -> dict | None:
     """추출 결과 하나 -> 추출 실행 + 자리·한 줄·요건·요건 기술. 이미 넣은 결과면 None."""
     model = r["model"]
@@ -454,11 +461,12 @@ def insert_run(conn, posting_id: int, r: dict, inp: dict | None, path: str, cap_
     for useq, pos in enumerate(r["positions"], 1):
         lo, hi = parse_years(pos.get("years", ""))
         unit_id = conn.execute(
-            """INSERT INTO recruit_unit (run_id, seq, name, is_it, career, years_text, min_years, max_years)
-               VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id""",
-            (run_id, useq, pos["name"], pos.get("it_job", True) is not False, pos["career"], pos.get("years", ""), lo, hi)).fetchone()[0]
+            """INSERT INTO recruit_unit (run_id, seq, name, is_it, job, career, years_text, min_years, max_years)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id""",
+            (run_id, useq, pos["name"], pos.get("it_job", True) is not False, unit_job(pos),
+             pos["career"], pos.get("years", ""), lo, hi)).fetchone()[0]
         n["자리"] += 1
-        if pos.get("it_job") is False:  # IT 가 아닌 자리는 이름·경력만
+        if not target_job(pos):  # 백엔드·데이터 엔지니어가 아닌 자리(옛 결과는 IT 가 아닌 자리)는 이름·경력만
             continue
         for cat in CATS:
             for iseq, it in enumerate(pos.get(cat, []), 1):
