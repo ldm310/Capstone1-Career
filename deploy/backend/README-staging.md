@@ -4,6 +4,8 @@ develop CD는 웹(3001)과 별도 Spring 서비스 `career-backend-staging`을 �
 
 ## 설정
 
+스테이징 계정을 별도로 사용할 때는 Actions Secrets `STAGING_RDS_HOST`, `STAGING_RDS_PASSWORD`와 Actions Variables `STAGING_RDS_USERNAME`, `STAGING_RDS_DATABASE`, `STAGING_RDS_PORT`를 등록한다. 이 항목들은 스테이징 백엔드 잡에서만 우선 사용한다. 기존 공통 `RDS_PASSWORD`는 다른 계정의 암호로 덮어쓰지 않는다.
+
 기존 저장소 Actions Secrets의 `RDS_HOST`, `RDS_PASSWORD`를 배포 단계에서만 사용한다. 비밀번호를 저장소·명령행·로그·빌드 산출물로 내보내지 않는다. DB·계정 기본값 `career`는 기존 `job-skill/db_load.py`의 RDS 설정과 같다. 별도 계정은 Actions Variables `RDS_DATABASE`, `RDS_USERNAME`, `RDS_PORT`로 선택한다.
 
 런타임 설정은 EC2 `~/career-data-staging/backend.env`에 소유자만 읽는 파일로 저장한다. Secret을 주지 않는 환경에서는 관리자가 사전에 준비한 동일 경로의 설정 파일을 사용할 수 있다. 둘 다 없거나 일부만 주어지면 기존 설정을 변경하지 않고 실패한다. 설정 값이나 개인키를 채팅에 보내지 않는다.

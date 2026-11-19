@@ -84,11 +84,11 @@ jobs:
           path: ${{ runner.temp }}/backend-staging
       - name: Deploy staging-only backend and verify read-only RDS connection
         env:
-          RDS_HOST: ${{ secrets.RDS_HOST }}
-          RDS_PASSWORD: ${{ secrets.RDS_PASSWORD }}
-          RDS_DATABASE: ${{ vars.RDS_DATABASE }}
-          RDS_USERNAME: ${{ vars.RDS_USERNAME }}
-          RDS_PORT: ${{ vars.RDS_PORT }}
+          RDS_HOST: ${{ secrets.STAGING_RDS_HOST || secrets.RDS_HOST }}
+          RDS_PASSWORD: ${{ secrets.STAGING_RDS_PASSWORD || secrets.RDS_PASSWORD }}
+          RDS_DATABASE: ${{ vars.STAGING_RDS_DATABASE || vars.RDS_DATABASE }}
+          RDS_USERNAME: ${{ vars.STAGING_RDS_USERNAME || vars.RDS_USERNAME }}
+          RDS_PORT: ${{ vars.STAGING_RDS_PORT || vars.RDS_PORT }}
         run: bash deploy/backend/deploy_staging.sh "$GITHUB_SHA" "$RUNNER_TEMP/backend-staging/backend-staging.tgz"
 
   web:
