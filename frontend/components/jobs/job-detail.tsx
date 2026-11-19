@@ -1,58 +1,27 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, CheckCircle2, CircleX } from "lucide-react";
+import { ArrowLeft, ChevronDown, ExternalLink } from "lucide-react";
 import {
   studyDemoJobs,
-  exampleComparison,
   examplePosting,
   studyTier,
-  type Requirement,
 } from "@/lib/study-prototype";
 import type { PublicJob } from "@/types/public-job";
-import { QualificationSummary } from "./qualification-summary";
 import { ExampleSwitcher } from "./example-switcher";
-import { JobSkillComparison } from "./job-skill-comparison";
 import { JobPosting } from "./job-posting";
-import { ApplicantComparison } from "./applicant-comparison";
-import { PassedPreferred } from "./passed-preferred";
+import { CategoryComparison } from "./category-comparison";
+import { ApplicationConditions } from "./application-conditions";
 import { LoadingSpinner } from "@/components/shared/loading-spinner";
 import { JobExtras, JobSummary } from "./job-summary";
 
-function RequirementList({
-  title,
-  rows,
-}: {
-  title: string;
-  rows: Requirement[];
-}) {
-  return (
-    <section className="study-requirements">
-      <h3>{title}</h3>
-      {rows.map((row, i) => (
-        <div className="study-requirement-row" key={i}>
-          {row.satisfied ? <CheckCircle2 size={19} /> : <CircleX size={19} />}
-          <div>
-            <strong>{row.text}</strong>
-          </div>
-          <span className={row.satisfied ? "study-positive" : "study-negative"}>
-            {row.satisfied ? "만족" : "불만족"}
-            {row.level && (
-              <small>
-                내 {row.skill} LV{row.level}
-              </small>
-            )}
-          </span>
-        </div>
-      ))}
-    </section>
-  );
-}
 export function JobDetail({ id }: { id: string }) {
   const params = useSearchParams();
   const tier = studyTier(params.get("demo"));
-  const view = params.get("view") === "compare" ? "compare" : "posting";
+  const view = params.get("view") === "conditions" ? "conditions" : "stats";
+  const hasPassed = params.get("cohort") !== "empty";
+  const original = useRef<HTMLDetailsElement>(null);
   const [actual, setActual] = useState<PublicJob | null>(null);
   const [error, setError] = useState("");
   const [retry, setRetry] = useState(0);
@@ -87,8 +56,15 @@ export function JobDetail({ id }: { id: string }) {
         <Link href={tier ? `/jobs?demo=${tier}` : "/jobs"}>공고 목록</Link>
       </div>
     );
-  const comparison = tier ? exampleComparison(job, tier) : undefined;
-  const base = `/jobs?job=${encodeURIComponent(job.id)}${tier ? `&demo=${tier}` : ""}`;
+  function href(
+    nextView: "stats" | "conditions",
+    nextCohort = hasPassed ? "available" : "empty",
+  ) {
+    const search = new URLSearchParams(params.toString());
+    search.set("view", nextView);
+    search.set("cohort", nextCohort);
+    return `/jobs?${search}`;
+  }
   return (
     <div className="job-detail-page">
       {tier && <ExampleSwitcher tier={tier} />}
@@ -97,43 +73,83 @@ export function JobDetail({ id }: { id: string }) {
         공고 목록
       </Link>
       <JobSummary job={job} />
-      <ApplicantComparison job={job} />
-      <PassedPreferred
-        job={job}
-        posting={tier ? examplePosting(job) : undefined}
-      />
       <nav className="study-detail-tabs" aria-label="공고 상세 메뉴">
         <Link
-          href={base}
-          aria-current={view === "posting" ? "page" : undefined}
+          href={href("stats")}
+          aria-current={view === "stats" ? "page" : undefined}
         >
-          공고 내용
+          스탯 분석
         </Link>
         <Link
-          href={`${base}&view=compare`}
-          aria-current={view === "compare" ? "page" : undefined}
+          href={href("conditions")}
+          aria-current={view === "conditions" ? "page" : undefined}
         >
-          역량 비교
+          지원 조건
         </Link>
       </nav>
-      {view === "posting" ? (
+      {view === "stats" ? (
         <>
-          <JobPosting
-            job={job}
-            posting={tier ? examplePosting(job) : undefined}
-          />
-          <JobExtras job={job} />
-        </>
-      ) : comparison ? (
-        <>
-          <QualificationSummary comparison={comparison} />
-          <RequirementList title="자격요건" rows={comparison.required} />
-          <RequirementList title="우대사항" rows={comparison.preferred} />
-          <p className="study-muted">예시 결과예요.</p>
+          <div className="comparison-preview-switch">
+            <span>가상 데이터 미리보기</span>
+            <nav aria-label="합격자 데이터 예시 선택">
+              <Link
+                href={href("stats", "available")}
+                aria-current={hasPassed ? "page" : undefined}
+              >
+                합격자 있음
+              </Link>
+              <Link
+                href={href("stats", "empty")}
+                aria-current={!hasPassed ? "page" : undefined}
+              >
+                합격자 없음
+              </Link>
+            </nav>
+          </div>
+          <CategoryComparison job={job} hasPassed={hasPassed} />
         </>
       ) : (
-        <JobSkillComparison job={job} />
+        <ApplicationConditions
+          onOpenPosting={() => {
+            if (original.current) {
+              original.current.open = true;
+              original.current.scrollIntoView({
+                behavior: "smooth",
+                block: "start",
+              });
+            }
+          }}
+        />
       )}
+      <details className="job-original-panel" ref={original}>
+        <summary>
+          공고 내용 보기
+          <ChevronDown size={17} aria-hidden="true" />
+        </summary>
+        <div className="job-source-row">
+          {job.dummy || job.url ? (
+            <a
+              className="job-original-link"
+              href={
+                job.dummy ? `/postings/${encodeURIComponent(job.id)}` : job.url
+              }
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              원문 보기
+              <ExternalLink size={13} aria-hidden="true" />
+              <span className="sr-only"> (새 창)</span>
+            </a>
+          ) : (
+            <p className="original-missing">원문을 찾을 수 없습니다.</p>
+          )}
+        </div>
+        <JobPosting
+          job={job}
+          posting={tier ? examplePosting(job) : undefined}
+        />
+        <JobExtras job={job} />
+      </details>
     </div>
   );
 }

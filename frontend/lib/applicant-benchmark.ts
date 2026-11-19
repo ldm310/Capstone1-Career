@@ -1,6 +1,11 @@
 import { targetSkills } from "@/lib/workspace-selectors";
 import { patterns } from "@/lib/skill-patterns";
 import type { PostingSection } from "@/types/public-job";
+import {
+  createHiringCohort,
+  demoCandidate,
+  meanKeywordLevels,
+} from "@/mock/hiring-cohort";
 
 // 더미 데이터: 실제 지원자, 합격자 통계가 연결되기 전까지 공고별 비교 화면을 보여주기 위한 예시 값이다.
 // 축은 공고의 기술이고 값은 내 역량과 같은 LV(1~100)다.
@@ -43,21 +48,22 @@ export function applicantBenchmark(
   skills: string[],
   myLevels?: Record<string, number>,
 ): ApplicantBenchmark {
-  const rand = seeded(jobId);
-  const between = (min: number, max: number) =>
-    Math.round(min + rand() * (max - min));
+  const cohort = createHiringCohort(jobId, skills);
+  const applicants = meanKeywordLevels(cohort.people, skills);
+  const passed = meanKeywordLevels(cohort.passed, skills);
+  const mine = demoCandidate(174, skills).keywordLevels;
   const rows = skills.map((axis) => {
-    const applicants = between(22, 48);
-    const passed = Math.min(95, applicants + between(14, 32));
-    const sample = between(8, 88);
-    return { axis, me: myLevels?.[axis] ?? sample, applicants, passed };
+    return {
+      axis,
+      me: myLevels?.[axis] ?? mine[axis],
+      applicants: applicants[axis],
+      passed: passed[axis],
+    };
   });
-  // 우대사항 비율이 의미 있게 보이도록 합격자를 20명 이상으로 둔다.
-  const applicantCount = between(240, 620);
   return {
     rows,
-    applicantCount,
-    passedCount: Math.round(applicantCount * (0.08 + rand() * 0.06)),
+    applicantCount: cohort.people.length,
+    passedCount: cohort.passed.length,
   };
 }
 

@@ -110,9 +110,7 @@ export function LiveJobsSection({
     >
       <div className="public-jobs-heading">
         <div>
-          <h2 id="public-jobs-title">
-            {preview ? "채용공고" : "전체 공고"}
-          </h2>
+          <h2 id="public-jobs-title">{preview ? "채용공고" : "전체 공고"}</h2>
         </div>
         {preview ? (
           <Link className="feature-action" href="/jobs">
@@ -131,9 +129,7 @@ export function LiveJobsSection({
             <Link href="/jobs?demo=low">예시 보기 →</Link>
           </aside>
           <div className="public-jobs-toolbar">
-            <span className="catalog-results-label">
-              검색
-            </span>
+            <span className="catalog-results-label">검색</span>
             <div className="public-job-filters">
               <select
                 aria-label="공고 직무"
@@ -241,9 +237,9 @@ export function LiveJobsSection({
             </div>
             <Link
               className="public-job-source"
-              href={`/jobs?job=${encodeURIComponent(job.id)}&view=compare`}
+              href={`/jobs?job=${encodeURIComponent(job.id)}&view=stats`}
             >
-              역량 비교 →
+              스탯 분석 →
             </Link>
           </article>
         ))}

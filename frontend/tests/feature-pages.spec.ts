@@ -87,17 +87,13 @@ test("catalog filters and comparison URL stay inside jobs", async ({
         exact: true,
       }),
     })
-    .getByRole("link", { name: "역량 비교 →" })
+    .getByRole("link", { name: "스탯 분석 →" })
     .click();
-  await expect(page).toHaveURL(/\/jobs\?job=fixture-0&view=compare$/);
+  await expect(page).toHaveURL(/\/jobs\?job=fixture-0&view=stats$/);
   await expect(
     page.getByRole("navigation", { name: "공고 상세 메뉴" }).getByRole("link"),
-  ).toHaveText(["공고 내용", "역량 비교"]);
-  // The comparison runs on its own, without pressing a button.
-  await expect(page.locator(".job-compare-group h4")).toHaveText([
-    "필수",
-    "우대",
-  ]);
+  ).toHaveText(["스탯 분석", "지원 조건"]);
+  await expect(page.locator(".comparison-radar-card")).toHaveCount(2);
 });
 
 test("old links preserve destination and removed sections are gone", async ({

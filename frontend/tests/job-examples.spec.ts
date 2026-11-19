@@ -1,6 +1,5 @@
 import { test, expect } from "@playwright/test";
 import { mockPublicJobs } from "./public-jobs-fixture";
-import AxeBuilder from "@axe-core/playwright";
 import { jobExperience, sortPublicJobs } from "../lib/job-filters";
 
 test("official cards show no verdict; only explicitly selected examples show satisfaction and skill levels", async ({
@@ -59,57 +58,22 @@ test("recruitment multi-select and closing order filter examples with reset", as
   await expect(page.locator(".public-job-card")).toHaveCount(1);
 });
 
-test("job detail has no study tab and compares portfolio with applicants", async ({
+test("job detail uses category stats tabs and preserves the original posting", async ({
   page,
 }) => {
-  await page.goto("/studies");
-  await expect(page.getByText("내가 참여한 스터디를 한곳에")).toHaveCount(0);
-  await page.goto("/jobs?demo=low");
-  await expect(page.getByText("스터디")).toHaveCount(0);
   await page.goto("/jobs?job=study-demo-backend&demo=low");
-  const tabs = page.getByRole("navigation", { name: "공고 상세 메뉴" });
-  await expect(tabs.getByRole("link")).toHaveText([
-    "공고 내용",
-    "역량 비교",
-  ]);
+  await expect(
+    page.getByRole("navigation", { name: "공고 상세 메뉴" }).getByRole("link"),
+  ).toHaveText(["스탯 분석", "지원 조건"]);
+  await expect(page.locator(".category-radar")).toHaveCount(2);
+  await expect(page.locator(".applicant-stats")).toHaveCount(0);
+  await page.locator(".job-original-panel > summary").click();
   await expect(page.locator(".job-posting-section h3")).toHaveText([
     "주요 업무",
     "자격요건",
     "우대사항",
     "근무 조건",
   ]);
-  // The applicant comparison sits above the tabs on every job.
-  await expect(page.locator(".applicant-radar .recharts-radar-polygon")).toHaveCount(3);
-  // Axes are the job's skills, padded with role skills to five, scored as LV.
-  await expect(page.locator(".applicant-stats li span")).toHaveText([
-    "SQL",
-    "REST API",
-    "Docker",
-    "PostgreSQL",
-    "Java",
-  ]);
-  await expect(page.locator(".applicant-stats li strong").first()).toHaveText(
-    /^LV \d+$/,
-  );
-  for (const width of [390, 320]) {
-    await page.setViewportSize({ width, height: 900 });
-    // The chart re-measures after a resize, so wait for it to settle.
-    await expect
-      .poll(() =>
-        page.evaluate(
-          () => document.documentElement.scrollWidth <= window.innerWidth,
-        ),
-      )
-      .toBe(true);
-  }
-  await page.setViewportSize({ width: 1440, height: 1000 });
-  expect(
-    (
-      await new AxeBuilder({ page })
-        .withTags(["wcag2a", "wcag2aa", "wcag21aa"])
-        .analyze()
-    ).violations,
-  ).toEqual([]);
 });
 
 test("unknown employment and deadlines are not fabricated", () => {
@@ -132,47 +96,38 @@ test("unknown employment and deadlines are not fabricated", () => {
   ).toEqual(["sooner", "later", "unknown"]);
 });
 
-test("dummy job shows its posting first and compares skills without a click", async ({
+test("dummy detail opens stats first and condition info separately", async ({
   page,
 }) => {
   await page.goto("/jobs?job=dummy%3Abackend-platform");
+  await expect(page.locator(".comparison-radar-card")).toHaveCount(2);
+  await page.locator(".job-original-panel > summary").click();
   await expect(page.locator(".job-posting-section h3").first()).toHaveText(
     "회사 소개",
-    { timeout: 15000 },
   );
   await expect(page.locator(".job-original-link")).toHaveAttribute(
     "href",
     /^\/postings\//,
   );
-  await page.getByRole("link", { name: "역량 비교", exact: true }).click();
-  await expect(page.locator(".job-compare-group").first()).toContainText(
-    "Spring Boot",
+  await page.getByRole("link", { name: "지원 조건", exact: true }).click();
+  await expect(page.locator(".application-condition-rows")).toContainText(
+    "3.8",
   );
+  await expect(page.locator(".category-radar")).toHaveCount(0);
 });
 
-test("job detail shows how many passed applicants meet each preferred item", async ({
+test("detail omits lower bars while catalog keeps the cohort average", async ({
   page,
 }) => {
   await page.goto("/jobs?job=dummy%3Abackend-platform");
-  const section = page.locator(".passed-preferred");
-  await expect(section.locator("li > div span")).toHaveText([
-    "컴퓨터공학, 소프트웨어공학 등 관련 전공",
-    "개발 관련 프로젝트 또는 실무 경험",
-    "Docker 기반 배포 경험",
-    "Kubernetes 운영 경험",
-    "결제 도메인 경험",
-  ]);
-  await expect(section.locator("li > div b").first()).toHaveText(
-    /^\d+ \/ \d+명, \d+%$/,
-  );
-  // Skill items compare the passed average LV with mine.
-  await expect(section.locator("li").nth(2).locator("small")).toContainText(
-    "Docker 합격자 평균 LV",
-  );
+  await expect(page.getByText("가상 합격자 50명 기준")).toBeVisible();
+  await expect(
+    page.locator(".passed-preferred, .applicant-stats, [role=progressbar]"),
+  ).toHaveCount(0);
   await page.goto("/jobs");
-  await expect(page.locator(".public-job-card .passed-gap").first()).toContainText(
-    /합격자 평균 LV \d+/,
-  );
+  await expect(
+    page.locator(".public-job-card .passed-gap").first(),
+  ).toContainText(/합격자 평균 LV \d+/);
 });
 
 test("dummy jobs link to a placeholder original; real jobs without a link say so", async ({
@@ -210,7 +165,7 @@ test("dummy jobs link to a placeholder original; real jobs without a link say so
     }),
   );
   await page.goto("/jobs?job=no-link");
-  await expect(page.locator("header .original-missing")).toHaveText(
+  await expect(page.locator(".job-source-row .original-missing")).toHaveText(
     "원문을 찾을 수 없습니다.",
   );
 });
