@@ -55,6 +55,21 @@ export function backendUrl() {
   return process.env.BACKEND_URL?.replace(/\/+$/, "") || null;
 }
 
+// 상세 링크는 목록의 최근 200개 제한과 관계없이 원래 ID로 조회한다.
+export async function backendJob(postingId: number): Promise<PublicJob | null> {
+  if (!Number.isSafeInteger(postingId) || postingId < 1)
+    throw new Error("잘못된 공고 ID입니다.");
+  const base = backendUrl();
+  if (!base) throw new Error("BACKEND_URL이 없어요.");
+  const response = await fetch(`${base}/api/postings/${postingId}`, {
+    signal: AbortSignal.timeout(5000),
+    cache: "no-store",
+  });
+  if (response.status === 404) return null;
+  if (!response.ok) throw new Error(`백엔드 응답 ${response.status}`);
+  return toPublicJob((await response.json()) as BackendPostingDetail);
+}
+
 async function get<T>(path: string): Promise<T> {
   const base = backendUrl();
   if (!base) throw new Error("BACKEND_URL이 없어요.");

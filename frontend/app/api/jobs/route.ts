@@ -6,7 +6,7 @@ import {
   type ExperienceKind,
 } from "@/lib/job-filters";
 import { collectedJobs } from "@/lib/server/job-feed";
-import { backendJobs } from "@/lib/server/backend-jobs";
+import { backendJob, backendJobs } from "@/lib/server/backend-jobs";
 import { dummyJobs } from "@/lib/dummy-jobs";
 import type { PublicJob } from "@/types/public-job";
 const minimumJobs = 6;
@@ -40,7 +40,28 @@ export async function GET(request: Request) {
     !["all", "data", "backend"].includes(role)
   )
     return Response.json({ error: "잘못된 조회 조건입니다." }, { status: 400 });
+  if (jobId?.startsWith("be:") && !/^be:[1-9]\d*$/.test(jobId))
+    return Response.json({ error: "잘못된 공고 ID입니다." }, { status: 400 });
   try {
+    if (jobId?.startsWith("be:")) {
+      const id = Number(jobId.slice(3));
+      if (!Number.isSafeInteger(id))
+        return Response.json(
+          { error: "잘못된 공고 ID입니다." },
+          { status: 400 },
+        );
+      const job = await backendJob(id);
+      return Response.json(
+        {
+          jobs: job ? [job] : [],
+          total: job ? 1 : 0,
+          nextOffset: null,
+          checkedAt: new Date().toISOString(),
+          unavailableSources: [],
+        },
+        { headers: { "Cache-Control": "no-store" } },
+      );
+    }
     // 수집에 실패해도 더미 공고로 목록을 채운다. 실패 안내는 화면에 띄우지 않는다.
     // 백엔드 공고(BACKEND_URL)가 있으면 먼저 보여준다.
     const [collected, fromBackend] = await Promise.all([
