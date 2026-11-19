@@ -4,7 +4,7 @@
 #   production = 3000번, main,    데이터 ~/career-data(지금 운영 데이터 그대로)
 # 몇 번 돌려도 같은 결과(멱등):
 #   - 그 커밋에 웹 코드(frontend/package.json)가 없으면 아무것도 하지 않는다(지금 사이트를 건드리지 않음)
-#   - 이미 그 커밋이 떠 있으면 아무것도 하지 않는다
+#   - 같은 커밋은 빌드를 재사용하고 환경설정을 다시 읽는다
 #   - 판마다 따로 빌드(~/web/<env>/releases/<커밋>)한 뒤 current 를 한 번에 바꾸고, 안 뜨면 이전 판으로 되돌린다
 # 사용: bash deploy.sh staging|production <커밋>   (REPO 를 바꾸면 다른 저장소로 시험할 수 있음)
 set -euo pipefail
@@ -27,10 +27,6 @@ mkdir -p "$base/releases" "$data"
 git -C "$mirror" fetch --quiet origin '+refs/heads/*:refs/heads/*'
 if ! git -C "$mirror" cat-file -e "$sha:frontend/package.json" 2>/dev/null; then
   echo "이 커밋(${sha:0:7})에는 웹 코드(frontend/)가 없어 배포하지 않습니다 — $svc 는 그대로"
-  exit 0
-fi
-if [ "$(readlink -f "$base/current" 2>/dev/null || true)" = "$rel" ] && systemctl is-active --quiet "$svc"; then
-  echo "$svc 는 이미 ${sha:0:7} — 바꾼 것 없음"
   exit 0
 fi
 
@@ -93,6 +89,10 @@ if ! wait_up; then
 fi
 
 # 4) 판 정리: 지금 판과 바로 전 판만 남긴다
+if [ "$prev_rel" = "$rel" ]; then
+  echo "$svc 환경설정 갱신 완료 (${sha:0:7})"
+  exit 0
+fi
 for d in "$base"/releases/*; do
   [ -d "$d" ] || continue
   case "$(readlink -f "$d")" in "$rel"|"$prev_rel") continue ;; esac
