@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "test:e2e": "playwright test",
+    "test:api-contract": "playwright test --config=playwright.contract.config.ts",
     "typecheck": "tsc --noEmit",
     "format": "prettier --write app components mock types lib tests playwright.config.ts"
   },

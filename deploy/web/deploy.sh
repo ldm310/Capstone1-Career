@@ -56,6 +56,7 @@ WorkingDirectory=$base/current/frontend
 Environment=NODE_ENV=production
 Environment=CAREER_DATA_DIR=$data
 Environment=NEXT_TELEMETRY_DISABLED=1
+EnvironmentFile=-$data/.env
 ExecStart=$(command -v npm) start -- -p $port -H 127.0.0.1
 Restart=always
 
