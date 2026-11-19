@@ -86,9 +86,9 @@ export function ExampleJobs({ tier }: { tier: StudyTier }) {
             </div>
             <Link
               className="public-job-source"
-              href={`/jobs?job=${job.id}&demo=${tier}&view=compare`}
+              href={`/jobs?job=${job.id}&demo=${tier}&view=stats`}
             >
-              역량 비교 <ArrowRight size={16} />
+              스탯 분석 <ArrowRight size={16} />
             </Link>
           </article>
         ))}

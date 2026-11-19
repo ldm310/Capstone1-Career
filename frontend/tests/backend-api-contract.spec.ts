@@ -77,6 +77,15 @@ test("backend detail bypasses the 200-item list and public feeds", async () => {
   });
   expect(requests).toEqual(["/api/postings/9001"]);
 });
+
+test("dummy detail never waits for real job feeds", async () => {
+  const response = await jobs(
+    new Request("http://localhost/api/jobs?id=dummy%3Abackend-platform"),
+  );
+  expect(response.status).toBe(200);
+  expect((await response.json()).jobs[0].id).toBe("dummy:backend-platform");
+  expect(requests).toEqual([]);
+});
 test("invalid IDs, missing data and backend failures remain distinct", async () => {
   expect(
     (await jobs(new Request("http://localhost/api/jobs?id=be:0"))).status,

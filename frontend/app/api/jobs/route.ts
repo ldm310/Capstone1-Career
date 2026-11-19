@@ -43,6 +43,20 @@ export async function GET(request: Request) {
   if (jobId?.startsWith("be:") && !/^be:[1-9]\d*$/.test(jobId))
     return Response.json({ error: "잘못된 공고 ID입니다." }, { status: 400 });
   try {
+    // 예시 상세는 외부 수집·백엔드 목록 조회를 기다리지 않는다.
+    if (jobId?.startsWith("dummy:")) {
+      const job = dummyJobs.find((item) => item.id === jobId);
+      return Response.json(
+        {
+          jobs: job ? [job] : [],
+          total: job ? 1 : 0,
+          nextOffset: null,
+          checkedAt: new Date().toISOString(),
+          unavailableSources: [],
+        },
+        { headers: { "Cache-Control": "no-store" } },
+      );
+    }
     if (jobId?.startsWith("be:")) {
       const id = Number(jobId.slice(3));
       if (!Number.isSafeInteger(id))
