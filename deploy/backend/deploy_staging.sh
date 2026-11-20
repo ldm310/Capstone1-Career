@@ -69,10 +69,9 @@ EnvironmentFile=$data/backend.env
 Environment=SPRING_PROFILES_ACTIVE=docker,rds,staging-readonly
 Environment=SERVER_ADDRESS=127.0.0.1
 Environment=SERVER_PORT=18081
-Environment=SPRING_JPA_HIBERNATE_DDL_AUTO=none
 Environment=SPRING_SQL_INIT_MODE=never
-Environment=SPRING_DATASOURCE_HIKARI_READ_ONLY=true
-Environment="SPRING_DATASOURCE_HIKARI_CONNECTION_INIT_SQL=SET default_transaction_read_only = on"
+# Keep dashed Hikari properties in canonical command-line form below. Splitting
+# CONNECTION_INIT_SQL with underscores creates a nested connection.init.sql path.
 Environment=APP_STORAGE_PROJECTFILEDIR=$data/backend-uploads
 ExecStart=$base/current/runtime/bin/java -Xms64m -Xmx256m -jar $base/current/app.jar --spring.profiles.active=docker,rds,staging-readonly --server.address=127.0.0.1 --server.port=18081 --spring.jpa.hibernate.ddl-auto=none --spring.sql.init.mode=never --spring.datasource.hikari.read-only=true "--spring.datasource.hikari.connection-init-sql=SET default_transaction_read_only = on"
 Restart=on-failure
