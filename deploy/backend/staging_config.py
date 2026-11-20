@@ -6,6 +6,7 @@ from pathlib import Path
 import re
 import subprocess
 import tempfile
+import time
 import urllib.request
 
 BACKEND_URL = 'http://127.0.0.1:18081'
@@ -89,6 +90,18 @@ def verify_web():
     return {'backendJobsOnPage': count, 'filteredFeedTotal': jobs['total']}
 
 
+def wait_for_web(attempts=4, delay=15):
+    # The first feed fetch can fail while the app warms up. Its failure cache
+    # expires after 30 seconds; retry without accepting a dummy-only response.
+    for attempt in range(1, attempts + 1):
+        try:
+            return {**verify_web(), 'verificationAttempt': attempt}
+        except (AssertionError, OSError, ValueError):
+            if attempt == attempts:
+                raise
+            time.sleep(delay)
+
+
 def sanitized_causes(text, environment):
     for key in ('RDS_PASSWORD', 'RDS_HOST', 'RDS_USERNAME', 'POSTGRES_PASSWORD', 'JDBC_DATABASE_URL'):
         value = environment.get(key)
@@ -128,7 +141,7 @@ def main():
     elif args.action == 'diagnostics':
         print(json.dumps(diagnostics()))
     else:
-        print(json.dumps(verify_backend() if args.action == 'verify-backend' else verify_web()))
+        print(json.dumps(verify_backend() if args.action == 'verify-backend' else wait_for_web()))
 
 
 if __name__ == '__main__':

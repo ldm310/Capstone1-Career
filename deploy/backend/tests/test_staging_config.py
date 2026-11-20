@@ -97,6 +97,21 @@ class StagingConfigTest(unittest.TestCase):
     def test_startup_diagnostics_are_bounded(self):
         self.assertEqual(len(config.sanitized_causes('\n'.join('ERROR failure' for _ in range(100)), {})), 20)
 
+    def test_web_readiness_waits_for_real_backend_rows(self):
+        with patch.object(config, 'verify_web', side_effect=[AssertionError(), OSError(), {'backendJobsOnPage': 24}]) as verify:
+            with patch.object(config.time, 'sleep') as sleep:
+                result = config.wait_for_web()
+        self.assertEqual(result, {'backendJobsOnPage': 24, 'verificationAttempt': 3})
+        self.assertEqual(verify.call_count, 3)
+        self.assertEqual(sleep.call_count, 2)
+
+    def test_web_readiness_still_fails_if_backend_never_appears(self):
+        with patch.object(config, 'verify_web', side_effect=AssertionError('No backend rows')) as verify:
+            with patch.object(config.time, 'sleep'):
+                with self.assertRaises(AssertionError):
+                    config.wait_for_web()
+        self.assertEqual(verify.call_count, 4)
+
 
 if __name__ == '__main__':
     unittest.main()
