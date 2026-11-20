@@ -84,6 +84,19 @@ class StagingConfigTest(unittest.TestCase):
         self.assertEqual(result.returncode, 2)
         self.assertIn(b'Only develop', result.stderr)
 
+    def test_startup_diagnostics_hide_credentials_and_database_addresses(self):
+        environment = {'RDS_PASSWORD': 'fake-secret-123', 'RDS_HOST': 'private.db.example', 'RDS_USERNAME': 'test-user'}
+        text = 'INFO regular startup\nERROR password fake-secret-123 host private.db.example user test-user\nCaused by: connection jdbc:postgresql://private.db.example/career?password=fake-secret-123\nFATAL authentication failed'
+        result = '\n'.join(config.sanitized_causes(text, environment))
+        for value in environment.values():
+            self.assertNotIn(value, result)
+        self.assertNotIn('regular startup', result)
+        self.assertIn('FATAL authentication failed', result)
+        self.assertNotIn('jdbc:postgresql://', result)
+
+    def test_startup_diagnostics_are_bounded(self):
+        self.assertEqual(len(config.sanitized_causes('\n'.join('ERROR failure' for _ in range(100)), {})), 20)
+
 
 if __name__ == '__main__':
     unittest.main()
