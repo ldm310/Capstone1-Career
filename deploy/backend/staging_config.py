@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import re
+import subprocess
 import tempfile
 import urllib.request
 
@@ -88,9 +89,34 @@ def verify_web():
     return {'backendJobsOnPage': count, 'filteredFeedTotal': jobs['total']}
 
 
+def sanitized_causes(text, environment):
+    for key in ('RDS_PASSWORD', 'RDS_HOST', 'RDS_USERNAME', 'POSTGRES_PASSWORD', 'JDBC_DATABASE_URL'):
+        value = environment.get(key)
+        if value:
+            text = text.replace(value, '[redacted]')
+    text = re.sub(r'(?:jdbc:)?postgres(?:ql)?://[^\s]+', '[database URL]', text, flags=re.I)
+    lines = [line[:1200] for line in text.splitlines()
+             if re.search(r'Caused by:|Exception|\bERROR\b|\bFATAL\b|failed|denied|oom|out.of.memory|Description:|Action:', line, re.I)]
+    return lines[-20:]
+
+
+def diagnostics():
+    service = 'career-backend-staging'
+    # Scope strictly to this service. Do not inspect process environments or env files.
+    status = subprocess.run(['sudo', 'systemctl', 'show', service,
+                             '--property=ActiveState,SubState,Result,ExecMainStatus,NRestarts,MemoryCurrent'],
+                            capture_output=True, text=True, timeout=15)
+    journal = subprocess.run(['sudo', 'journalctl', '-u', service, '--since=-5min', '-n', '200',
+                              '--no-pager', '-o', 'cat'], capture_output=True, text=True, timeout=15)
+    allowed = {'ActiveState', 'SubState', 'Result', 'ExecMainStatus', 'NRestarts', 'MemoryCurrent'}
+    properties = dict(line.split('=', 1) for line in status.stdout.splitlines()
+                      if '=' in line and line.split('=', 1)[0] in allowed)
+    return {'stagingService': properties, 'sanitizedStartupCauses': sanitized_causes(journal.stdout, os.environ)}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action', choices=['backend-env', 'web-env', 'verify-backend', 'verify-web'])
+    parser.add_argument('action', choices=['backend-env', 'web-env', 'verify-backend', 'verify-web', 'diagnostics'])
     parser.add_argument('--path', type=Path)
     args = parser.parse_args()
     if args.action in ('backend-env', 'web-env') and not args.path:
@@ -99,6 +125,8 @@ def main():
         backend_env(args.path, os.environ)
     elif args.action == 'web-env':
         web_env(args.path)
+    elif args.action == 'diagnostics':
+        print(json.dumps(diagnostics()))
     else:
         print(json.dumps(verify_backend() if args.action == 'verify-backend' else verify_web()))
 

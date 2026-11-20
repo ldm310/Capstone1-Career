@@ -37,6 +37,7 @@ if [ -f "$data/backend.env" ]; then cp -p "$data/backend.env" "$base/env.previou
 python3 "$script_dir/staging_config.py" backend-env --path "$data/backend.env"
 rollback() {
   trap - ERR
+  python3 "$script_dir/staging_config.py" diagnostics || true
   echo 'Staging backend failed; restoring its previous release' >&2
   if [ -n "$prev_rel" ]; then ln -sfn "$prev_rel" "$base/current"; else rm -f "$base/current"; fi
   if $prev_env; then cp -p "$base/env.previous" "$data/backend.env"; fi
@@ -86,8 +87,9 @@ sudo systemctl daemon-reload
 sudo systemctl enable --quiet "$svc"
 sudo systemctl restart "$svc"
 ready=false
-for _ in $(seq 1 45); do
+for _ in $(seq 1 90); do
   if curl -fsS -o /dev/null http://127.0.0.1:18081/api/health 2>/dev/null; then ready=true; break; fi
+  if sudo systemctl is-failed --quiet "$svc"; then break; fi
   sleep 2
 done
 $ready
