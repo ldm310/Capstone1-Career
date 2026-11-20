@@ -25,6 +25,10 @@ backend 코드·배포 스크립트 변경도 develop에서 이 경로를 실행
 
 ## 검증
 
+Hikari의 하이픈이 있는 속성은 서비스 `ExecStart`의 정규 명령행 옵션으로만 강제한다. `SPRING_DATASOURCE_HIKARI_CONNECTION_INIT_SQL`처럼 하이픈 위치를 밑줄로 나누면 `connection.init.sql` 중첩 경로로 해석되어 설정 바인딩 중 연결 풀이 먼저 시작되고 `pool is sealed once started` 오류가 발생한다. 잘못된 환경변수와 정규 옵션을 동시에 주어도 실패하므로 중복 환경변수를 제거했다. Spring의 변환 규칙은 [공식 외부 설정 안내](https://docs.spring.io/spring-boot/reference/features/external-config.html#features.external-config.typesafe-configuration-properties.relaxed-binding.environment-variables)를 따른다.
+
+회귀 검사는 잘못된 이름으로 동일한 오류가 발생하고, 정규 옵션만 사용하면 첫 연결 전에 설정이 적용되는지 확인한다. 로컬 PostgreSQL 스냅샷에서는 잘못된 설정의 시작 실패와 수정 후 1,717개 공고 조회·쓰기 차단을 비교 검증했다.
+
 ```powershell
 python -m unittest discover -s deploy/backend/tests -v
 ```
