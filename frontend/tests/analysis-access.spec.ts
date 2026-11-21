@@ -141,7 +141,10 @@ test("Word template is readable and contains the resume sections", async () => {
     buffer: readFileSync("public/downloads/career-resume-template.docx"),
   });
   for (const section of [
-    "기본 정보",
+    "이미지 삽입",
+    "성명",
+    "연락처",
+    "이메일",
     "프로젝트 경험",
     "학력",
     "자격증",

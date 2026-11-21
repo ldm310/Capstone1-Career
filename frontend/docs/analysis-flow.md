@@ -11,7 +11,7 @@
 
 ## Career 이력서 양식
 
-분석 화면에서 `public/downloads/career-resume-template.docx`(편집용 Word)와 `career-resume-template.pdf`(2페이지 PDF 양식)를 받을 수 있다. 기본 정보, 소개, 프로젝트 2개, 경력·인턴, 학력·학점, 자격증·교육, 기타 경험을 담았다. Word 양식에 작성한 뒤 PDF로 내보내서 업로드한다.
+분석 화면에서 `public/downloads/career-resume-template.docx`(편집용 Word)와 `career-resume-template.pdf`(A4 1페이지 양식)를 받을 수 있다. 왼쪽 상단에는 이미지 삽입용 사진 칸, 옆에는 성명·연락처·이메일 표를 둔다. 학력·자격증·기술/역량·교육/활동은 2단, 프로젝트 2개와 경력은 전체 너비로 배치한다. 실제 인물 사진이나 가상 개인정보는 넣지 않았다. Word의 사진 칸에 이미지를 삽입하고 내용을 작성한 뒤 PDF로 내보내서 업로드한다.
 
 양식 원본은 `scripts/build-resume-template.py`, PDF 출력은 `scripts/print-resume-template.mjs`다. 별도 Python 패키지 설치 없이 DOCX와 인쇄용 HTML을 만들고, 설치된 Edge와 Playwright로 PDF를 출력한다. 생성된 파일은 저장소에 포함하므로 웹 배포 때 브라우저나 Python을 실행하지 않는다.
 
@@ -27,4 +27,4 @@
 
 단일 자료·혼합 다중 자료, 부분 실패 재시도, PDF 제한, 공개 탐색, 이전 경로 이동, 모바일 접근성, 저장된 키워드 필터링과 기존 공고 기능을 Playwright로 확인한다. 테스트의 제출 요청은 고정 응답을 사용하며 외부 임베딩 API를 호출하지 않는다.
 
-회원가입 → 분석 이동 → 실제 PDF 업로드, 게스트·비회원 추출 차단, 로그인 만료 재확인, Word 양식 파싱·다운로드와 PDF 2페이지·한글 텍스트 추출도 검증한다.
+회원가입 → 분석 이동 → 실제 PDF 업로드, 게스트·비회원 추출 차단, 로그인 만료 재확인, Word 양식 파싱·다운로드와 PDF 1페이지·한글 텍스트 추출도 검증한다.
