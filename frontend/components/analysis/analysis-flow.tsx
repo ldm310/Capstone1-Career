@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   ArrowRight,
@@ -12,7 +12,6 @@ import {
   Plus,
   X,
 } from "lucide-react";
-import { openCareerSpace } from "@/lib/guest-session";
 
 type Source = {
   id: string;
@@ -25,6 +24,28 @@ type Source = {
 };
 
 export function AnalysisFlow() {
+  const [access, setAccess] = useState<"checking" | "member" | "visitor">(
+    "checking",
+  );
+  useEffect(() => {
+    let active = true;
+    fetch("/api/account", { cache: "no-store" })
+      .then(async (response) => {
+        const account = await response.json();
+        if (active)
+          setAccess(
+            response.ok && account.user && account.guest === false
+              ? "member"
+              : "visitor",
+          );
+      })
+      .catch(() => {
+        if (active) setAccess("visitor");
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
   const [sources, setSources] = useState<Source[]>([]);
   const [url, setUrl] = useState("");
   const [error, setError] = useState("");
@@ -113,13 +134,21 @@ export function AnalysisFlow() {
   }
 
   async function analyze() {
-    if (lock.current || !sources.length) return;
+    if (lock.current || !sources.length || access !== "member") return;
     lock.current = true;
     setBusy(true);
     setError("");
     let succeeded = sources.filter((source) => source.state === "done").length;
     try {
-      const session = await openCareerSpace();
+      const accountResponse = await fetch("/api/account", {
+        cache: "no-store",
+      });
+      const account = await accountResponse.json();
+      if (!accountResponse.ok || !account.user || account.guest !== false) {
+        setAccess("visitor");
+        throw new Error("로그인 후 역량 분석을 시작해 주세요.");
+      }
+      const session = await fetch("/api/career");
       if (!session.ok)
         throw new Error("분석 공간을 열지 못했어요. 다시 시도해 주세요.");
       for (const source of sources.filter((item) => item.state !== "done")) {
@@ -263,7 +292,50 @@ export function AnalysisFlow() {
         <br />
         종류와 상관없이 여러 개 추가해도 좋아요.
       </p>
-      <fieldset className="analysis-inputs" disabled={busy}>
+      <aside
+        className="analysis-template"
+        aria-labelledby="resume-template-title"
+      >
+        <FileText size={24} aria-hidden="true" />
+        <div>
+          <h3 id="resume-template-title">아직 이력서가 없으신가요?</h3>
+          <p>
+            Career만의 이력서 양식으로 경험을 정리해 보세요.
+            <br />
+            작성 후 PDF로 저장해서 추가하면 돼요.
+          </p>
+          <div className="analysis-template-links">
+            <a href="/downloads/career-resume-template.docx" download>
+              Career 이력서 양식 다운로드 · Word
+            </a>
+            <a href="/downloads/career-resume-template.pdf" download>
+              PDF 양식 받기
+            </a>
+          </div>
+          <small>양식은 로그인 없이도 받을 수 있어요.</small>
+        </div>
+      </aside>
+      {access === "checking" && (
+        <p role="status" className="analysis-login-note">
+          로그인 상태를 확인하고 있어요.
+        </p>
+      )}
+      {access === "visitor" && (
+        <aside className="analysis-login-note">
+          <h3>로그인 후 역량을 분석할 수 있어요</h3>
+          <p>
+            채용공고는 로그인 없이 볼 수 있어요. 내 자료를 분석하려면 로그인해
+            주세요.
+          </p>
+          <Link href="/sign-in">
+            로그인 · 회원가입 <ArrowRight size={16} aria-hidden="true" />
+          </Link>
+        </aside>
+      )}
+      <fieldset
+        className="analysis-inputs"
+        disabled={busy || access !== "member"}
+      >
         <legend className="sr-only">분석할 자료 추가</legend>
         <form
           className="analysis-source-block"
@@ -386,7 +458,9 @@ export function AnalysisFlow() {
       </div>
       <button
         className="analysis-primary"
-        disabled={!sources.length || busy || !!url.trim()}
+        disabled={
+          !sources.length || busy || !!url.trim() || access !== "member"
+        }
         onClick={() => void analyze()}
       >
         {busy ? (

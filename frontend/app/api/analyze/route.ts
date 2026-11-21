@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import {
-  requireUser,
+  user,
+  isGuest,
   workspace,
   saveWorkspace,
   originCheck,
@@ -17,7 +18,12 @@ export const runtime = "nodejs";
 export async function POST(req: Request) {
   try {
     originCheck(req);
-    const u = await requireUser();
+    const u = await user();
+    if (!u || isGuest(u.id))
+      return Response.json(
+        { error: "로그인한 회원만 역량을 추출할 수 있어요." },
+        { status: 401 },
+      );
     rateLimit("analysis:" + u.id, 30);
     const input = z
       .object({

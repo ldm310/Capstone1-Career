@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import {
   db,
-  requireUser,
+  user,
+  isGuest,
   workspace,
   saveWorkspace,
   originCheck,
@@ -13,7 +14,12 @@ export const runtime = "nodejs";
 export async function POST(req: Request) {
   try {
     originCheck(req);
-    const u = await requireUser();
+    const u = await user();
+    if (!u || isGuest(u.id))
+      return Response.json(
+        { error: "로그인한 회원만 이력서를 분석할 수 있어요." },
+        { status: 401 },
+      );
     rateLimit("docs:" + u.id, 20);
     if (Number(req.headers.get("content-length")) > 11000000)
       throw new Error("파일은 10MB 이하로 선택하세요.");

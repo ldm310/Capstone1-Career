@@ -10,20 +10,29 @@ export const demoLogin = {
 export function SignInForm() {
   const router = useRouter();
   const [email, setEmail] = useState("");
+  const [mode, setMode] = useState<"login" | "register">("login");
+  const [name, setName] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  async function login(next = { email, password }) {
+  async function login(
+    next = { email, password },
+    action: "login" | "register" = mode,
+  ) {
     setBusy(true);
     setError("");
     try {
       const r = await fetch("/api/account", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "login", ...next }),
+        body: JSON.stringify({
+          action,
+          ...next,
+          ...(action === "register" ? { name } : {}),
+        }),
       });
       const d = await r.json();
-      if (!r.ok) throw Error(d.error || "로그인하지 못했어요.");
+      if (!r.ok) throw Error(d.error || "계정 연결을 완료하지 못했어요.");
       router.push("/analysis");
       router.refresh();
     } catch (e) {
@@ -33,13 +42,26 @@ export function SignInForm() {
   }
   return (
     <section className="career-panel sign-in-panel">
-      <h1>로그인</h1>
+      <h1>{mode === "login" ? "로그인" : "회원가입"}</h1>
+      <p>로그인하면 GitHub와 이력서로 내 경험을 분석할 수 있어요.</p>
       <form
         onSubmit={(e) => {
           e.preventDefault();
           void login();
         }}
       >
+        {mode === "register" && (
+          <label>
+            이름
+            <input
+              autoComplete="name"
+              required
+              maxLength={60}
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+            />
+          </label>
+        )}
         <label>
           이메일
           <input
@@ -54,7 +76,9 @@ export function SignInForm() {
           비밀번호
           <input
             type="password"
-            autoComplete="current-password"
+            autoComplete={
+              mode === "register" ? "new-password" : "current-password"
+            }
             required
             minLength={10}
             value={password}
@@ -67,9 +91,25 @@ export function SignInForm() {
           </p>
         )}
         <button className="career-primary" disabled={busy}>
-          {busy ? "로그인 중…" : "로그인"}
+          {busy
+            ? "연결 중…"
+            : mode === "login"
+              ? "로그인"
+              : "가입하고 분석 시작하기"}
         </button>
       </form>
+      <button
+        className="header-login"
+        disabled={busy}
+        onClick={() => {
+          setMode(mode === "login" ? "register" : "login");
+          setError("");
+        }}
+      >
+        {mode === "login"
+          ? "처음이신가요? 회원가입"
+          : "이미 계정이 있나요? 로그인"}
+      </button>
       <div className="sign-in-demo">
         <strong>데모 계정</strong>
         <p>
@@ -83,7 +123,7 @@ export function SignInForm() {
           onClick={() => {
             setEmail(demoLogin.email);
             setPassword(demoLogin.password);
-            void login(demoLogin);
+            void login(demoLogin, "login");
           }}
         >
           데모 계정으로 로그인

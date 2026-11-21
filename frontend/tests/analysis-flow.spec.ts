@@ -8,6 +8,11 @@ const pdf = {
   buffer: Buffer.from("%PDF-1.4 fictional resume fixture"),
 };
 async function prepare(page: Page) {
+  await page.route("**/api/account", (route) =>
+    route.fulfill({
+      json: { user: { id: "test-member", name: "테스트 회원" }, guest: false },
+    }),
+  );
   await page.route("**/api/career", (route) =>
     route.fulfill({ json: { workspace: { runs: [], documents: [] } } }),
   );
@@ -180,7 +185,15 @@ test("documents API rejects renamed text and Markdown even when called directly"
   request,
 }) => {
   const headers = { origin: "http://127.0.0.1:3000" };
-  await request.post("/api/guest", { headers });
+  await request.post("/api/account", {
+    headers,
+    data: {
+      action: "register",
+      email: `pdf-test-${Date.now()}@example.com`,
+      password: "Career-test-2026!",
+      name: "PDF 테스트",
+    },
+  });
   for (const name of ["resume.pdf", "resume.md"]) {
     const response = await request.post("/api/documents", {
       headers,
