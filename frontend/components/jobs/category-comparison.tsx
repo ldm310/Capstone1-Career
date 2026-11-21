@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { Info, UsersRound } from "lucide-react";
 import {
   categoryKeywords,
@@ -8,20 +7,11 @@ import {
   skillCategories,
   type SkillCategoryCode,
 } from "@/lib/skill-categories";
-import {
-  demoMyProfile,
-  meanKeywordLevels,
-  type DemoCandidate,
-} from "@/mock/hiring-cohort";
+import { demoMyProfile, meanKeywordLevels } from "@/mock/hiring-cohort";
 import { useMyLevels } from "@/lib/my-levels";
-import type { PublicJob } from "@/types/public-job";
+import type { JobBenchmark } from "@/lib/job-benchmark";
 
 type Levels = Record<SkillCategoryCode, number>;
-interface Cohort {
-  source: "SYNTHETIC";
-  applicants: DemoCandidate[];
-  passed: DemoCandidate[];
-}
 const center = { x: 230, y: 176 };
 function point(index: number, radius: number) {
   const angle = ((index * 36 - 90) * Math.PI) / 180;
@@ -185,61 +175,8 @@ function ComparisonRadar({
   );
 }
 
-export function CategoryComparison({
-  job,
-  hasPassed = true,
-}: {
-  job: PublicJob;
-  hasPassed?: boolean;
-}) {
+export function CategoryComparison({ cohort }: { cohort: JobBenchmark }) {
   const mine = useMyLevels(categoryKeywords);
-  const key = `${job.id}:${hasPassed}`;
-  const [result, setResult] = useState<{
-    key: string;
-    cohort?: Cohort;
-    error?: string;
-  } | null>(null);
-  const [retry, setRetry] = useState(0);
-  useEffect(() => {
-    const controller = new AbortController();
-    fetch(
-      `/api/jobs/benchmark?jobId=${encodeURIComponent(job.id)}&cohort=${hasPassed ? "available" : "empty"}`,
-      { signal: controller.signal },
-    )
-      .then(async (response) => {
-        if (!response.ok) throw new Error("비교 자료를 불러오지 못했어요.");
-        const cohort = (await response.json()) as Cohort;
-        if (
-          cohort.source !== "SYNTHETIC" ||
-          !Array.isArray(cohort.applicants) ||
-          !Array.isArray(cohort.passed)
-        )
-          throw new Error("비교 자료를 확인하지 못했어요.");
-        if (!controller.signal.aborted) setResult({ key, cohort });
-      })
-      .catch((error: Error) => {
-        if (!controller.signal.aborted)
-          setResult({ key, error: error.message });
-      });
-    return () => controller.abort();
-  }, [job.id, hasPassed, key, retry]);
-  const current = result?.key === key ? result : null;
-  if (current?.error)
-    return (
-      <div className="comparison-message" role="alert">
-        {current.error}
-        <button onClick={() => setRetry((value) => value + 1)}>
-          다시 시도
-        </button>
-      </div>
-    );
-  if (!current?.cohort)
-    return (
-      <p className="comparison-message" role="status">
-        비교 자료를 불러오는 중이에요.
-      </p>
-    );
-  const cohort = current.cohort;
   const myLevels = categoryLevels(mine ?? demoMyProfile().keywordLevels);
   const applicants = categoryLevels(
     meanKeywordLevels(cohort.applicants, categoryKeywords),

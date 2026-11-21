@@ -40,7 +40,10 @@ test("three detail states show the right charts and no lower stats table", async
     path: "work/comparison-with-passers.png",
     fullPage: true,
   });
-  await page.getByRole("link", { name: "합격자 없음", exact: true }).click();
+  await expect(
+    page.getByRole("navigation", { name: "합격자 데이터 예시 선택" }),
+  ).toHaveCount(0);
+  await page.goto("/jobs?job=study-demo-data&demo=low");
   await expect(
     page.getByText("합격자 데이터가 아직 없어요.", { exact: true }),
   ).toBeVisible();
@@ -50,6 +53,17 @@ test("three detail states show the right charts and no lower stats table", async
   ).toHaveCount(0);
   await page.screenshot({
     path: "work/comparison-no-passers.png",
+    fullPage: true,
+  });
+  await page.goto("/jobs?job=study-demo-backend-intern&demo=low");
+  await expect(page.locator(".category-radar")).toHaveCount(0);
+  await expect(
+    tabs.getByRole("link", { name: "지원 조건", exact: true }),
+  ).toHaveAttribute("aria-current", "page");
+  await expect(page.getByLabel("지원 자격 75점, 100점 만점")).toBeVisible();
+  await expect(page.locator(".qualification-checks li")).toHaveCount(4);
+  await page.screenshot({
+    path: "work/comparison-qualification-score.png",
     fullPage: true,
   });
   await tabs.getByRole("link", { name: "지원 조건", exact: true }).click();
@@ -69,6 +83,20 @@ test("three detail states show the right charts and no lower stats table", async
   await expect(page.locator(".job-posting-section").first()).toBeVisible();
 });
 
+test("real postings never receive invented qualification scores or synthetic cohorts", async ({
+  page,
+}) => {
+  const { mockPublicJobs } = await import("./public-jobs-fixture");
+  await mockPublicJobs(page);
+  await page.goto("/jobs?job=fixture-0&cohort=available");
+  await expect(page.getByLabel("지원 자격 점수 산정 전")).toBeVisible();
+  await expect(page.locator(".category-radar")).toHaveCount(0);
+  await expect(page.locator(".application-condition-rows")).toHaveCount(0);
+  await expect(
+    page.getByRole("link", { name: "내 자료 등록하기" }),
+  ).toBeVisible();
+});
+
 test("mobile states fit and remain accessible", async ({ page }) => {
   for (const width of [390, 320]) {
     await page.setViewportSize({ width, height: 900 });
@@ -79,7 +107,7 @@ test("mobile states fit and remain accessible", async ({ page }) => {
         () => document.documentElement.scrollWidth <= window.innerWidth,
       ),
     ).toBe(true);
-    await page.getByRole("link", { name: "지원 조건", exact: true }).click();
+    await page.goto("/jobs?job=study-demo-backend-intern&demo=low");
     await expect(page.locator(".application-conditions")).toBeVisible();
     expect(
       await page.evaluate(

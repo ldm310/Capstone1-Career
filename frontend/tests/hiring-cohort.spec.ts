@@ -7,6 +7,7 @@ import {
   categoryLevels,
 } from "@/lib/skill-categories";
 import { GET } from "@/app/api/jobs/benchmark/route";
+import { qualificationScore } from "@/lib/job-benchmark";
 
 test("50 distinct synthetic successful profiles are part of the applicant population", () => {
   const cohort = createHiringCohort("test-job");
@@ -53,13 +54,13 @@ test("ten chart categories match the backend taxonomy and do not split frontend/
 
 test("benchmark API separates empty/synthetic data and validates input", async () => {
   const response = GET(
-    new Request("http://localhost/api/jobs/benchmark?jobId=demo"),
+    new Request("http://localhost/api/jobs/benchmark?jobId=study-demo-backend"),
   );
   const data = await response.json();
   expect(data.source).toBe("SYNTHETIC");
   expect(data.passed).toHaveLength(50);
   const empty = await GET(
-    new Request("http://localhost/api/jobs/benchmark?jobId=demo&cohort=empty"),
+    new Request("http://localhost/api/jobs/benchmark?jobId=study-demo-data"),
   ).json();
   expect(empty.passed).toEqual([]);
   expect(empty.applicants).toHaveLength(100);
@@ -71,11 +72,39 @@ test("benchmark API separates empty/synthetic data and validates input", async (
   expect(GET(new Request("http://localhost/api/jobs/benchmark")).status).toBe(
     400,
   );
+  const noPeople = await GET(
+    new Request(
+      "http://localhost/api/jobs/benchmark?jobId=study-demo-backend-intern",
+    ),
+  ).json();
+  expect(noPeople.applicants).toEqual([]);
+  expect(noPeople.passed).toEqual([]);
+  expect(qualificationScore(noPeople.qualifications)).toBe(75);
+  const real = await GET(
+    new Request(
+      "http://localhost/api/jobs/benchmark?jobId=be:4375&cohort=available",
+    ),
+  ).json();
+  expect(real.source).toBe("UNAVAILABLE");
+  expect(real.applicants).toEqual([]);
+  expect(real.passed).toEqual([]);
+  expect(qualificationScore(real.qualifications)).toBeNull();
+  const forced = await GET(
+    new Request(
+      "http://localhost/api/jobs/benchmark?jobId=study-demo-backend&cohort=empty",
+    ),
+  ).json();
+  expect(forced.passed).toHaveLength(50);
+});
+
+test("unknown qualification assessments keep scores pending instead of treating them as zero", () => {
+  expect(qualificationScore([])).toBeNull();
   expect(
-    GET(
-      new Request(
-        "http://localhost/api/jobs/benchmark?jobId=demo&cohort=invalid",
-      ),
-    ).status,
-  ).toBe(400);
+    qualificationScore([
+      { text: "A", status: "met" },
+      { text: "B", status: "unknown" },
+    ]),
+  ).toBeNull();
+  expect(qualificationScore([{ text: "A", status: "missing" }])).toBe(0);
+  expect(qualificationScore([{ text: "A", status: "met" }])).toBe(100);
 });

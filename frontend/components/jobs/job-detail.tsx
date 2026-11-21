@@ -9,18 +9,18 @@ import {
   studyTier,
 } from "@/lib/study-prototype";
 import type { PublicJob } from "@/types/public-job";
-import { ExampleSwitcher } from "./example-switcher";
 import { JobPosting } from "./job-posting";
 import { CategoryComparison } from "./category-comparison";
 import { ApplicationConditions } from "./application-conditions";
 import { LoadingSpinner } from "@/components/shared/loading-spinner";
 import { JobExtras, JobSummary } from "./job-summary";
+import { useJobBenchmark } from "@/lib/use-job-benchmark";
 
 export function JobDetail({ id }: { id: string }) {
   const params = useSearchParams();
   const tier = studyTier(params.get("demo"));
   const view = params.get("view") === "conditions" ? "conditions" : "stats";
-  const hasPassed = params.get("cohort") !== "empty";
+  const benchmark = useJobBenchmark(id);
   const original = useRef<HTMLDetailsElement>(null);
   const [actual, setActual] = useState<PublicJob | null>(null);
   const [error, setError] = useState("");
@@ -56,18 +56,25 @@ export function JobDetail({ id }: { id: string }) {
         <Link href={tier ? `/jobs?demo=${tier}` : "/jobs"}>공고 목록</Link>
       </div>
     );
-  function href(
-    nextView: "stats" | "conditions",
-    nextCohort = hasPassed ? "available" : "empty",
-  ) {
+  function href(nextView: "stats" | "conditions") {
     const search = new URLSearchParams(params.toString());
     search.set("view", nextView);
-    search.set("cohort", nextCohort);
+    search.delete("cohort");
     return `/jobs?${search}`;
   }
+  function openPosting() {
+    if (original.current) {
+      original.current.open = true;
+      original.current.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }
+  const conditionsOnly =
+    !!benchmark.data &&
+    !benchmark.data.passed.length &&
+    !benchmark.data.applicants.length;
+  const selectedView = conditionsOnly ? "conditions" : view;
   return (
     <div className="job-detail-page">
-      {tier && <ExampleSwitcher tier={tier} />}
       <Link className="study-back" href={tier ? `/jobs?demo=${tier}` : "/jobs"}>
         <ArrowLeft size={16} />
         공고 목록
@@ -76,50 +83,34 @@ export function JobDetail({ id }: { id: string }) {
       <nav className="study-detail-tabs" aria-label="공고 상세 메뉴">
         <Link
           href={href("stats")}
-          aria-current={view === "stats" ? "page" : undefined}
+          aria-current={selectedView === "stats" ? "page" : undefined}
         >
           스탯 분석
         </Link>
         <Link
           href={href("conditions")}
-          aria-current={view === "conditions" ? "page" : undefined}
+          aria-current={selectedView === "conditions" ? "page" : undefined}
         >
           지원 조건
         </Link>
       </nav>
-      {view === "stats" ? (
-        <>
-          <div className="comparison-preview-switch">
-            <span>가상 데이터 미리보기</span>
-            <nav aria-label="합격자 데이터 예시 선택">
-              <Link
-                href={href("stats", "available")}
-                aria-current={hasPassed ? "page" : undefined}
-              >
-                합격자 있음
-              </Link>
-              <Link
-                href={href("stats", "empty")}
-                aria-current={!hasPassed ? "page" : undefined}
-              >
-                합격자 없음
-              </Link>
-            </nav>
-          </div>
-          <CategoryComparison job={job} hasPassed={hasPassed} />
-        </>
-      ) : (
+      {benchmark.error ? (
+        <div className="comparison-message" role="alert">
+          {benchmark.error}
+          <button onClick={benchmark.retry}>다시 시도</button>
+        </div>
+      ) : !benchmark.data ? (
+        <p className="comparison-message" role="status">
+          비교 자료를 불러오는 중이에요.
+        </p>
+      ) : selectedView === "conditions" ? (
         <ApplicationConditions
-          onOpenPosting={() => {
-            if (original.current) {
-              original.current.open = true;
-              original.current.scrollIntoView({
-                behavior: "smooth",
-                block: "start",
-              });
-            }
-          }}
+          benchmark={benchmark.data}
+          noComparison={conditionsOnly}
+          onOpenPosting={openPosting}
         />
+      ) : (
+        <CategoryComparison cohort={benchmark.data} />
       )}
       <details className="job-original-panel" ref={original}>
         <summary>
