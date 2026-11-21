@@ -397,6 +397,83 @@
   border-radius: 12px;
   padding: 0 22px;
 }
+.job-keyword-levels {
+  margin-top: 24px;
+  padding: 24px;
+  background: #fff;
+  border: 1px solid #dce6ef;
+  border-radius: 14px;
+  color: #334f63;
+}
+.job-keyword-levels h3 {
+  font-size: 17px;
+  font-weight: 600;
+  margin: 0 0 8px;
+}
+.job-keyword-levels header p,
+.job-keyword-note {
+  font-size: 12px;
+  color: #536c80;
+  line-height: 1.8;
+}
+.job-keyword-levels ul {
+  list-style: none;
+  padding: 0;
+  margin: 20px 0;
+}
+.job-keyword-levels li {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 18px 0;
+  border-bottom: 1px solid #e5edf3;
+}
+.job-keyword-levels li > div {
+  min-width: 0;
+  flex: 1;
+}
+.job-keyword-levels li strong {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+.job-keyword-levels li p {
+  font-size: 11px;
+  color: #536c80;
+  margin: 8px 0 0;
+}
+.job-keyword-lv {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: #315e7e;
+  text-align: right;
+}
+.job-keyword-lv b {
+  font-size: 22px;
+  margin-left: 4px;
+}
+.job-keyword-lv small {
+  display: block;
+  font-size: 10px;
+  color: #536c80;
+  margin-top: 4px;
+}
+.job-keyword-levels > a,
+.job-keyword-levels button {
+  display: inline-block;
+  margin-top: 10px;
+  font-size: 12px;
+  color: #315e7e;
+}
+@media (max-width: 540px) {
+  .job-keyword-levels {
+    padding: 20px 15px;
+  }
+  .job-keyword-levels li {
+    gap: 12px;
+  }
+}
 .job-original-panel > summary {
   display: flex;
   justify-content: space-between;

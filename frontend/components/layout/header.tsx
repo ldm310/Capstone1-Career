@@ -99,7 +99,7 @@ export function Header() {
               </Link>
             </>
           )}
-          <LinkButton href="/my-data">
+          <LinkButton href="/analysis">
             시작하기 <ArrowUpRight size={15} />
           </LinkButton>
           <button

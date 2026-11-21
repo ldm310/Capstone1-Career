@@ -1,9 +1,5 @@
 import { CheckCircle2, CircleX } from "lucide-react";
-import {
-  matchingSkills,
-  qualificationLabel,
-  type JobComparison,
-} from "@/lib/study-prototype";
+import { qualificationLabel, type JobComparison } from "@/lib/study-prototype";
 
 export function QualificationSummary({
   comparison,
@@ -28,13 +24,6 @@ export function QualificationSummary({
         </strong>{" "}
         만족
       </p>
-      <div className="qualification-skills">
-        {matchingSkills(comparison).map((item) => (
-          <span key={item.skill}>
-            {item.skill} <b>LV{item.level}</b>
-          </span>
-        ))}
-      </div>
     </div>
   );
 }

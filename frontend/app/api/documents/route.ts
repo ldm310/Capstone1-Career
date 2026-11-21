@@ -22,6 +22,11 @@ export async function POST(req: Request) {
     if (!(file instanceof File) || file.size > 10000000)
       throw new Error("10MB 이하의 파일을 선택하세요.");
     const bytes = Buffer.from(await file.arrayBuffer());
+    if (
+      !/\.pdf$/i.test(file.name) ||
+      bytes.subarray(0, 5).toString("ascii") !== "%PDF-"
+    )
+      throw new Error("PDF 형식의 이력서만 업로드할 수 있습니다.");
     let text = "";
     let mime = "text/plain";
     if (/\.pdf$/i.test(file.name)) {
@@ -33,9 +38,7 @@ export async function POST(req: Request) {
         await parser.destroy();
       }
       mime = "application/pdf";
-    } else if (/\.md$/i.test(file.name)) {
-      text = bytes.toString("utf8");
-    } else throw new Error("PDF 또는 Markdown(.md) 파일을 선택해 주세요.");
+    } else throw new Error("PDF 형식의 이력서를 선택해 주세요.");
     if (text.trim().length < 10)
       throw new Error(
         "읽을 수 있는 텍스트가 없습니다. 스캔 문서는 OCR 후 업로드하세요.",
@@ -53,6 +56,7 @@ export async function POST(req: Request) {
     state.runs = [
       {
         id: randomUUID(),
+        sourceId: `document:${id}`,
         at,
         title: file.name,
         findings: extract(

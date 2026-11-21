@@ -6,8 +6,7 @@ test("each header menu opens its independent section", async ({ page }) => {
   await mockPublicJobs(page);
   const sections = [
     ["채용공고", "/jobs", "채용공고", []],
-    ["내 역량", "/my-skills", "내 역량", ["분석 결과", "추천 과제"]],
-    ["내 자료", "/my-data", "내 자료", ["자료 추가", "포트폴리오 공유"]],
+    ["분석", "/analysis", "분석", []],
   ] as const;
   for (const [action, url, title, tabs] of sections) {
     await page.setViewportSize({ width: 1440, height: 1000 });
@@ -93,7 +92,7 @@ test("catalog filters and comparison URL stay inside jobs", async ({
   await expect(
     page.getByRole("navigation", { name: "공고 상세 메뉴" }).getByRole("link"),
   ).toHaveText(["스탯 분석", "지원 조건"]);
-  await expect(page.locator(".comparison-radar-card")).toHaveCount(2);
+  await expect(page.getByLabel("지원 자격 점수 산정 전")).toBeVisible();
 });
 
 test("old links preserve destination and removed sections are gone", async ({
@@ -101,13 +100,11 @@ test("old links preserve destination and removed sections are gone", async ({
 }) => {
   await mockPublicJobs(page);
   await page.goto("/career?tab=plan");
-  await expect(page).toHaveURL(/\/my-skills\?tab=next$/);
+  await expect(page).toHaveURL(/\/jobs$/);
   await page.goto("/career?tab=sources");
-  await expect(page).toHaveURL(/\/my-data$/);
+  await expect(page).toHaveURL(/\/analysis$/);
   await page.goto("/my-skills?tab=schedule");
-  await expect(
-    page.getByRole("heading", { name: "찾은 기술", exact: true }),
-  ).toBeVisible();
+  await expect(page).toHaveURL(/\/jobs$/);
   for (const url of [
     "/studies",
     "/application-tracker",

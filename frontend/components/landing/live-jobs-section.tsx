@@ -186,7 +186,7 @@ export function LiveJobsSection({
             job={job}
             href={`/jobs?job=${encodeURIComponent(job.id)}`}
             statsHref={`/jobs?job=${encodeURIComponent(job.id)}&view=stats`}
-            comparison={<PassedGap job={job} />}
+            comparison={<PassedGap />}
             isSaved={savedJobs.isSaved(job.id)}
             onToggle={() => void toggle(job)}
           />

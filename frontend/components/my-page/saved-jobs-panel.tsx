@@ -63,7 +63,7 @@ export function SavedJobsPanel() {
                     저장
                   </span>
                 </p>
-                <PassedGap job={job} />
+                <PassedGap />
               </div>
               <div className="mypage-job-side">
                 {left && (

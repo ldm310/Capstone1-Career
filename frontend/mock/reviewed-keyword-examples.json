@@ -1,0 +1,48 @@
+{
+  "version": "flat-10-infra-review-20261119",
+  "sourceSha256": "0de3332edbd9413a71cd75e9a32524894bb01f55e14f121eb4199368d9dad7bc",
+  "examples": [
+    {
+      "id": "fe2d8ce51f0320226dbec00b85e2e00a69c8c3b340bdb98d909d22b9977f0945",
+      "text": "Backend 개발 경력 3년 이상 또는 이에 준하는 개발 역량",
+      "categoryCodes": ["B"],
+      "sourceItemId": 46019,
+      "level": null
+    },
+    {
+      "id": "984e8afe570dc4178bd803a5ef231fc6b241f374a7da954c9b3e93e227a19070",
+      "text": "PostgreSQL 또는 MariaDB 등 관계형 데이터베이스 활용 경험",
+      "categoryCodes": ["D"],
+      "sourceItemId": 45974,
+      "level": null
+    },
+    {
+      "id": "bc02c43f8c7c80a8e959690179901c28f49e4c341324a722cd30bd43e22dbc0f",
+      "text": "AWS·GCP 등 클라우드 환경에서 설계 및 운영 경험",
+      "categoryCodes": ["O"],
+      "sourceItemId": 46009,
+      "level": null
+    },
+    {
+      "id": "594d956e68cf92f5407a1933f301165cf1339fc1e3770fd3a9e136c6595d4e26",
+      "text": "기존 프로그램의 구조를 파악하고 기능 개선이 가능한 능력",
+      "categoryCodes": ["Q"],
+      "sourceItemId": 45955,
+      "level": null
+    },
+    {
+      "id": "e6410bd123d3b6fba7aad0f2d66b47de77740b4f3981fe79f8d46bf8d910e80d",
+      "text": "웹 기반 시스템 개발 및 유지보수 실무 경험",
+      "categoryCodes": ["F"],
+      "sourceItemId": 45954,
+      "level": null
+    },
+    {
+      "id": "b28d8c3a71515bd2be2d8d20bf03291aa230339bc5f0d7e4ec13bd4d2a0570f8",
+      "text": "Python 등 프로그래밍 언어를 활용한 개발 가능자",
+      "categoryCodes": ["L"],
+      "sourceItemId": 45953,
+      "level": null
+    }
+  ]
+}

@@ -20,8 +20,7 @@ async function request(init?: RequestInit) {
   publish(d.jobs);
 }
 function load() {
-  loading ??= openCareerSpace()
-    .then(() => request())
+  loading ??= request()
     .catch(() => publish([]))
     .finally(() => {
       loading = null;

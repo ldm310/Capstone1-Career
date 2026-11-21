@@ -21,15 +21,7 @@ test("official cards show no verdict; only explicitly selected examples show sat
     .getByRole("link", { name: "Middle", exact: true })
     .click();
   const first = page.locator(".public-job-card").first();
-  await expect(first.locator(".qualification-skills")).toContainText(
-    "REST API LV2",
-  );
-  await expect(first.locator(".qualification-skills")).not.toContainText(
-    "Airflow",
-  );
-  await expect(
-    page.locator(".public-job-card").nth(1).locator(".qualification-skills"),
-  ).toContainText("SQL LV2");
+  await expect(first.locator(".qualification-skills")).toHaveCount(0);
   await expect(
     page.getByRole("option", { name: "인기순", exact: true }),
   ).toHaveCount(0);
@@ -128,7 +120,7 @@ test("detail omits lower bars while catalog keeps the cohort average", async ({
   await page.goto("/jobs");
   await expect(
     page.locator(".public-job-card .passed-gap").first(),
-  ).toContainText(/합격자 평균 LV \d+/);
+  ).toContainText("공고의 역량 키워드와 내 경험을 비교해요");
 });
 
 test("dummy jobs link to a placeholder original; real jobs without a link say so", async ({

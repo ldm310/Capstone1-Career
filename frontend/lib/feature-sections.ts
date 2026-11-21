@@ -1,4 +1,10 @@
 export const featureSections = {
+  analysis: {
+    path: "/analysis",
+    title: "분석",
+    description: "내 경험을 담고, 관심 있는 공고에서 비교해요.",
+    tabs: [["sources", "분석 자료"]],
+  },
   jobs: {
     path: "/jobs",
     title: "채용공고",
@@ -43,16 +49,16 @@ export function selectedSectionTab(
 }
 export function legacyDestination(tab: string | null) {
   const routes: Record<string, string> = {
-    sources: "/my-data",
+    sources: "/analysis",
     share: "/my-data?tab=share",
-    skills: "/my-skills",
-    // 진행 중 과제, 주간 계획, 면접 준비는 없앴으므로 추천 과제로 보낸다.
-    tasks: "/my-skills?tab=next",
-    plan: "/my-skills?tab=next",
-    interview: "/my-skills?tab=next",
+    skills: "/jobs",
+    // 이전 역량·과제 경로는 공고별 비교 흐름으로 보낸다.
+    tasks: "/jobs",
+    plan: "/jobs",
+    interview: "/jobs",
     jobs: "/jobs",
     saved: "/my-page",
     profile: "/my-page?tab=profile",
   };
-  return routes[tab || ""] || "/my-skills";
+  return routes[tab || ""] || "/analysis";
 }

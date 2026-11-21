@@ -1,4 +1,4 @@
-import { CareerWorkspace } from "@/components/career/workspace";
+import { redirect } from "next/navigation";
 export default function Page() {
-  return <CareerWorkspace section="data" />;
+  redirect("/analysis");
 }

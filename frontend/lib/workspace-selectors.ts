@@ -3,8 +3,9 @@ export function currentFindings(state: Workspace) {
   const sources = new Set<string>();
   return state.runs
     .filter((r) => {
-      if (sources.has(r.title)) return false;
-      sources.add(r.title);
+      const source = r.sourceId ?? r.title;
+      if (sources.has(source)) return false;
+      sources.add(source);
       return true;
     })
     .flatMap((r) => r.findings);

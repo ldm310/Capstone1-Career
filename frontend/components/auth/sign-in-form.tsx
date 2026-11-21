@@ -24,7 +24,7 @@ export function SignInForm() {
       });
       const d = await r.json();
       if (!r.ok) throw Error(d.error || "로그인하지 못했어요.");
-      router.push("/my-skills");
+      router.push("/analysis");
       router.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "로그인하지 못했어요.");

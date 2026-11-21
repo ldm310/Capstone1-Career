@@ -1,6 +1,5 @@
 "use client";
 import { useEffect, useState } from "react";
-import { openCareerSpace } from "@/lib/guest-session";
 import { currentFindings } from "@/lib/workspace-selectors";
 import { mergeReviews } from "@/lib/growth/model";
 import { skillCardItems } from "@/components/growth/skill-card-grid";
@@ -16,7 +15,7 @@ let cached: { at: number; promise: Promise<Source | null> } | null = null;
 function loadSource() {
   if (cached && Date.now() - cached.at < 30_000) return cached.promise;
   const promise = Promise.all([
-    openCareerSpace().then((r) => (r.ok ? r.json() : null)),
+    fetch("/api/career").then((r) => (r.ok ? r.json() : null)),
     fetch("/api/growth").then((r) => (r.ok ? r.json() : null)),
   ])
     .then(([career, growth]) => {

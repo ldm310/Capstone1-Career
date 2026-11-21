@@ -9,6 +9,7 @@ export interface Finding {
 }
 export interface AnalysisRun {
   id: string;
+  sourceId?: string;
   title: string;
   at: string;
   findings: Finding[];

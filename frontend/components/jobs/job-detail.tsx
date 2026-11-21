@@ -15,6 +15,7 @@ import { ApplicationConditions } from "./application-conditions";
 import { LoadingSpinner } from "@/components/shared/loading-spinner";
 import { JobExtras, JobSummary } from "./job-summary";
 import { useJobBenchmark } from "@/lib/use-job-benchmark";
+import { KeywordLevels } from "./keyword-levels";
 
 export function JobDetail({ id }: { id: string }) {
   const params = useSearchParams();
@@ -112,6 +113,7 @@ export function JobDetail({ id }: { id: string }) {
       ) : (
         <CategoryComparison cohort={benchmark.data} />
       )}
+      <KeywordLevels jobId={job.id} />
       <details className="job-original-panel" ref={original}>
         <summary>
           공고 내용 보기
