@@ -1,7 +1,6 @@
 "use client";
 import { useState } from "react";
-import Link from "next/link";
-import { MapPin, ArrowRight } from "lucide-react";
+import { JobListRow } from "./job-list-row";
 import {
   studyDemoJobs,
   exampleComparison,
@@ -57,40 +56,19 @@ export function ExampleJobs({ tier }: { tier: StudyTier }) {
         }}
       />
       <p className="study-muted">예시 공고 {jobs.length}개</p>
-      <div className="public-job-grid">
+      <div className="public-job-grid job-list">
         {jobs.map((job) => (
-          <article className="public-job-card card-click" key={job.id}>
-            <QualificationSummary comparison={exampleComparison(job, tier)} />
-            <div className="public-company">
-              <strong>{job.company}</strong>
-            </div>
-            <h3>
-              <Link
-                className="card-link"
-                href={`/jobs?job=${job.id}&demo=${tier}`}
-              >
-                {job.title}
-              </Link>
-            </h3>
-            <div className="public-job-meta">
-              <span>
-                <MapPin size={15} />
-                {job.location}
-              </span>
-              <span>{job.employment}</span>
-            </div>
-            <div className="public-job-bottom">
-              <span>
-                마감 {new Date(job.closesAt!).toLocaleDateString("ko-KR")}
-              </span>
-            </div>
-            <Link
-              className="public-job-source"
-              href={`/jobs?job=${job.id}&demo=${tier}&view=stats`}
-            >
-              스탯 분석 <ArrowRight size={16} />
-            </Link>
-          </article>
+          <JobListRow
+            key={job.id}
+            job={job}
+            href={`/jobs?job=${job.id}&demo=${tier}`}
+            statsHref={`/jobs?job=${job.id}&demo=${tier}&view=stats`}
+            comparison={
+              <QualificationSummary comparison={exampleComparison(job, tier)} />
+            }
+            showCategory={false}
+            showWorkplace={false}
+          />
         ))}
       </div>
       {!jobs.length && (

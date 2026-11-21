@@ -5,7 +5,7 @@ test.beforeEach(async ({ page }) => {
     sessionStorage.setItem("career:sky-intro:seen", "yes"),
   );
 });
-test("official job cards paginate, bookmark, persist, filter and link to source", async ({
+test("job rows paginate, bookmark, persist, filter and link to stats", async ({
   page,
 }) => {
   await mockPublicJobs(page);
@@ -13,11 +13,7 @@ test("official job cards paginate, bookmark, persist, filter and link to source"
   await expect(page.locator(".public-job-card")).toHaveCount(7);
   await expect(page.locator(".public-job-source").first()).toHaveAttribute(
     "href",
-    "https://jobs.lever.co/zoyi/fixture-0",
-  );
-  await expect(page.locator(".public-job-source").first()).toHaveAttribute(
-    "target",
-    "_blank",
+    "/jobs?job=fixture-0&view=stats",
   );
   await page
     .getByRole("button", {

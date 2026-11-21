@@ -126,7 +126,7 @@
 }
 .home-jobs li {
   display: grid;
-  grid-template-columns: 48px minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 16px;
   padding: 18px 0;
   border-top: 1px solid #e8eef3;

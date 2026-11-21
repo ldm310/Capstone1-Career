@@ -1,13 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import {
-  Building2,
-  CalendarClock,
-  Info,
-  MapPin,
-  Star,
-  TrainFront,
-} from "lucide-react";
+import { CalendarClock, Info, MapPin, Star, TrainFront } from "lucide-react";
 import { unknownLocation, type PublicJob } from "@/types/public-job";
 import { experienceLabels, jobExperience } from "@/lib/job-filters";
 import { useSavedJobs } from "@/lib/saved-jobs";
@@ -219,9 +212,6 @@ export function JobExtras({ job }: { job: PublicJob }) {
           <h3 id="job-company-title">기업 정보</h3>
           <div className="job-box job-company">
             <div className="job-company-head">
-              <span className="job-company-logo" aria-hidden="true">
-                <Building2 size={22} />
-              </span>
               <strong>{job.company}</strong>
             </div>
             <div className="job-summary-grid">

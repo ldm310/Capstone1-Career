@@ -8,13 +8,8 @@ import {
 } from "@/lib/job-filters";
 import { CatalogFilters } from "@/components/jobs/catalog-filters";
 import { useEffect, useRef, useState } from "react";
-import {
-  Bookmark,
-  BriefcaseBusiness,
-  MapPin,
-  RefreshCw,
-  Search,
-} from "lucide-react";
+import { RefreshCw, Search } from "lucide-react";
+import { JobListRow } from "@/components/jobs/job-list-row";
 import type { PublicJob, PublicJobsResponse } from "@/types/public-job";
 import { isSupportedRole } from "@/lib/roles";
 import { roleLabels } from "@/lib/korean";
@@ -184,64 +179,17 @@ export function LiveJobsSection({
             : "불러오는 중…"}
         </p>
       )}
-      <div className="public-job-grid">
+      <div className="public-job-grid job-list">
         {(preview ? visible.slice(0, 3) : visible).map((job) => (
-          <article className="public-job-card card-click" key={job.id}>
-            <div className="public-company">
-              <span className="public-company-mark" aria-hidden="true">
-                {job.company.slice(0, 1)}
-              </span>
-              <strong>{job.company}</strong>
-              {job.dummy && <span className="dummy-label">예시</span>}
-            </div>
-            <span className="public-job-category">
-              {roleLabels[job.category]}
-            </span>
-            <h3>
-              <Link
-                className="card-link"
-                href={`/jobs?job=${encodeURIComponent(job.id)}`}
-              >
-                {job.title}
-              </Link>
-            </h3>
-            <div className="public-job-meta">
-              <span>
-                <MapPin size={15} />
-                {job.location}
-              </span>
-              <span>
-                <BriefcaseBusiness size={15} />
-                {job.employment}
-              </span>
-              {job.workplace && <span>{job.workplace}</span>}
-            </div>
-            <PassedGap job={job} />
-            <div className="public-job-bottom">
-              <span>
-                {job.closesAt
-                  ? `${new Date(job.closesAt).toLocaleDateString("ko-KR")} 마감`
-                  : "마감일 원문 확인"}
-              </span>
-              <button
-                className="icon-button"
-                aria-label={`${job.title} ${savedJobs.isSaved(job.id) ? "저장 취소" : "저장"}`}
-                aria-pressed={savedJobs.isSaved(job.id)}
-                onClick={() => void toggle(job)}
-              >
-                <Bookmark
-                  size={21}
-                  fill={savedJobs.isSaved(job.id) ? "currentColor" : "none"}
-                />
-              </button>
-            </div>
-            <Link
-              className="public-job-source"
-              href={`/jobs?job=${encodeURIComponent(job.id)}&view=stats`}
-            >
-              스탯 분석 →
-            </Link>
-          </article>
+          <JobListRow
+            key={job.id}
+            job={job}
+            href={`/jobs?job=${encodeURIComponent(job.id)}`}
+            statsHref={`/jobs?job=${encodeURIComponent(job.id)}&view=stats`}
+            comparison={<PassedGap job={job} />}
+            isSaved={savedJobs.isSaved(job.id)}
+            onToggle={() => void toggle(job)}
+          />
         ))}
       </div>
       {loading && !feed && <LoadingSpinner inline />}

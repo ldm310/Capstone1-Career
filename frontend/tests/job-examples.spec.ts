@@ -124,6 +124,7 @@ test("detail omits lower bars while catalog keeps the cohort average", async ({
   await expect(
     page.locator(".passed-preferred, .applicant-stats, [role=progressbar]"),
   ).toHaveCount(0);
+  await mockPublicJobs(page);
   await page.goto("/jobs");
   await expect(
     page.locator(".public-job-card .passed-gap").first(),

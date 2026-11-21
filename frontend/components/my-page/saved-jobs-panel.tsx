@@ -34,9 +34,6 @@ export function SavedJobsPanel() {
           const left = dDay(job.closesAt, now);
           return (
             <li key={job.id} className="card-click">
-              <span className="home-job-mark" aria-hidden="true">
-                {job.company.slice(0, 1)}
-              </span>
               <div className="mypage-job-main">
                 <small>
                   {job.company}, {roleLabels[job.category]}

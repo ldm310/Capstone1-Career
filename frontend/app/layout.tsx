@@ -7,6 +7,7 @@ import "./career.css";
 import "./typography.css";
 import "./learning-path.css";
 import "./controls.css";
+import "./job-list.css";
 const careerFont = localFont({
   src: "./fonts/PretendardVariable.woff2",
   variable: "--font-career-ui",

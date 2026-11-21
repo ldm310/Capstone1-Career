@@ -259,9 +259,6 @@ export function HomeDashboard() {
                   const kind = jobExperience(job)[0];
                   return (
                     <li key={job.id} className="card-click">
-                      <span className="home-job-mark" aria-hidden="true">
-                        {job.company.slice(0, 1)}
-                      </span>
                       <div className="home-job-main">
                         <small>
                           {job.company}
