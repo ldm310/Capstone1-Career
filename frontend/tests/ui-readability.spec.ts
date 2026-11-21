@@ -54,11 +54,11 @@ test("primary screens keep a visible heading gap and fit desktop, tablet and sma
     ["home", "/#market-preview", ".home-panel"],
     ["analysis", "/analysis", "#analysis-start-title"],
     ["jobs", "/jobs", ".job-list-row"],
-    ["detail", "/jobs?job=study-demo-backend&demo=low", ".category-radar"],
+    ["detail", "/jobs?job=study-demo-backend&demo=low", ".job-public-content"],
     [
       "conditions",
       "/jobs?job=study-demo-backend-intern&demo=low",
-      ".qualification-score-ring",
+      ".personal-job-comparison",
     ],
     ["sign-in", "/sign-in", ".sign-in-panel"],
     ["profile", "/my-page?tab=profile", ".mypage-form"],

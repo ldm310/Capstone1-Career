@@ -86,13 +86,15 @@ test("catalog filters and comparison URL stay inside jobs", async ({
         exact: true,
       }),
     })
-    .getByRole("link", { name: "스탯 분석 →" })
+    .getByRole("link", { name: "역량 비교", exact: true })
     .click();
-  await expect(page).toHaveURL(/\/jobs\?job=fixture-0&view=stats$/);
+  await expect(page).toHaveURL(
+    /\/jobs\?job=fixture-0&view=stats#job-personal-comparison$/,
+  );
   await expect(
     page.getByRole("navigation", { name: "공고 상세 메뉴" }).getByRole("link"),
-  ).toHaveText(["스탯 분석", "지원 조건"]);
-  await expect(page.getByLabel("지원 자격 점수 산정 전")).toBeVisible();
+  ).toHaveText(["공고 내용", "역량 비교"]);
+  await expect(page.locator(".job-public-content")).toBeVisible();
 });
 
 test("old links preserve destination and removed sections are gone", async ({
@@ -113,8 +115,8 @@ test("old links preserve destination and removed sections are gone", async ({
     "/dashboard",
     "/applications",
   ]) {
-    const response = await page.goto(url);
-    expect(response?.status(), url).toBe(404);
+    const response = await page.request.get(url);
+    expect(response.status(), url).toBe(404);
   }
 });
 

@@ -1,8 +1,8 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, ChevronDown, ExternalLink } from "lucide-react";
+import { ArrowLeft, ExternalLink } from "lucide-react";
 import {
   studyDemoJobs,
   examplePosting,
@@ -10,19 +10,14 @@ import {
 } from "@/lib/study-prototype";
 import type { PublicJob } from "@/types/public-job";
 import { JobPosting } from "./job-posting";
-import { CategoryComparison } from "./category-comparison";
-import { ApplicationConditions } from "./application-conditions";
 import { LoadingSpinner } from "@/components/shared/loading-spinner";
 import { JobExtras, JobSummary } from "./job-summary";
-import { useJobBenchmark } from "@/lib/use-job-benchmark";
-import { KeywordLevels } from "./keyword-levels";
+import { PersonalJobComparison } from "./personal-job-comparison";
 
 export function JobDetail({ id }: { id: string }) {
   const params = useSearchParams();
   const tier = studyTier(params.get("demo"));
-  const view = params.get("view") === "conditions" ? "conditions" : "stats";
-  const benchmark = useJobBenchmark(id);
-  const original = useRef<HTMLDetailsElement>(null);
+  const view = params.get("view") === "stats" ? "stats" : "posting";
   const [actual, setActual] = useState<PublicJob | null>(null);
   const [error, setError] = useState("");
   const [retry, setRetry] = useState(0);
@@ -57,23 +52,12 @@ export function JobDetail({ id }: { id: string }) {
         <Link href={tier ? `/jobs?demo=${tier}` : "/jobs"}>공고 목록</Link>
       </div>
     );
-  function href(nextView: "stats" | "conditions") {
+  function href(nextView: "stats" | "posting") {
     const search = new URLSearchParams(params.toString());
     search.set("view", nextView);
     search.delete("cohort");
-    return `/jobs?${search}`;
+    return `/jobs?${search}#${nextView === "posting" ? "job-public-content" : "job-personal-comparison"}`;
   }
-  function openPosting() {
-    if (original.current) {
-      original.current.open = true;
-      original.current.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
-  }
-  const conditionsOnly =
-    !!benchmark.data &&
-    !benchmark.data.passed.length &&
-    !benchmark.data.applicants.length;
-  const selectedView = conditionsOnly ? "conditions" : view;
   return (
     <div className="job-detail-page">
       <Link className="study-back" href={tier ? `/jobs?demo=${tier}` : "/jobs"}>
@@ -83,42 +67,24 @@ export function JobDetail({ id }: { id: string }) {
       <JobSummary job={job} />
       <nav className="study-detail-tabs" aria-label="공고 상세 메뉴">
         <Link
-          href={href("stats")}
-          aria-current={selectedView === "stats" ? "page" : undefined}
+          href={href("posting")}
+          aria-current={view === "posting" ? "page" : undefined}
         >
-          스탯 분석
+          공고 내용
         </Link>
         <Link
-          href={href("conditions")}
-          aria-current={selectedView === "conditions" ? "page" : undefined}
+          href={href("stats")}
+          aria-current={view === "stats" ? "page" : undefined}
         >
-          지원 조건
+          역량 비교
         </Link>
       </nav>
-      {benchmark.error ? (
-        <div className="comparison-message" role="alert">
-          {benchmark.error}
-          <button onClick={benchmark.retry}>다시 시도</button>
-        </div>
-      ) : !benchmark.data ? (
-        <p className="comparison-message" role="status">
-          비교 자료를 불러오는 중이에요.
-        </p>
-      ) : selectedView === "conditions" ? (
-        <ApplicationConditions
-          benchmark={benchmark.data}
-          noComparison={conditionsOnly}
-          onOpenPosting={openPosting}
-        />
-      ) : (
-        <CategoryComparison cohort={benchmark.data} />
-      )}
-      <KeywordLevels jobId={job.id} />
-      <details className="job-original-panel" ref={original}>
-        <summary>
-          공고 내용 보기
-          <ChevronDown size={17} aria-hidden="true" />
-        </summary>
+      <section
+        id="job-public-content"
+        className="job-public-content"
+        aria-labelledby="job-public-title"
+      >
+        <h3 id="job-public-title">공고 내용</h3>
         <div className="job-source-row">
           {job.dummy || job.url ? (
             <a
@@ -142,7 +108,8 @@ export function JobDetail({ id }: { id: string }) {
           posting={tier ? examplePosting(job) : undefined}
         />
         <JobExtras job={job} />
-      </details>
+      </section>
+      <PersonalJobComparison jobId={job.id} />
     </div>
   );
 }

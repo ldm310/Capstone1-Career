@@ -127,14 +127,12 @@ test("job detail displays the saved requirement text, not a technology-name LV",
   page,
 }) => {
   await page.goto("/jobs?job=study-demo-backend&demo=low");
-  await expect(page.locator(".job-keyword-levels li")).toHaveCount(6);
-  await expect(page.locator(".job-keyword-levels li").first()).toContainText(
-    "산정 전",
-  );
+  await expect(page.locator(".personal-keyword-list > li")).toHaveCount(6);
+  await expect(page.locator(".personal-keyword-level")).toHaveCount(0);
   await expect(
-    page.locator(".job-keyword-levels li strong").first(),
+    page.locator(".personal-keyword-list h4").first(),
   ).not.toHaveText("SQL");
-  await expect(page.locator(".job-keyword-levels")).toContainText(
+  await expect(page.locator(".personal-job-comparison")).toContainText(
     "저장된 분류 문장",
   );
 });

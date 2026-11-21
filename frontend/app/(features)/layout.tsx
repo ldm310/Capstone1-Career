@@ -8,6 +8,7 @@ import "../skills.css";
 import "../job-detail.css";
 import "../readability.css";
 import "../job-comparison.css";
+import "../personal-comparison.css";
 import { LoadingSpinner } from "@/components/shared/loading-spinner";
 export default function Layout({ children }: { children: React.ReactNode }) {
   return (

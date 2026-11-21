@@ -47,7 +47,7 @@ test("job rows retain existing fields without placeholder logos or reference-onl
       exact: true,
     }),
   ).toHaveAttribute("aria-pressed", "true");
-  await first.getByRole("link", { name: "스탯 분석 →", exact: true }).click();
+  await first.getByRole("link", { name: "역량 비교", exact: true }).click();
   await expect(page).toHaveURL(/job=fixture-0&view=stats/);
 });
 

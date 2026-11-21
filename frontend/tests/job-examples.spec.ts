@@ -56,10 +56,9 @@ test("job detail uses category stats tabs and preserves the original posting", a
   await page.goto("/jobs?job=study-demo-backend&demo=low");
   await expect(
     page.getByRole("navigation", { name: "공고 상세 메뉴" }).getByRole("link"),
-  ).toHaveText(["스탯 분석", "지원 조건"]);
-  await expect(page.locator(".category-radar")).toHaveCount(2);
+  ).toHaveText(["공고 내용", "역량 비교"]);
+  await expect(page.locator(".job-public-content")).toBeVisible();
   await expect(page.locator(".applicant-stats")).toHaveCount(0);
-  await page.locator(".job-original-panel > summary").click();
   await expect(page.locator(".job-posting-section h3")).toHaveText([
     "주요 업무",
     "자격요건",
@@ -92,8 +91,7 @@ test("dummy detail opens stats first and condition info separately", async ({
   page,
 }) => {
   await page.goto("/jobs?job=dummy%3Abackend-platform");
-  await expect(page.locator(".comparison-radar-card")).toHaveCount(2);
-  await page.locator(".job-original-panel > summary").click();
+  await expect(page.locator(".job-public-content")).toBeVisible();
   await expect(page.locator(".job-posting-section h3").first()).toHaveText(
     "회사 소개",
   );
@@ -101,10 +99,8 @@ test("dummy detail opens stats first and condition info separately", async ({
     "href",
     /^\/postings\//,
   );
-  await page.getByRole("link", { name: "지원 조건", exact: true }).click();
-  await expect(page.locator(".application-condition-rows")).toContainText(
-    "3.8",
-  );
+  await page.getByRole("link", { name: "역량 비교", exact: true }).click();
+  await expect(page.locator(".personal-job-comparison")).toBeVisible();
   await expect(page.locator(".category-radar")).toHaveCount(0);
 });
 
@@ -112,7 +108,7 @@ test("detail omits lower bars while catalog keeps the cohort average", async ({
   page,
 }) => {
   await page.goto("/jobs?job=dummy%3Abackend-platform");
-  await expect(page.getByText("가상 합격자 50명 기준")).toBeVisible();
+  await expect(page.locator(".job-public-content")).toBeVisible();
   await expect(
     page.locator(".passed-preferred, .applicant-stats, [role=progressbar]"),
   ).toHaveCount(0);
