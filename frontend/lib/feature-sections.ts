@@ -2,13 +2,13 @@ export const featureSections = {
   analysis: {
     path: "/analysis",
     title: "분석",
-    description: "내 경험을 담고, 관심 있는 공고에서 비교해요.",
+    description: "GitHub·이력서 등록 및 공고별 역량 비교",
     tabs: [["sources", "분석 자료"]],
   },
   jobs: {
     path: "/jobs",
     title: "채용공고",
-    description: "공고를 찾고 내 역량과 비교해요.",
+    description: "채용공고 검색 및 자격요건·역량 비교",
     tabs: [["browse", "전체 공고"]],
   },
   skills: {
@@ -32,7 +32,7 @@ export const featureSections = {
   mypage: {
     path: "/my-page",
     title: "마이페이지",
-    description: "저장한 공고와 내 정보를 관리해요.",
+    description: "저장한 공고와 회원 정보 관리",
     tabs: [
       ["saved", "저장한 공고"],
       ["profile", "내 정보"],

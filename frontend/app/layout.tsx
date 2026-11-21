@@ -8,6 +8,7 @@ import "./typography.css";
 import "./learning-path.css";
 import "./controls.css";
 import "./job-list.css";
+import "./ui-layout.css";
 const careerFont = localFont({
   src: "./fonts/PretendardVariable.woff2",
   variable: "--font-career-ui",

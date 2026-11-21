@@ -38,8 +38,8 @@ export function KeywordLevels({ jobId }: { jobId: string }) {
   return (
     <section className="job-keyword-levels" aria-labelledby="job-keyword-title">
       <header>
-        <h3 id="job-keyword-title">이 공고에서 확인할 나의 역량</h3>
-        <p>임베딩으로 분류·검토한 역량 문장과 키워드를 기준으로 확인해요.</p>
+        <h3 id="job-keyword-title">공고별 역량</h3>
+        <p>공고의 역량 키워드별 분석 결과입니다.</p>
       </header>
       {!current ? (
         <p role="status">공고의 키워드를 불러오는 중이에요.</p>
@@ -85,8 +85,7 @@ export function KeywordLevels({ jobId }: { jobId: string }) {
             ))}
           </ul>
           <p className="job-keyword-note">
-            키워드 분류는 반영했어요. LV 산정 결과가 연결되면 각 항목에
-            표시해요.
+            각 항목의 LV은 역량 평가가 완료된 후 표시됩니다.
           </p>
         </>
       ) : (

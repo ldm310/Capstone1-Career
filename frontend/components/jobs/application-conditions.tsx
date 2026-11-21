@@ -63,9 +63,7 @@ export function ApplicationConditions({
         <div className="qualification-score-copy">
           <p className="qualification-eyebrow">나의 지원 자격</p>
           <h4>
-            {score === null
-              ? "지원 자료를 먼저 확인해 주세요"
-              : `필수 조건 ${met}개를 충족했어요`}
+            {score === null ? "평가 자료 미등록" : `필수 조건 ${met}개 충족`}
           </h4>
           <p>
             {score === null

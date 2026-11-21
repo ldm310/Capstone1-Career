@@ -9,9 +9,7 @@ test("visitors can download both templates and browse jobs but cannot start extr
 }) => {
   await mockPublicJobs(page);
   await page.goto("/analysis");
-  await expect(
-    page.getByText("로그인 후 역량을 분석할 수 있어요"),
-  ).toBeVisible();
+  await expect(page.getByText("회원 전용 분석")).toBeVisible();
   await expect(page.getByLabel("공개 GitHub 저장소 URL")).toBeDisabled();
   await expect(page.getByLabel("PDF 이력서 추가")).toBeDisabled();
   await expect(
@@ -81,9 +79,7 @@ test("registration returns to analysis and a member can submit an actual PDF", a
   page,
 }) => {
   await page.goto("/sign-in");
-  await page
-    .getByRole("button", { name: "처음이신가요? 회원가입", exact: true })
-    .click();
+  await page.getByRole("button", { name: "회원가입", exact: true }).click();
   await page.getByLabel("이름", { exact: true }).fill("새 커리어 회원");
   await page
     .getByLabel("이메일", { exact: true })
@@ -101,7 +97,7 @@ test("registration returns to analysis and a member can submit an actual PDF", a
     .getByRole("button", { name: "분석 시작하기", exact: true })
     .click();
   await expect(
-    page.getByRole("heading", { name: "분석 완료!", exact: true }),
+    page.getByRole("heading", { name: "분석 완료", exact: true }),
   ).toBeVisible();
 });
 

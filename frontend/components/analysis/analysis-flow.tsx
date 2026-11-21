@@ -2,16 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import {
-  ArrowRight,
-  Check,
-  CheckCircle2,
-  FileText,
-  GitBranch as Github,
-  LoaderCircle,
-  Plus,
-  X,
-} from "lucide-react";
+import { Check, LoaderCircle, Plus, X } from "lucide-react";
 
 type Source = {
   id: string;
@@ -226,25 +217,16 @@ export function AnalysisFlow() {
   if (complete)
     return (
       <section className="analysis-flow analysis-complete">
-        <div className="analysis-success-icon">
-          <CheckCircle2 size={44} aria-hidden="true" />
-        </div>
-        <p className="analysis-eyebrow">준비가 끝났어요</p>
+        <p className="analysis-eyebrow">ANALYSIS</p>
         <h2 ref={heading} tabIndex={-1}>
-          분석 완료!
+          분석 완료
         </h2>
-        <p>
-          이제 관심 있는 채용공고에서
-          <br />내 경험이 얼마나 맞는지 확인해 보세요.
-        </p>
+        <p>분석 결과는 각 채용공고의 역량 비교에서 확인할 수 있습니다.</p>
         <div className="analysis-complete-summary">
-          <FileText size={19} aria-hidden="true" />
           <span>자료 {done}개 분석 완료</span>
-          <Check size={17} aria-hidden="true" />
         </div>
         <Link className="analysis-primary" href="/jobs">
-          채용공고에서 내 역량 확인하기{" "}
-          <ArrowRight size={18} aria-hidden="true" />
+          채용공고에서 내 역량 확인하기
         </Link>
         <button
           className="analysis-text-button"
@@ -272,38 +254,20 @@ export function AnalysisFlow() {
           2 <span>분석</span>
         </li>
         <li>
-          3 <span>공고에서 비교</span>
+          3 <span>공고 비교</span>
         </li>
       </ol>
-      <p className="analysis-eyebrow">경험을 공고와 연결하는 첫 단계</p>
-      <h2 id="analysis-start-title">
-        {busy ? (
-          "경험을 하나씩 살펴보고 있어요"
-        ) : (
-          <>
-            어떤 경험을 해오셨나요?
-            <br />
-            자료로 알려주세요
-          </>
-        )}
-      </h2>
+      <h2 id="analysis-start-title">{busy ? "자료 분석 중" : "분석 자료"}</h2>
       <p className="analysis-intro">
-        GitHub 링크 또는 PDF 이력서, 하나만 있어도 시작할 수 있어요.
-        <br />
-        종류와 상관없이 여러 개 추가해도 좋아요.
+        GitHub 링크 또는 PDF 이력서를 1개 이상 등록하세요.
       </p>
       <aside
         className="analysis-template"
         aria-labelledby="resume-template-title"
       >
-        <FileText size={24} aria-hidden="true" />
         <div>
-          <h3 id="resume-template-title">아직 이력서가 없으신가요?</h3>
-          <p>
-            Career만의 이력서 양식으로 경험을 정리해 보세요.
-            <br />
-            작성 후 PDF로 저장해서 추가하면 돼요.
-          </p>
+          <h3 id="resume-template-title">Career 이력서 양식</h3>
+          <p>Word 양식에 작성한 뒤 PDF로 저장해 업로드하세요.</p>
           <div className="analysis-template-links">
             <a href="/downloads/career-resume-template.docx" download>
               Career 이력서 양식 다운로드 · Word
@@ -322,14 +286,12 @@ export function AnalysisFlow() {
       )}
       {access === "visitor" && (
         <aside className="analysis-login-note">
-          <h3>로그인 후 역량을 분석할 수 있어요</h3>
+          <h3>회원 전용 분석</h3>
           <p>
             채용공고는 로그인 없이 볼 수 있어요. 내 자료를 분석하려면 로그인해
             주세요.
           </p>
-          <Link href="/sign-in">
-            로그인 · 회원가입 <ArrowRight size={16} aria-hidden="true" />
-          </Link>
+          <Link href="/sign-in">로그인 · 회원가입</Link>
         </aside>
       )}
       <fieldset
@@ -345,10 +307,9 @@ export function AnalysisFlow() {
           }}
         >
           <div className="analysis-source-heading">
-            <Github size={23} aria-hidden="true" />
             <div>
               <h3>GitHub 링크</h3>
-              <p>내 경험이 담긴 공개 저장소를 연결해요</p>
+              <p>공개 저장소 주소를 등록하세요.</p>
             </div>
           </div>
           <label htmlFor="analysis-github-url" className="sr-only">
@@ -370,10 +331,9 @@ export function AnalysisFlow() {
         </form>
         <div className="analysis-source-block">
           <div className="analysis-source-heading">
-            <FileText size={23} aria-hidden="true" />
             <div>
               <h3>PDF 이력서</h3>
-              <p>경험과 프로젝트를 담은 이력서를 올려주세요</p>
+              <p>PDF만 등록할 수 있습니다. 파일당 최대 10MB입니다.</p>
             </div>
           </div>
           <label className="analysis-file-picker">
@@ -387,7 +347,6 @@ export function AnalysisFlow() {
                 event.target.value = "";
               }}
             />
-            <Plus size={22} aria-hidden="true" />
             <strong>PDF 파일 추가</strong>
             <span>여러 파일 선택 가능 · 파일당 10MB 이하</span>
           </label>
@@ -403,11 +362,9 @@ export function AnalysisFlow() {
         <ul className="analysis-source-list">
           {sources.map((source) => (
             <li key={source.id}>
-              {source.kind === "github" ? (
-                <Github size={20} aria-hidden="true" />
-              ) : (
-                <FileText size={20} aria-hidden="true" />
-              )}
+              <span className="analysis-source-kind">
+                {source.kind === "github" ? "GitHub" : "PDF"}
+              </span>
               <div>
                 <strong>{source.name}</strong>
                 <small>
@@ -446,7 +403,7 @@ export function AnalysisFlow() {
           ))}
         </ul>
       ) : (
-        <p className="analysis-empty">추가한 링크와 파일이 여기에 모여요.</p>
+        <p className="analysis-empty">등록한 자료가 없습니다.</p>
       )}
       {error && (
         <p className="analysis-error" role="alert">
@@ -477,7 +434,6 @@ export function AnalysisFlow() {
             {sources.some((source) => source.state === "failed")
               ? "실패한 자료 다시 분석하기"
               : "분석 시작하기"}
-            <ArrowRight size={18} aria-hidden="true" />
           </>
         )}
       </button>

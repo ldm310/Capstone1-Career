@@ -106,9 +106,7 @@ export function SignInForm() {
           setError("");
         }}
       >
-        {mode === "login"
-          ? "처음이신가요? 회원가입"
-          : "이미 계정이 있나요? 로그인"}
+        {mode === "login" ? "회원가입" : "로그인으로 전환"}
       </button>
       <div className="sign-in-demo">
         <strong>데모 계정</strong>

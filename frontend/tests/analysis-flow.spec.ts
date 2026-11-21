@@ -54,7 +54,7 @@ test("mixed sources are optional, multiple, submitted once and complete without 
   await page.screenshot({ path: "work/analysis-sources.png", fullPage: true });
   await start.click();
   await expect(
-    page.getByRole("heading", { name: "분석 완료!", exact: true }),
+    page.getByRole("heading", { name: "분석 완료", exact: true }),
   ).toBeVisible();
   expect(sent).toEqual([
     "https://github.com/example/one",
@@ -97,7 +97,7 @@ test("a PDF alone is sufficient and unsupported, duplicate and oversized sources
     .getByRole("button", { name: "분석 시작하기", exact: true })
     .click();
   await expect(
-    page.getByRole("heading", { name: "분석 완료!", exact: true }),
+    page.getByRole("heading", { name: "분석 완료", exact: true }),
   ).toBeVisible();
 });
 
@@ -126,12 +126,12 @@ test("partial failures retry only failed sources and never report full completio
     .click();
   await expect(page.locator(".analysis-error")).toContainText("일부 자료");
   await expect(
-    page.getByRole("heading", { name: "분석 완료!", exact: true }),
+    page.getByRole("heading", { name: "분석 완료", exact: true }),
   ).toHaveCount(0);
   failing = false;
   await page.getByRole("button", { name: "실패한 자료 다시 분석하기" }).click();
   await expect(
-    page.getByRole("heading", { name: "분석 완료!", exact: true }),
+    page.getByRole("heading", { name: "분석 완료", exact: true }),
   ).toBeVisible();
   expect(sent).toEqual([
     "https://github.com/example/one",
