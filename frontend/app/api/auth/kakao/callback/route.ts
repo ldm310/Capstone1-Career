@@ -1,6 +1,10 @@
 import { timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
-import { kakaoConfig, kakaoIdentity } from "@/lib/server/kakao";
+import {
+  kakaoConfig,
+  kakaoIdentity,
+  KakaoServiceError,
+} from "@/lib/server/kakao";
 import { session } from "@/lib/server/store";
 export const runtime = "nodejs";
 export async function GET(request: Request) {
@@ -40,6 +44,26 @@ export async function GET(request: Request) {
     await session(id);
     return Response.redirect(new URL("/analysis", base), 303);
   } catch (error) {
+    if (error instanceof KakaoServiceError) {
+      console.error("Kakao login failed", {
+        stage: error.stage,
+        status: error.status,
+        providerCode: error.providerCode,
+        transportCode: error.transportCode,
+      });
+      return fail(
+        error.stage === "profile"
+          ? "kakao_profile"
+          : ["KOE010", "KOE101", "KOE114", "KOE127"].includes(
+                error.providerCode || "",
+              )
+            ? "kakao_config"
+            : "kakao_token",
+      );
+    }
+    console.error("Kakao local account processing failed", {
+      name: error instanceof Error ? error.name : "UnknownError",
+    });
     return fail(
       error instanceof Error && error.message === "ACCOUNT_LINK_REQUIRED"
         ? "kakao_existing"

@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 
 export const demoLogin = {
   email: "demo@career.dev",
@@ -11,9 +12,15 @@ const kakaoMessages: Record<string, string> = {
   kakao_state: "로그인 요청이 만료되었습니다. 다시 시도해 주세요.",
   kakao_cancelled: "카카오 로그인을 취소했습니다.",
   kakao_failed: "카카오 로그인에 실패했습니다. 다시 시도해 주세요.",
+  kakao_config:
+    "카카오 로그인 연결 설정을 확인해야 합니다. 관리자에게 문의해 주세요.",
+  kakao_token:
+    "카카오 로그인 인증을 완료하지 못했습니다. 카카오 로그인을 다시 눌러 주세요.",
+  kakao_profile:
+    "카카오 계정 정보를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.",
   kakao_existing:
     "같은 이메일의 계정이 있습니다. 기존 이메일과 비밀번호로 로그인해 주세요.",
-  kakao_email: "카카오 계정의 이메일 제공 동의가 필요합니다.",
+  kakao_email: "가입을 완료하려면 카카오 계정의 이메일 제공에 동의해 주세요.",
 };
 export function SignInForm({
   initialError = "",
@@ -22,6 +29,9 @@ export function SignInForm({
   const [email, setEmail] = useState("");
   const [mode, setMode] = useState<"login" | "register">("login");
   const [name, setName] = useState("");
+  const [age, setAge] = useState("");
+  const [school, setSchool] = useState("");
+  const [major, setMajor] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(kakaoMessages[initialError] || "");
@@ -45,7 +55,9 @@ export function SignInForm({
         body: JSON.stringify({
           action,
           ...next,
-          ...(action === "register" ? { name } : {}),
+          ...(action === "register"
+            ? { name, age: age === "" ? null : Number(age), school, major }
+            : {}),
         }),
       });
       const d = await r.json();
@@ -60,19 +72,11 @@ export function SignInForm({
   return (
     <section className="career-panel sign-in-panel">
       <h1>{mode === "login" ? "로그인" : "회원가입"}</h1>
-      <p>로그인하면 GitHub와 이력서로 내 경험을 분석할 수 있어요.</p>
-      <form action="/api/auth/kakao" method="get">
-        <button
-          type="submit"
-          className="kakao-login-button"
-          disabled={!kakaoReady || busy}
-        >
-          카카오로 시작하기
-        </button>
-      </form>
-      {!kakaoReady && (
-        <p className="kakao-login-note">카카오 로그인 연결 준비 중</p>
-      )}
+      <p>
+        {mode === "register"
+          ? "이메일 또는 카카오 계정으로 가입할 수 있습니다."
+          : "로그인하면 GitHub와 이력서로 내 경험을 분석할 수 있어요."}
+      </p>
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -114,10 +118,54 @@ export function SignInForm({
             onChange={(e) => setPassword(e.target.value)}
           />
         </label>
+        {mode === "register" && (
+          <fieldset className="registration-optional">
+            <legend>
+              추가 정보 <span>선택</span>
+            </legend>
+            <label>
+              나이 (선택)
+              <input
+                type="number"
+                inputMode="numeric"
+                min={0}
+                max={120}
+                step={1}
+                value={age}
+                onChange={(event) => setAge(event.target.value)}
+              />
+            </label>
+            <label>
+              학교 (선택)
+              <input
+                autoComplete="organization"
+                maxLength={60}
+                value={school}
+                onChange={(event) => setSchool(event.target.value)}
+              />
+            </label>
+            <label>
+              학과 (선택)
+              <input
+                maxLength={60}
+                value={major}
+                onChange={(event) => setMajor(event.target.value)}
+              />
+            </label>
+          </fieldset>
+        )}
         {error && (
-          <p role="alert" className="career-error">
-            {error}
-          </p>
+          <div role="alert" className="career-error">
+            <p>{error}</p>
+            {error === kakaoMessages.kakao_email && (
+              <a
+                href="/api/auth/kakao?consent=email"
+                className="kakao-consent-link"
+              >
+                이메일 제공 동의
+              </a>
+            )}
+          </div>
         )}
         <button className="career-primary" disabled={busy}>
           {busy
@@ -127,6 +175,25 @@ export function SignInForm({
               : "가입하고 분석 시작하기"}
         </button>
       </form>
+      <form action="/api/auth/kakao" method="get" className="kakao-login-form">
+        <button
+          type="submit"
+          className="kakao-login-button"
+          disabled={!kakaoReady || busy}
+        >
+          <Image
+            src="/auth/kakao-login-ko.svg"
+            alt="카카오 로그인"
+            width={224}
+            height={46}
+            loading="eager"
+            unoptimized
+          />
+        </button>
+      </form>
+      {!kakaoReady && (
+        <p className="kakao-login-note">카카오 로그인 연결 준비 중</p>
+      )}
       <button
         className="header-login"
         disabled={busy}

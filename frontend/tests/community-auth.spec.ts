@@ -158,6 +158,9 @@ test("notice permissions, one-time admin setup and GitHub preview persist in RDS
     await page.getByRole("button", { name: "수정", exact: true }).click();
     await page.getByLabel("제목", { exact: true }).fill(title + " 수정");
     await page.getByRole("button", { name: "저장", exact: true }).click();
+    await expect(
+      page.getByRole("button", { name: new RegExp(title + " 수정") }),
+    ).toBeVisible();
     await page.reload();
     await page
       .getByRole("button", { name: new RegExp(title + " 수정") })
@@ -207,6 +210,23 @@ test("notice permissions, one-time admin setup and GitHub preview persist in RDS
       "DELETE FROM public.career_lv_member WHERE namespace=$1 AND subject_id=$2",
       [namespace, subject],
     );
+    await connection.query(
+      "DELETE FROM public.career_account WHERE namespace=$1 AND subject_id=$2",
+      [namespace, subject],
+    );
+    const cleanup = new DatabaseSync(
+      path.resolve(env.CAREER_DATA_DIR || ".career-data", "career.sqlite"),
+    );
+    for (const table of [
+      "admin_invitations",
+      "sessions",
+      "profiles",
+      "workspaces",
+    ]) {
+      cleanup.prepare(`DELETE FROM ${table} WHERE user_id=?`).run(subject);
+    }
+    cleanup.prepare("DELETE FROM users WHERE id=?").run(subject);
+    cleanup.close();
     await connection.end();
     await anonymous.dispose();
   }
@@ -219,9 +239,47 @@ test("unconfigured Kakao login and invalid OAuth state fail safely", async ({
   const status = await (
     await page.request.get("/api/auth/kakao/status")
   ).json();
+  const kakaoButton = page.getByRole("button", {
+    name: "카카오 로그인",
+    exact: true,
+  });
+  await expect(kakaoButton).toBeVisible();
+  await expect(kakaoButton.getByRole("img")).toHaveAttribute(
+    "src",
+    "/auth/kakao-login-ko.svg",
+  );
+  const kakaoBounds = await kakaoButton.boundingBox();
+  const loginBounds = await page
+    .getByRole("button", { name: "로그인", exact: true })
+    .boundingBox();
+  expect(kakaoBounds!.y).toBeGreaterThanOrEqual(
+    loginBounds!.y + loginBounds!.height,
+  );
+  expect(kakaoBounds!.width).toBeCloseTo(loginBounds!.width, 0);
+  expect(kakaoBounds!.height).toBeCloseTo(loginBounds!.height, 0);
+  if (status.configured) {
+    const start = await page.request.get("/api/auth/kakao", {
+      maxRedirects: 0,
+    });
+    expect(start.status()).toBe(302);
+    expect(new URL(start.headers().location).searchParams.get("lang")).toBe(
+      "ko",
+    );
+    expect(start.headers()["cache-control"]).toBe("no-store");
+    await page.goto("/sign-in?error=kakao_email");
+    await expect(
+      page.getByRole("link", { name: "이메일 제공 동의", exact: true }),
+    ).toHaveAttribute("href", "/api/auth/kakao?consent=email");
+    const consent = await page.request.get("/api/auth/kakao?consent=email", {
+      maxRedirects: 0,
+    });
+    const consentUrl = new URL(consent.headers().location);
+    expect(consentUrl.searchParams.get("scope")).toBe("account_email");
+    expect(consentUrl.searchParams.get("lang")).toBe("ko");
+  }
   if (!status.configured) {
     await expect(
-      page.getByRole("button", { name: "카카오로 시작하기", exact: true }),
+      page.getByRole("button", { name: "카카오 로그인", exact: true }),
     ).toBeDisabled();
     expect((await page.request.get("/api/auth/kakao")).status()).toBe(503);
   }

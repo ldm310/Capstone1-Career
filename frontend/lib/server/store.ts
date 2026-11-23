@@ -24,12 +24,12 @@ export function db() {
  CREATE TABLE IF NOT EXISTS documents(id TEXT PRIMARY KEY,user_id TEXT,name TEXT,mime TEXT,bytes BLOB,text TEXT);
  CREATE TABLE IF NOT EXISTS shares(token TEXT PRIMARY KEY,user_id TEXT,data TEXT);
  CREATE TABLE IF NOT EXISTS attempts(key TEXT PRIMARY KEY,count INTEGER,reset INTEGER);`);
-    connection.exec(`CREATE TABLE IF NOT EXISTS admin_invitations(token_hash TEXT PRIMARY KEY,user_id TEXT NOT NULL REFERENCES users(id),expires INTEGER NOT NULL,used_at INTEGER);
-      CREATE TABLE IF NOT EXISTS oauth_accounts(provider TEXT NOT NULL,subject TEXT NOT NULL,user_id TEXT NOT NULL REFERENCES users(id),PRIMARY KEY(provider,subject),UNIQUE(provider,user_id));`);
     globals.careerDb = connection;
   }
   globals.careerDb.exec(
-    `CREATE TABLE IF NOT EXISTS guests(user_id TEXT PRIMARY KEY);
+    `CREATE TABLE IF NOT EXISTS admin_invitations(token_hash TEXT PRIMARY KEY,user_id TEXT NOT NULL REFERENCES users(id),expires INTEGER NOT NULL,used_at INTEGER);
+ CREATE TABLE IF NOT EXISTS oauth_accounts(provider TEXT NOT NULL,subject TEXT NOT NULL,user_id TEXT NOT NULL REFERENCES users(id),PRIMARY KEY(provider,subject),UNIQUE(provider,user_id));
+ CREATE TABLE IF NOT EXISTS guests(user_id TEXT PRIMARY KEY);
  CREATE TABLE IF NOT EXISTS profiles(user_id TEXT PRIMARY KEY,data TEXT);
  CREATE TABLE IF NOT EXISTS saved_jobs(user_id TEXT,job_id TEXT,data TEXT,saved_at INTEGER,PRIMARY KEY(user_id,job_id));`,
   );
@@ -55,12 +55,26 @@ const hash = (s: string) => createHash("sha256").update(s).digest("hex");
 export async function user() {
   const token = (await cookies()).get("career_session")?.value;
   if (!token) return null;
-  return db()
+  const local = db()
     .prepare(
       "SELECT users.id,users.email,users.name FROM sessions JOIN users ON users.id=sessions.user_id WHERE token=? AND expires>?",
     )
     .get(hash(token), Date.now()) as
     { id: string; email: string; name: string } | undefined;
+  if (!local || isGuest(local.id)) return local;
+  if (process.env.CAREER_ACCOUNT_STORE !== "rds") return local;
+  const { profilePool } = await import("./posting-levels");
+  const pool = profilePool();
+  if (!pool) throw new Error("회원 데이터베이스 연결 설정이 필요합니다.");
+  const { rows } = await pool.query<{
+    id: string;
+    email: string;
+    name: string;
+  }>(
+    `SELECT subject_id AS id,email,name FROM public.career_account WHERE namespace=$1 AND subject_id=$2`,
+    [process.env.CAREER_PROFILE_NAMESPACE || "local-review", local.id],
+  );
+  return rows[0];
 }
 export async function requireUser() {
   const u = await user();

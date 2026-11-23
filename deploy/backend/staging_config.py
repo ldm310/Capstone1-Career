@@ -87,11 +87,24 @@ def profile_env(path, ca_path, environment):
     if len(ca) > 1_000_000 or b'-----BEGIN CERTIFICATE-----' not in ca:
         raise ConfigError('Invalid AWS RDS certificate bundle')
     original = Path(path).read_text(encoding='utf-8') if Path(path).exists() else ''
-    owned = ('CAREER_PROFILE_DATABASE_URL', 'CAREER_PROFILE_CA_FILE', 'CAREER_PROFILE_NAMESPACE')
+    kakao_keys = ('KAKAO_REST_API_KEY', 'KAKAO_CLIENT_SECRET')
+    if any(environment.get(key) for key in kakao_keys) and not all(environment.get(key) for key in kakao_keys):
+        raise ConfigError('Both Kakao REST API key and client secret are required')
+    owned = ('CAREER_PROFILE_DATABASE_URL', 'CAREER_PROFILE_CA_FILE', 'CAREER_PROFILE_NAMESPACE', 'CAREER_ACCOUNT_STORE', 'CAREER_DATA_DIR')
+    kakao = {key: environment[key] for key in kakao_keys} if all(environment.get(key) for key in kakao_keys) else {}
+    if kakao:
+        redirect = environment.get('KAKAO_REDIRECT_URI', '')
+        if not redirect.startswith('https://') or not redirect.endswith('/api/auth/kakao/callback'):
+            raise ConfigError('A staging HTTPS Kakao callback URI is required')
+        kakao['KAKAO_REDIRECT_URI'] = redirect
+        for value in kakao.values():
+            quoted(value)
+        owned += tuple(kakao)
     lines = [line for line in original.splitlines() if not any(re.match(r'^\s*(?:export\s+)?' + key + r'\s*=', line) for key in owned)]
     user, password = quote(environment['RDS_USERNAME'], safe=''), quote(environment['RDS_PASSWORD'], safe='')
     values = {'CAREER_PROFILE_DATABASE_URL': f'postgresql://{user}:{password}@{host}:{port}/{database}',
-              'CAREER_PROFILE_CA_FILE': str(Path(ca_path).resolve()), 'CAREER_PROFILE_NAMESPACE': 'staging'}
+              'CAREER_PROFILE_CA_FILE': str(Path(ca_path).resolve()), 'CAREER_PROFILE_NAMESPACE': 'staging',
+              'CAREER_ACCOUNT_STORE': 'rds', 'CAREER_DATA_DIR': str(Path(path).resolve().parent), **kakao}
     atomic_write(ca_path, ca.decode('ascii'))
     lines += [f'{key}={quoted(value)}' for key, value in values.items()]
     atomic_write(path, '\n'.join(lines) + '\n')

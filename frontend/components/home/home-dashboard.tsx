@@ -17,12 +17,14 @@ export function HomeDashboard() {
           <p>
             GitHub와 PDF 이력서의 경험을 채용공고의 역량 키워드와 비교합니다.
           </p>
-          <Link className="cta" href="/analysis">
-            자료 분석
-          </Link>
-          <Link className="home-panel-action" href="/experience">
-            역량 체험하기
-          </Link>
+          <div className="home-greeting-actions">
+            <Link className="cta" href="/analysis">
+              자료 분석
+            </Link>
+            <Link className="cta cta-secondary" href="/experience">
+              역량 체험하기
+            </Link>
+          </div>
         </div>
         <SkyPlayback />
       </section>
