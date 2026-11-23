@@ -1,5 +1,6 @@
 // 마이페이지에서 수정하는 내 정보. 모든 항목은 선택 입력이다.
 export interface Profile {
+  age?: number | null;
   education: string;
   school: string;
   major: string;

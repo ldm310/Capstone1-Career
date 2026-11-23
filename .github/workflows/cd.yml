@@ -100,7 +100,7 @@ jobs:
     runs-on: [self-hosted, career-ec2]   # EC2 에 설치한 러너(ubuntu 계정, 서비스)
     steps:
       - uses: actions/checkout@v4      # 배포 스크립트만 쓰려고(웹은 deploy.sh 가 판마다 따로 받음)
-      - name: Configure staging user LV and notice RDS connection
+      - name: Configure staging member, LV, notice and optional Kakao connection
         if: github.ref_name == 'develop'
         env:
           RDS_HOST: ${{ secrets.STAGING_RDS_HOST || secrets.RDS_HOST }}
@@ -108,6 +108,9 @@ jobs:
           RDS_DATABASE: ${{ vars.STAGING_RDS_DATABASE || vars.RDS_DATABASE }}
           RDS_USERNAME: ${{ vars.STAGING_RDS_USERNAME || vars.RDS_USERNAME }}
           RDS_PORT: ${{ vars.STAGING_RDS_PORT || vars.RDS_PORT }}
+          KAKAO_REST_API_KEY: ${{ secrets.STAGING_KAKAO_REST_API_KEY }}
+          KAKAO_CLIENT_SECRET: ${{ secrets.STAGING_KAKAO_CLIENT_SECRET }}
+          KAKAO_REDIRECT_URI: ${{ vars.STAGING_KAKAO_REDIRECT_URI || 'https://staging.15-164-137-78.sslip.io/api/auth/kakao/callback' }}
         run: python3 deploy/backend/staging_config.py profile-env --path "$HOME/career-data-staging/.env" --ca-path "$HOME/career-data-staging/rds-ca.pem"
       - name: EC2 웹 배포(develop → 스테이징, main → 운영)
         env:

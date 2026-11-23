@@ -5,6 +5,7 @@ import type { PublicJob } from "@/types/public-job";
 
 const text = (max: number) => z.string().trim().max(max).default("");
 export const profileSchema = z.object({
+  age: z.number().int().min(0).max(120).nullable().default(null),
   education: text(30),
   school: text(60),
   major: text(60),

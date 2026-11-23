@@ -28,9 +28,24 @@ class StagingConfigTest(unittest.TestCase):
         connection=urlsplit(values['CAREER_PROFILE_DATABASE_URL'])
         self.assertEqual(unquote(connection.password),self.profile_settings()['RDS_PASSWORD'])
         self.assertEqual(values['CAREER_PROFILE_NAMESPACE'],'staging')
+        self.assertEqual(values['CAREER_ACCOUNT_STORE'],'rds')
+        self.assertEqual(values['CAREER_DATA_DIR'],str(self.path.parent.resolve()))
         self.assertEqual(values['BACKEND_URL'],'http://127.0.0.1:18081')
         self.assertEqual(values['KAKAO_REST_API_KEY'],'keep-existing')
         self.assertTrue(ca.exists())
+
+    def test_profile_env_configures_kakao_without_printing_keys(self):
+        settings = {**self.profile_settings(), 'KAKAO_REST_API_KEY':'test-key', 'KAKAO_CLIENT_SECRET':'test-secret',
+                    'KAKAO_REDIRECT_URI':'https://staging.example.test/api/auth/kakao/callback'}
+        with patch.object(config.urllib.request,'urlopen',return_value=io.BytesIO(b'-----BEGIN CERTIFICATE-----\nfixture\n-----END CERTIFICATE-----')):
+            config.profile_env(self.path,Path(self.temp.name)/'ca.pem',settings)
+        values={key:json.loads(value) for key,value in (line.split('=',1) for line in self.path.read_text().splitlines())}
+        self.assertEqual(values['KAKAO_CLIENT_SECRET'],'test-secret')
+        self.assertEqual(values['KAKAO_REDIRECT_URI'],settings['KAKAO_REDIRECT_URI'])
+        for patch_values in ({'KAKAO_CLIENT_SECRET':''},{'KAKAO_REDIRECT_URI':'http://localhost/callback'}):
+            with patch.object(config.urllib.request,'urlopen',return_value=io.BytesIO(b'-----BEGIN CERTIFICATE-----\nfixture\n-----END CERTIFICATE-----')):
+                with self.assertRaises(ValueError):
+                    config.profile_env(self.path,Path(self.temp.name)/'ca.pem',{**settings,**patch_values})
 
     def test_profile_env_rejects_production_and_partial_or_multiline_settings(self):
         self.path.write_text('original')

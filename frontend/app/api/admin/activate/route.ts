@@ -9,6 +9,7 @@ import {
   rateLimit,
 } from "@/lib/server/store";
 import { memberRole } from "@/lib/server/notices";
+import { accountById, updateAccount } from "@/lib/server/accounts";
 export const runtime = "nodejs";
 export async function POST(request: Request) {
   try {
@@ -58,6 +59,9 @@ export async function POST(request: Request) {
       d.exec("ROLLBACK");
       throw error;
     }
+    const account = await accountById(invite.user_id);
+    if (!account) throw new Error("Administrator account not provisioned");
+    await updateAccount({ ...account, password });
     await session(invite.user_id);
     return Response.json(
       { ok: true },

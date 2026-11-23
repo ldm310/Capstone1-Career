@@ -85,7 +85,7 @@ export function ProfilePanel() {
     set({ profile: { ...account.profile, ...patch } });
   const p = account.profile;
   const field = (
-    key: keyof Profile,
+    key: Exclude<keyof Profile, "age">,
     label: string,
     placeholder: string,
     type = "text",

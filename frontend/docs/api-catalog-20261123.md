@@ -9,6 +9,16 @@ Next 서버가 Spring 공고 API 또는 사용자용 RDS/SQLite에 연결한다.
 - 로그인 쿠키: `career_session`. 변경 요청은 같은 출처의 Origin 검사를 통과해야 한다.
 - 일반 회원은 실제 분석/개인 LV/공지 작성의 게스트 세션과 구분된다.
 
+회원 RDS 연결: `CAREER_ACCOUNT_STORE=rds`일 때 기존 사용자용 RDS의
+`career_account`(이름, 이메일, 비밀번호 해시, 선택 나이/학교/학과),
+`career_account_oauth`(카카오 식별자 연결)를 사용한다. 세션과 분석 파일/작업 공간은 기존 SQLite에 보관한다.
+가입·로그인·카카오 로그인·내 정보/비밀번호 변경은 같은 회원 저장소를 사용한다.
+새 RDS 인스턴스를 추가하지 않는다. 로컬/스테이징 회원은 `namespace`로 구분한다.
+
+기존 계정 이전은 `node scripts/setup-community.mjs --migrate-accounts`로 명시적으로 실행한다.
+이 명령은 회원 ID와 비밀번호 해시를 유지하고, 이미 RDS에 있는 회원의 정보를 덮어쓰지 않는다.
+이전 완료 후 해당 환경 `.env`에 `CAREER_ACCOUNT_STORE=rds`를 설정하고 서버를 재시작한다.
+
 ## 1. 프론트 서버 API (Next.js)
 
 | 메서드 | 경로 | 역할 | 인증/상태 |
@@ -48,7 +58,7 @@ Next 서버가 Spring 공고 API 또는 사용자용 RDS/SQLite에 연결한다.
 
 | API | action | 본문 주요 필드 |
 |---|---|---|
-| POST /api/account | register | email, password(10~128자), name |
+| POST /api/account | register | name, email, password(10~128자) 필수. age(0~120 정수), school, major 선택 |
 | POST /api/account | login | email, password |
 | POST /api/account | logout | 없음 |
 | POST /api/account | update | name, email, profile |
@@ -112,7 +122,8 @@ Spring 문서: `/swagger-ui/index.html`, OpenAPI JSON: `/v3/api-docs` (Spring에
 | 데이터 | 현재 저장소 | 주의점 |
 |---|---|---|
 | 채용공고와 추출 결과 | RDS public posting/recruit_unit/unit_item 등 | Spring이 읽어서 Next가 전달 |
-| 웹 로그인/세션/문서/workspace | 각 웹 서버의 SQLite | 로컬과 스테이징의 계정 데이터는 자동 복사되지 않음 |
+| 회원/카카오 연결 | RDS career_account / career_account_oauth | CAREER_ACCOUNT_STORE=rds, namespace별 분리 |
+| 세션/문서/workspace | 각 웹 서버의 SQLite | 회원 정보는 RDS를 기준으로 조회, 파일과 세션은 서버별 보관 |
 | 문장별 사용자 LV | RDS career_lv_posting_keyword_level | 세션 subject + namespace + 공고 + 문장 + 분류 버전 |
 | 사용자 자료 메타데이터 | RDS career_lv_analysis_source | 실제 PDF 바이트의 저장 위치와 구분 |
 | 관리자 권한 | RDS career_lv_member.app_role | MEMBER/ADMIN, 클라이언트 role 입력을 신뢰하지 않음 |

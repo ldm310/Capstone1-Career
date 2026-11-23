@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import { cookies } from "next/headers";
 import { kakaoConfig } from "@/lib/server/kakao";
 export const runtime = "nodejs";
-export async function GET() {
+export async function GET(request: Request) {
   let config;
   try {
     config = kakaoConfig();
@@ -27,6 +27,13 @@ export async function GET() {
     client_id: config.clientId,
     redirect_uri: config.redirect,
     state,
+    lang: "ko",
   }).toString();
-  return Response.redirect(url, 302);
+  if (new URL(request.url).searchParams.get("consent") === "email") {
+    url.searchParams.set("scope", "account_email");
+  }
+  return new Response(null, {
+    status: 302,
+    headers: { Location: url.toString(), "Cache-Control": "no-store" },
+  });
 }

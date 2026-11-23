@@ -1,5 +1,5 @@
 // Administrator CLI. No credentials or one-time activation tokens are printed.
-import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { randomBytes, randomUUID, scryptSync, createHash } from "node:crypto";
@@ -80,6 +80,9 @@ try {
       `INSERT INTO public.career_notice(namespace,id,title,content,pinned,author_id,author_name) VALUES($1,$2,$3,$4,$5,'career-system','Career') ON CONFLICT DO NOTHING`,
       [namespace, id, title, content, pinned],
     );
+  await client.query(
+    readFileSync(path.join(root, "db/migrations/08-user-accounts.sql"), "utf8"),
+  );
   const report = { migrationApplied: true, starterNotices: 2 };
   const sourceNamespace = option("--seed-demo-from");
   if (sourceNamespace) {
@@ -151,6 +154,21 @@ try {
       );
       created = true;
     }
+    if (env.CAREER_ACCOUNT_STORE === "rds") {
+      const identity = d
+        .prepare("SELECT id,email,name,password FROM users WHERE id=?")
+        .get(account.id);
+      await client.query(
+        `INSERT INTO public.career_account(namespace,subject_id,email,name,password_hash) VALUES($1,$2,$3,$4,$5) ON CONFLICT(namespace,subject_id) DO NOTHING`,
+        [
+          namespace,
+          identity.id,
+          identity.email,
+          identity.name,
+          identity.password,
+        ],
+      );
+    }
     await client.query(
       `INSERT INTO public.career_lv_member(namespace,subject_id,app_role) VALUES($1,$2,'ADMIN') ON CONFLICT(namespace,subject_id) DO UPDATE SET app_role='ADMIN'`,
       [namespace, account.id],
@@ -175,6 +193,85 @@ try {
     report.adminEmail = email;
     report.newAccount = created;
     d.close();
+  }
+  // Keep IDs and password hashes so existing LV ownership and roles stay valid.
+  const sqliteFile = path.resolve(
+    front,
+    env.CAREER_DATA_DIR || ".career-data",
+    "career.sqlite",
+  );
+  report.accounts = { imported: 0, oauthImported: 0 };
+  if (args.includes("--migrate-accounts") && existsSync(sqliteFile)) {
+    const local = new DatabaseSync(sqliteFile, { readOnly: true });
+    try {
+      const tables = new Set(
+        local
+          .prepare("SELECT name FROM sqlite_master WHERE type='table'")
+          .all()
+          .map((row) => row.name),
+      );
+      await client.query("BEGIN");
+      if (tables.has("users"))
+        for (const account of local
+          .prepare("SELECT id,email,name,password FROM users")
+          .all()) {
+          if (
+            tables.has("guests") &&
+            local
+              .prepare("SELECT 1 FROM guests WHERE user_id=?")
+              .get(account.id)
+          )
+            continue;
+          let details = {};
+          if (tables.has("profiles")) {
+            const saved = local
+              .prepare("SELECT data FROM profiles WHERE user_id=?")
+              .get(account.id);
+            try {
+              details = saved ? JSON.parse(saved.data) : {};
+            } catch {
+              /* Optional fields stay blank. */
+            }
+          }
+          const result = await client.query(
+            `INSERT INTO public.career_account(namespace,subject_id,email,name,password_hash,age,school,major)
+          VALUES($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT(namespace,subject_id) DO NOTHING`,
+            [
+              namespace,
+              account.id,
+              account.email.toLowerCase(),
+              account.name,
+              account.password,
+              Number.isInteger(details.age) &&
+              details.age >= 0 &&
+              details.age <= 120
+                ? details.age
+                : null,
+              String(details.school || "").slice(0, 60),
+              String(details.major || "").slice(0, 60),
+            ],
+          );
+          report.accounts.imported += result.rowCount;
+        }
+      if (tables.has("oauth_accounts"))
+        for (const identity of local
+          .prepare("SELECT provider,subject,user_id FROM oauth_accounts")
+          .all()) {
+          if (identity.provider !== "kakao") continue;
+          const result = await client.query(
+            `INSERT INTO public.career_account_oauth(namespace,provider,provider_subject,subject_id)
+          VALUES($1,'kakao',$2,$3) ON CONFLICT DO NOTHING`,
+            [namespace, identity.subject, identity.user_id],
+          );
+          report.accounts.oauthImported += result.rowCount;
+        }
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      local.close();
+    }
   }
   const reportFile =
     option("--report-file") ||

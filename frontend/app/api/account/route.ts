@@ -15,15 +15,37 @@ import {
 } from "@/lib/server/store";
 import { demoAccount, ensureDemoAccount } from "@/lib/server/demo-account";
 import { profile, profileSchema, saveProfile } from "@/lib/server/user-data";
+import {
+  accountByEmail,
+  accountById,
+  createAccount,
+  updateAccount as persistAccount,
+} from "@/lib/server/accounts";
 export const runtime = "nodejs";
 export async function GET() {
   const current = (await user()) || null;
   const guest = current ? isGuest(current.id) : false;
+  const account = current && !guest ? await accountById(current.id) : null;
+  const currentProfile = current && !guest ? profile(current.id) : null;
   return Response.json(
     {
       user: current,
       guest,
-      profile: current && !guest ? profile(current.id) : null,
+      profile: currentProfile
+        ? {
+            ...currentProfile,
+            ...(account
+              ? {
+                  age:
+                    account.age !== undefined
+                      ? account.age
+                      : (currentProfile.age ?? null),
+                  school: account.school ?? currentProfile.school,
+                  major: account.major ?? currentProfile.major,
+                }
+              : {}),
+          }
+        : null,
       demo: current?.email === demoAccount.email,
     },
     { headers: { "Cache-Control": "no-store" } },
@@ -46,23 +68,48 @@ export async function POST(req: Request) {
         email: z.email().max(200),
         password: z.string().min(10).max(128),
         name: z.string().trim().min(1).max(60).optional(),
+        age: z.number().int().min(0).max(120).nullable().optional(),
+        school: z.string().trim().max(60).optional(),
+        major: z.string().trim().max(60).optional(),
       })
       .parse(body);
     const email = input.email.toLowerCase();
     rateLimit("auth:" + email);
     if (email === demoAccount.email) ensureDemoAccount();
-    const found = db()
-      .prepare("SELECT * FROM users WHERE email=?")
-      .get(email) as { id: string; password: string } | undefined;
+    let found = await accountByEmail(email);
+    if (!found && email === demoAccount.email) {
+      const localDemo = db()
+        .prepare("SELECT * FROM users WHERE email=?")
+        .get(email) as {
+        id: string;
+        email: string;
+        name: string;
+        password: string;
+      };
+      found = await createAccount(localDemo);
+    }
     if (input.action === "register") {
       if (found)
         throw new Error(
           "이 이메일로 계정을 만들 수 없습니다. 로그인해 주세요.",
         );
       const id = randomUUID();
-      db()
-        .prepare("INSERT INTO users VALUES(?,?,?,?)")
-        .run(id, email, input.name || "사용자", passwordHash(input.password));
+      if (!input.name) throw new Error("이름을 입력해 주세요.");
+      await createAccount({
+        id,
+        email,
+        name: input.name,
+        password: passwordHash(input.password),
+        age: input.age ?? null,
+        school: input.school || "",
+        major: input.major || "",
+      });
+      saveProfile(id, {
+        ...profile(id),
+        age: input.age ?? null,
+        school: input.school || "",
+        major: input.major || "",
+      });
       await session(id);
     } else {
       if (!found || !passwordMatches(input.password, found.password))
@@ -93,14 +140,11 @@ async function updateAccount(body: Record<string, unknown>) {
       .parse(body);
     if (current.email === demoAccount.email)
       throw new Error("데모 계정은 비밀번호를 바꿀 수 없어요.");
-    const row = db()
-      .prepare("SELECT password FROM users WHERE id=?")
-      .get(current.id) as { password: string };
+    const row = await accountById(current.id);
+    if (!row) throw new Error("회원 정보를 찾을 수 없습니다.");
     if (!passwordMatches(input.current, row.password))
       throw new Error("현재 비밀번호가 맞지 않아요.");
-    db()
-      .prepare("UPDATE users SET password=? WHERE id=?")
-      .run(passwordHash(input.next), current.id);
+    await persistAccount({ ...row, password: passwordHash(input.next) });
     return Response.json({ ok: true });
   }
   const input = z
@@ -114,12 +158,19 @@ async function updateAccount(body: Record<string, unknown>) {
   if (email !== current.email) {
     if (current.email === demoAccount.email)
       throw new Error("데모 계정은 이메일을 바꿀 수 없어요.");
-    if (db().prepare("SELECT id FROM users WHERE email=?").get(email))
+    if (await accountByEmail(email))
       throw new Error("이미 사용 중인 이메일이에요.");
   }
-  db()
-    .prepare("UPDATE users SET name=?, email=? WHERE id=?")
-    .run(input.name, email, current.id);
+  const account = await accountById(current.id);
+  if (!account) throw new Error("회원 정보를 찾을 수 없습니다.");
+  await persistAccount({
+    ...account,
+    name: input.name,
+    email,
+    age: input.profile.age ?? null,
+    school: input.profile.school,
+    major: input.profile.major,
+  });
   saveProfile(current.id, input.profile);
   return Response.json({ user: await user(), profile: input.profile });
 }
