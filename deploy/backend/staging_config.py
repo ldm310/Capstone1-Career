@@ -8,6 +8,7 @@ import subprocess
 import tempfile
 import time
 import urllib.request
+from urllib.parse import quote
 
 BACKEND_URL = 'http://127.0.0.1:18081'
 
@@ -68,6 +69,34 @@ def web_env(path):
     atomic_write(path, '\n'.join(lines) + '\n')
 
 
+def profile_env(path, ca_path, environment):
+    """Reuse the designated staging RDS credentials, without logging or shell sourcing."""
+    if environment.get('GITHUB_REF_NAME') != 'develop':
+        raise ConfigError('Only develop may configure the staging profile database')
+    required = ('RDS_HOST', 'RDS_PASSWORD', 'RDS_USERNAME', 'RDS_DATABASE')
+    if any(not environment.get(key) for key in required):
+        raise ConfigError('Existing staging RDS host, password, username and database are required')
+    for key in required:
+        quoted(environment[key])
+    host, database = environment['RDS_HOST'], environment['RDS_DATABASE']
+    port = environment.get('RDS_PORT') or '5432'
+    if not re.fullmatch(r'[A-Za-z0-9.-]+', host) or not re.fullmatch(r'[A-Za-z0-9_]+', database) or not port.isdecimal() or not 1 <= int(port) <= 65535:
+        raise ConfigError('Invalid staging database address/name/port')
+    with urllib.request.urlopen('https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem', timeout=30) as response:
+        ca = response.read(1_000_001)
+    if len(ca) > 1_000_000 or b'-----BEGIN CERTIFICATE-----' not in ca:
+        raise ConfigError('Invalid AWS RDS certificate bundle')
+    original = Path(path).read_text(encoding='utf-8') if Path(path).exists() else ''
+    owned = ('CAREER_PROFILE_DATABASE_URL', 'CAREER_PROFILE_CA_FILE', 'CAREER_PROFILE_NAMESPACE')
+    lines = [line for line in original.splitlines() if not any(re.match(r'^\s*(?:export\s+)?' + key + r'\s*=', line) for key in owned)]
+    user, password = quote(environment['RDS_USERNAME'], safe=''), quote(environment['RDS_PASSWORD'], safe='')
+    values = {'CAREER_PROFILE_DATABASE_URL': f'postgresql://{user}:{password}@{host}:{port}/{database}',
+              'CAREER_PROFILE_CA_FILE': str(Path(ca_path).resolve()), 'CAREER_PROFILE_NAMESPACE': 'staging'}
+    atomic_write(ca_path, ca.decode('ascii'))
+    lines += [f'{key}={quoted(value)}' for key, value in values.items()]
+    atomic_write(path, '\n'.join(lines) + '\n')
+
+
 def read_json(url):
     with urllib.request.urlopen(url, timeout=60) as response:
         return json.load(response)
@@ -88,6 +117,12 @@ def verify_web():
     count = sum(job['id'].startswith('be:') for job in jobs['jobs'])
     assert count > 0, 'Staging still shows no backend postings'
     return {'backendJobsOnPage': count, 'filteredFeedTotal': jobs['total']}
+
+
+def verify_profile():
+    notices = read_json('http://127.0.0.1:3001/api/notices')
+    assert isinstance(notices.get('notices'), list), 'Staging notice database is unavailable'
+    return {'stagingNotices': len(notices['notices'])}
 
 
 def wait_for_web(attempts=4, delay=15):
@@ -129,8 +164,9 @@ def diagnostics():
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action', choices=['backend-env', 'web-env', 'verify-backend', 'verify-web', 'diagnostics'])
+    parser.add_argument('action', choices=['backend-env', 'web-env', 'profile-env', 'verify-profile', 'verify-backend', 'verify-web', 'diagnostics'])
     parser.add_argument('--path', type=Path)
+    parser.add_argument('--ca-path', type=Path)
     args = parser.parse_args()
     if args.action in ('backend-env', 'web-env') and not args.path:
         parser.error('--path is required')
@@ -138,6 +174,12 @@ def main():
         backend_env(args.path, os.environ)
     elif args.action == 'web-env':
         web_env(args.path)
+    elif args.action == 'profile-env':
+        if not args.path or not args.ca_path:
+            parser.error('--path and --ca-path are required')
+        profile_env(args.path, args.ca_path, os.environ)
+    elif args.action == 'verify-profile':
+        print(json.dumps(verify_profile()))
     elif args.action == 'diagnostics':
         print(json.dumps(diagnostics()))
     else:

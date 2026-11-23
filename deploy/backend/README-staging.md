@@ -36,3 +36,14 @@ python -m unittest discover -s deploy/backend/tests -v
 CI의 `deployment` 잡에서 설정 원자적 저장, 비밀번호 특수문자 처리, 설정 유실 방지, 실제 공고 없는 헬스 응답 거부, 더미만 있는 웹 응답 거부, main 배포 차단을 검사한다. Java 테스트에서 쓰기 요청이 필터 뒤로 전달되지 않는지 확인한다.
 
 현재 환경의 직접 SSH는 시간 초과여서 EC2 설정 내용을 조회하지 않았다. 이 배포는 서버의 환경변수를 수집하는 진단 작업이 아니라, 명시된 RDS 설정을 전용 서비스에 적용하는 정상 CD 단계다. 실제 복구 완료는 develop 병합 후 CD와 공고 전달 검사 성공으로 판정한다.
+# 사용자 LV·공지 RDS 연결
+
+develop 웹 배포는 기존 STAGING_RDS_HOST/PASSWORD와 STAGING_RDS_USERNAME/DATABASE 설정을 재사용한다.
+`staging_config.py profile-env`가 스테이징 `.env`에 CAREER_PROFILE_DATABASE_URL/CA_FILE/NAMESPACE를 저장한다.
+연결 문자열은 사용자명과 비밀번호를 URL 인코딩하며 로그에 출력하지 않는다. AWS 공식 CA로 TLS를 검증한다.
+기존 BACKEND_URL, 카카오 설정과 다른 환경 값은 보존한다. namespace는 staging이며 production은 변경하지 않는다.
+
+웹 배포 전 06/07 사용자용 테이블을 멱등 생성하고 공지 초기 자료를 준비한다.
+local-review의 공개 더미 사용자 자료만 staging으로 복사하며 실제 사용자 자료/관리자 역할은 복사하지 않는다.
+로컬과 스테이징 로그인 계정은 각 서버 SQLite에 있으므로 관리자 초기화도 해당 환경에서 별도로 실행한다.
+배포 후 `/api/notices`와 기존 Spring 공고 연결을 모두 확인한다.

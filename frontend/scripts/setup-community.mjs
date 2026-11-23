@@ -7,13 +7,23 @@ import { DatabaseSync } from "node:sqlite";
 import pg from "pg";
 const front = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."),
   root = path.dirname(front);
+const args = process.argv.slice(2);
+const option = (name) =>
+  args.includes(name) ? args[args.indexOf(name) + 1] : undefined;
 const env = Object.fromEntries(
-  readFileSync(path.join(front, ".env.local"), "utf8")
+  readFileSync(option("--env-file") || path.join(front, ".env.local"), "utf8")
     .split(/\r?\n/)
     .filter((line) => line.includes("=") && !line.startsWith("#"))
     .map((line) => {
       const i = line.indexOf("=");
-      return [line.slice(0, i), line.slice(i + 1)];
+      const raw = line.slice(i + 1).trim();
+      const value =
+        raw.startsWith('"') && raw.endsWith('"')
+          ? JSON.parse(raw)
+          : raw.startsWith("'") && raw.endsWith("'")
+            ? raw.slice(1, -1)
+            : raw;
+      return [line.slice(0, i).trim(), value];
     }),
 );
 const client = new pg.Client({
@@ -25,10 +35,9 @@ const client = new pg.Client({
   connectionTimeoutMillis: 10000,
 });
 const namespace = env.CAREER_PROFILE_NAMESPACE || "local-review";
-const args = process.argv.slice(2),
-  email = args.includes("--admin")
-    ? args[args.indexOf("--admin") + 1]?.toLowerCase()
-    : null;
+const email = args.includes("--admin")
+  ? args[args.indexOf("--admin") + 1]?.toLowerCase()
+  : null;
 if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
   throw new Error("Invalid administrator email");
 if (email === "demo@career.dev")
@@ -39,6 +48,12 @@ const hashPassword = (value) => {
 };
 try {
   await client.connect();
+  await client.query(
+    readFileSync(
+      path.join(root, "db/migrations/06-user-posting-levels.sql"),
+      "utf8",
+    ),
+  );
   await client.query(
     readFileSync(path.join(root, "db/migrations/07-notices-admin.sql"), "utf8"),
   );
@@ -66,6 +81,53 @@ try {
       [namespace, id, title, content, pinned],
     );
   const report = { migrationApplied: true, starterNotices: 2 };
+  const sourceNamespace = option("--seed-demo-from");
+  if (sourceNamespace) {
+    if (sourceNamespace === namespace)
+      throw new Error("Demo source and destination must differ");
+    await client.query("BEGIN");
+    try {
+      const source = await client.query(
+        `SELECT 1 FROM public.career_lv_member WHERE namespace=$1 AND subject_id='demo-user' AND is_demo`,
+        [sourceNamespace],
+      );
+      if (!source.rowCount) throw new Error("Demo source is not provisioned");
+      await client.query(
+        `INSERT INTO public.career_lv_member(namespace,subject_id,is_demo) VALUES($1,'demo-user',true) ON CONFLICT DO NOTHING`,
+        [namespace],
+      );
+      const target = await client.query(
+        `SELECT is_demo FROM public.career_lv_member WHERE namespace=$1 AND subject_id='demo-user'`,
+        [namespace],
+      );
+      if (!target.rows[0]?.is_demo)
+        throw new Error("Cannot replace a real member with a demo");
+      await client.query(
+        `INSERT INTO public.career_lv_analysis_source(namespace,subject_id,source_id,kind,title,locator,is_simulated)
+        SELECT $1,subject_id,source_id,kind,title,locator,true FROM public.career_lv_analysis_source
+        WHERE namespace=$2 AND subject_id='demo-user' AND is_simulated ON CONFLICT DO NOTHING`,
+        [namespace, sourceNamespace],
+      );
+      await client.query(
+        `INSERT INTO public.career_lv_posting_keyword_level(namespace,subject_id,job_id,keyword_id,taxonomy_version,keyword_text,category_codes,score,reference_score,reference_kind,evidence_source_ids,evaluation_kind,method_version)
+        SELECT $1,subject_id,job_id,keyword_id,taxonomy_version,keyword_text,category_codes,score,reference_score,reference_kind,evidence_source_ids,evaluation_kind,method_version
+        FROM public.career_lv_posting_keyword_level WHERE namespace=$2 AND subject_id='demo-user' AND evaluation_kind='DEMO' ON CONFLICT DO NOTHING`,
+        [namespace, sourceNamespace],
+      );
+      await client.query("COMMIT");
+      const counts = await client.query(
+        `SELECT count(*)::int AS levels,count(DISTINCT job_id)::int AS jobs FROM public.career_lv_posting_keyword_level WHERE namespace=$1 AND subject_id='demo-user' AND evaluation_kind='DEMO'`,
+        [namespace],
+      );
+      if (!counts.rows[0].levels)
+        throw new Error("Demo levels are not provisioned");
+      report.demo = counts.rows[0];
+      report.namespace = namespace;
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => {});
+      throw error;
+    }
+  }
   if (email) {
     const d = new DatabaseSync(
       path.resolve(
@@ -114,10 +176,11 @@ try {
     report.newAccount = created;
     d.close();
   }
-  writeFileSync(
-    path.join(root, "work/community-setup-20261123.json"),
-    JSON.stringify(report, null, 2),
-  );
+  const reportFile =
+    option("--report-file") ||
+    path.join(root, "work/community-setup-20261123.json");
+  mkdirSync(path.dirname(reportFile), { recursive: true });
+  writeFileSync(reportFile, JSON.stringify(report, null, 2), { mode: 0o600 });
   console.log(JSON.stringify(report));
 } catch (error) {
   console.error(
