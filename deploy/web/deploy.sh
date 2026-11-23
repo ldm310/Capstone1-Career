@@ -39,6 +39,11 @@ if [ ! -f "$rel/.built" ]; then
   touch "$rel/.built"
 fi
 
+# Provision only the dedicated staging app tables. No production/crawler changes.
+if [ "$env" = staging ]; then
+  (cd "$rel/frontend" && node scripts/setup-community.mjs --env-file "$data/.env" --seed-demo-from local-review --report-file "$data/profile-setup-report.json")
+fi
+
 # 2) 서비스 설정: 이 환경의 current/frontend 에서, 이 환경의 데이터·포트로(처음 한 번 만들거나 고침)
 prev_dir=$(sudo sed -n 's/^WorkingDirectory=//p' "$unit" 2>/dev/null || true)
 prev_rel=$(readlink -f "$base/current" 2>/dev/null || true)

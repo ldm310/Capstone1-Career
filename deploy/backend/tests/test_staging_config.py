@@ -5,6 +5,8 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+import io
+from urllib.parse import urlsplit, unquote
 from unittest.mock import patch
 
 SCRIPT = Path(__file__).resolve().parents[1] / 'staging_config.py'
@@ -14,6 +16,35 @@ spec.loader.exec_module(config)
 
 
 class StagingConfigTest(unittest.TestCase):
+    def profile_settings(self):
+        return {'GITHUB_REF_NAME':'develop','RDS_HOST':'rds.example','RDS_USERNAME':'app-user','RDS_PASSWORD':'fake$%#"\\value','RDS_DATABASE':'career'}
+
+    def test_profile_env_preserves_web_settings_and_encodes_credentials(self):
+        self.path.write_text('BACKEND_URL=http://127.0.0.1:18081\nKAKAO_REST_API_KEY=keep-existing\n',encoding='utf-8')
+        ca=Path(self.temp.name)/'rds-ca.pem'
+        with patch.object(config.urllib.request,'urlopen',return_value=io.BytesIO(b'-----BEGIN CERTIFICATE-----\nfixture\n-----END CERTIFICATE-----')):
+            config.profile_env(self.path,ca,self.profile_settings())
+        values={key:json.loads(value) if value.startswith('"') else value for key,value in (line.split('=',1) for line in self.path.read_text().splitlines())}
+        connection=urlsplit(values['CAREER_PROFILE_DATABASE_URL'])
+        self.assertEqual(unquote(connection.password),self.profile_settings()['RDS_PASSWORD'])
+        self.assertEqual(values['CAREER_PROFILE_NAMESPACE'],'staging')
+        self.assertEqual(values['BACKEND_URL'],'http://127.0.0.1:18081')
+        self.assertEqual(values['KAKAO_REST_API_KEY'],'keep-existing')
+        self.assertTrue(ca.exists())
+
+    def test_profile_env_rejects_production_and_partial_or_multiline_settings(self):
+        self.path.write_text('original')
+        for patch_values in ({'GITHUB_REF_NAME':'main'},{'RDS_USERNAME':''},{'RDS_PASSWORD':'fake\nOTHER=value'}):
+            with self.assertRaises(ValueError):
+                config.profile_env(self.path,Path(self.temp.name)/'ca.pem',{**self.profile_settings(),**patch_values})
+            self.assertEqual(self.path.read_text(),'original')
+
+    def test_profile_env_rejects_invalid_certificate_without_replacing_settings(self):
+        self.path.write_text('original')
+        with patch.object(config.urllib.request,'urlopen',return_value=io.BytesIO(b'not a certificate')):
+            with self.assertRaises(ValueError):config.profile_env(self.path,Path(self.temp.name)/'ca.pem',self.profile_settings())
+        self.assertEqual(self.path.read_text(),'original')
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
