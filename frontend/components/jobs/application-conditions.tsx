@@ -40,7 +40,7 @@ export function ApplicationConditions({
         </p>
       </header>
       {synthetic && (
-        <p className="conditions-example-label">가상 공고·내 지원 정보 예시</p>
+        <p className="conditions-example-label">가상 공고, 내 지원 정보 예시</p>
       )}
       <div className="qualification-score-panel">
         <div
@@ -68,9 +68,9 @@ export function ApplicationConditions({
           <p>
             {score === null
               ? "공고 요건과 내 자료의 평가 결과가 연결되면 점수를 표시해요."
-              : `필수 조건 ${benchmark.qualifications.length}개 중 ${met}개 충족 · ${benchmark.qualifications.length - met}개 보완`}
+              : `필수 조건 ${benchmark.qualifications.length}개 중 ${met}개 충족,  ${benchmark.qualifications.length - met}개 보완`}
           </p>
-          <span>필수 조건 충족도 · 합격 확률과는 달라요</span>
+          <span>필수 조건 충족도, 합격 확률과는 달라요</span>
         </div>
       </div>
       {!!benchmark.qualifications.length && (
@@ -143,7 +143,7 @@ export function ApplicationConditions({
       )}
       <p className="conditions-footnote">
         <Info size={15} aria-hidden="true" />
-        자격증·학점·경력은 위 점수에 합산하지 않아요.{" "}
+        자격증, 학점, 경력은 위 점수에 합산하지 않아요.{" "}
         {synthetic && "점수와 충족 여부는 화면 확인용 예시예요."}
       </p>
     </section>

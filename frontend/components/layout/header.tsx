@@ -63,6 +63,13 @@ export function Header() {
             </Link>
           ))}
           <Link
+            href="/notices"
+            aria-current={pathname === "/notices" ? "page" : undefined}
+            onClick={() => setOpen(false)}
+          >
+            공지사항
+          </Link>
+          <Link
             className="mobile-only"
             href="/my-page"
             aria-current={pathname === "/my-page" ? "page" : undefined}

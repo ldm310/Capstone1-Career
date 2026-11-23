@@ -24,6 +24,8 @@ export function db() {
  CREATE TABLE IF NOT EXISTS documents(id TEXT PRIMARY KEY,user_id TEXT,name TEXT,mime TEXT,bytes BLOB,text TEXT);
  CREATE TABLE IF NOT EXISTS shares(token TEXT PRIMARY KEY,user_id TEXT,data TEXT);
  CREATE TABLE IF NOT EXISTS attempts(key TEXT PRIMARY KEY,count INTEGER,reset INTEGER);`);
+    connection.exec(`CREATE TABLE IF NOT EXISTS admin_invitations(token_hash TEXT PRIMARY KEY,user_id TEXT NOT NULL REFERENCES users(id),expires INTEGER NOT NULL,used_at INTEGER);
+      CREATE TABLE IF NOT EXISTS oauth_accounts(provider TEXT NOT NULL,subject TEXT NOT NULL,user_id TEXT NOT NULL REFERENCES users(id),PRIMARY KEY(provider,subject),UNIQUE(provider,user_id));`);
     globals.careerDb = connection;
   }
   globals.careerDb.exec(

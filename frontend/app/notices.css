@@ -1,0 +1,137 @@
+.notice-board {
+  max-width: 960px;
+  margin: 0 auto 40px;
+  background: #fff;
+  border: 1px solid #dce6ef;
+  border-radius: 16px;
+  padding: 28px;
+  color: #243f53;
+}
+.notice-toolbar,
+.notice-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+.notice-toolbar p,
+.notice-meta {
+  font-size: 13px;
+  color: #536c80;
+}
+.notice-board button {
+  cursor: pointer;
+  border: 1px solid #c7d6e5;
+  border-radius: 7px;
+  padding: 10px 16px;
+  background: #fff;
+  color: #315e7e;
+  font-size: 14px;
+}
+.notice-board .notice-primary {
+  background: #315e7e;
+  color: white;
+  border-color: #315e7e;
+}
+.notice-board button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+.notice-board h2 {
+  font-size: 22px;
+  line-height: 1.5;
+  margin: 16px 0;
+}
+.notice-list {
+  padding: 0;
+  list-style: none;
+  margin: 0;
+}
+.notice-list li {
+  border-top: 1px solid #e3eaf1;
+}
+.notice-list li:last-child {
+  border-bottom: 1px solid #e3eaf1;
+}
+.notice-list button {
+  width: 100%;
+  text-align: left;
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  align-items: center;
+  border: 0;
+  border-radius: 0;
+  padding: 20px 8px;
+  color: #243f53;
+}
+.notice-list time {
+  font-size: 12px;
+  white-space: nowrap;
+  color: #536c80;
+}
+.notice-list small {
+  display: inline-block;
+  margin-right: 12px;
+  background: #edf3f9;
+  color: #315e7e;
+  padding: 3px 8px;
+  border-radius: 4px;
+}
+.notice-content {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.7;
+  font-size: 15px;
+  margin: 28px 0;
+}
+.notice-editor label {
+  display: grid;
+  gap: 8px;
+  margin: 20px 0;
+  font-size: 14px;
+}
+.notice-editor input:not([type="checkbox"]),
+.notice-editor textarea {
+  width: 100%;
+  border: 1px solid #c7d6e5;
+  border-radius: 7px;
+  padding: 12px;
+  font: inherit;
+  color: #243f53;
+}
+.notice-editor .notice-check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.notice-editor .notice-actions {
+  justify-content: flex-start;
+}
+.notice-error {
+  color: #a32d2d;
+  margin: 16px 0;
+}
+.notice-empty {
+  padding: 40px 0;
+  text-align: center;
+}
+.notice-meta a {
+  text-decoration: underline;
+}
+.notice-more {
+  margin: 20px 0;
+}
+@media (max-width: 680px) {
+  .notice-board {
+    padding: 18px;
+  }
+  .notice-list button {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+    padding: 16px 0;
+  }
+}

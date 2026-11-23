@@ -9,7 +9,7 @@ export const homeFeatures = [
   {
     id: "analysis",
     title: "분석",
-    detail: "GitHub·이력서로 공고 비교 준비",
+    detail: "GitHub, 이력서로 공고 비교 준비",
     action: "분석 시작",
     href: "/analysis",
   },

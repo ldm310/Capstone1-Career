@@ -94,9 +94,7 @@ test("RDS demo LVs are session-scoped, persistent and drawn to scale", async ({
   expect(isolated.levels).toEqual([]);
   expect(isolated.sources).toEqual([]);
 
-  await page.goto(
-    "/jobs?job=study-demo-backend&demo=low#job-personal-comparison",
-  );
+  await page.goto("/jobs?job=study-demo-backend&demo=low&view=stats");
   const radar = page.getByTestId("saved-level-radar");
   await expect(radar).toBeVisible();
   await expect(page.locator(".saved-level-radar")).toContainText(

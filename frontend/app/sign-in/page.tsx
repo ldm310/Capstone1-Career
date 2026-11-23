@@ -4,13 +4,18 @@ import "../sky.css";
 import "../home.css";
 import "../feature-pages.css";
 import "../readability.css";
-export default function SignIn() {
+export default async function SignIn({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string }>;
+}) {
+  const params = await searchParams;
   return (
     <div className="feature-site sky-home">
       <Header />
       <main className="feature-content home-width sign-in-main">
         <div className="career-workspace">
-          <SignInForm />
+          <SignInForm initialError={params.error} />
         </div>
       </main>
     </div>

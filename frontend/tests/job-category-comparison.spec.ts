@@ -4,16 +4,15 @@ import { emptyWorkspace, type Workspace } from "@/types/workspace";
 import { connectJobEvidence } from "@/lib/job-evidence";
 import examples from "@/mock/reviewed-keyword-examples.json";
 
-const detail = "/jobs?job=study-demo-backend&demo=low";
-const screenshotStyle = ".site-header, .skip-link, nextjs-portal { visibility: hidden !important; }";
+const posting = "/jobs?job=study-demo-backend&demo=low";
+const analysis = posting + "&view=stats";
 const myWorkspace: Workspace = {
   ...emptyWorkspace,
   runs: [
     {
       id: "my-pdf",
-      sourceId: "document:my-pdf",
       title: "내 이력서.pdf",
-      at: "2026-11-22",
+      at: "2026-11-23",
       findings: [
         {
           id: "my-evidence",
@@ -22,7 +21,7 @@ const myWorkspace: Workspace = {
           title: "내 이력서.pdf",
           quote: "PostgreSQL 인덱스와 쿼리를 개선했습니다.",
           url: "/documents/my-pdf",
-          detectedAt: "2026-11-22",
+          detectedAt: "2026-11-23",
         },
       ],
     },
@@ -47,86 +46,89 @@ async function account(
   await page.route("**/api/growth", (route) =>
     route.fulfill({ json: { growth: { reviews: [], tasks: [] } } }),
   );
+  await page.route("**/api/jobs/my-levels?**", (route) =>
+    route.fulfill({ status: 503, json: { error: "Not configured" } }),
+  );
 }
 
-test("public posting and requirements stay open without login or private data requests", async ({
+test("public posting and analysis are separate tabs, not scroll anchors", async ({
   page,
 }) => {
-  await page.setViewportSize({ width: 520, height: 950 });
   await account(page, false);
   let privateRequests = 0;
   page.on("request", (request) => {
-    if (/\/api\/(career|growth)$/.test(request.url())) privateRequests++;
+    if (/\/api\/(career|growth|jobs\/my-levels)/.test(request.url()))
+      privateRequests++;
   });
-  await page.goto(detail);
+  await page.goto(posting);
   await expect(
-    page.locator("#job-public-content .job-posting-section"),
-  ).toHaveCount(4);
+    page.getByRole("tablist", { name: "공고 상세 메뉴" }).getByRole("tab"),
+  ).toHaveText(["공고 내용", "역량 분석"]);
+  await expect(page.locator(".job-posting-section")).toHaveCount(4);
   await expect(
-    page.getByRole("navigation", { name: "공고 상세 메뉴" }).getByRole("link"),
-  ).toHaveText(["공고 내용", "역량 비교"]);
-  await expect(
-    page.getByRole("heading", { name: "개인 역량 비교 로그인", exact: true }),
+    page.getByRole("heading", { name: "근무지 위치", exact: true }),
   ).toBeVisible();
-  await expect(page.locator(".personal-keyword-list > li")).toHaveCount(6);
-  await expect(page.locator(".personal-keyword-level")).toHaveCount(0);
-  await expect(page.locator(".personal-radar-card")).toHaveCount(0);
+  await expect(page.locator(".personal-job-comparison")).toHaveCount(0);
+  await expect(
+    page.locator(".job-original-link, .original-missing"),
+  ).toHaveCount(0);
   expect(privateRequests).toBe(0);
-  await page.screenshot({ path: "work/job-review-public.png", fullPage: true, style: screenshotStyle });
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.getByRole("tab", { name: "역량 분석", exact: true }).click();
+  await expect(page).toHaveURL(/view=stats$/);
+  await expect(page.locator("#job-public-content")).toBeHidden();
+  await expect(page.locator(".job-posting-section")).toHaveCount(0);
+  await expect(
+    page.getByRole("heading", { name: "개인 역량 분석", exact: true }),
+  ).toBeVisible();
+  await expect(page.locator(".personal-keyword-list")).toHaveCount(0);
+  expect(await page.evaluate(() => window.scrollY)).toBe(0);
+  await page
+    .getByRole("tab", { name: "역량 분석", exact: true })
+    .press("ArrowLeft");
+  await expect(
+    page.getByRole("tab", { name: "공고 내용", exact: true }),
+  ).toHaveAttribute("aria-selected", "true");
+  await expect(page.locator(".job-posting-section")).toHaveCount(4);
+  await expect(page.locator(".personal-job-comparison")).toHaveCount(0);
 });
 
-test("member without sources sees a local comparison prompt while public posting stays visible", async ({
+test("members without sources see only the registration prompt in analysis", async ({
   page,
 }) => {
-  await page.setViewportSize({ width: 520, height: 950 });
   await account(page, true);
-  await page.goto(detail);
+  await page.goto(analysis);
   await expect(
     page.getByRole("heading", { name: "분석 자료 미등록", exact: true }),
   ).toBeVisible();
-  await expect(page.locator("#job-public-content")).toBeVisible();
-  await expect(page.locator(".personal-radar-card")).toHaveCount(0);
-  await expect(page.locator(".personal-keyword-level")).toHaveCount(0);
-  await page.locator(".personal-job-comparison").screenshot({
-    path: "work/job-review-no-sources.png",
-    style: screenshotStyle,
-  });
+  await expect(page.locator("#job-public-content")).toBeHidden();
+  await expect(
+    page.locator(".personal-radar-card, .personal-keyword-list"),
+  ).toHaveCount(0);
 });
 
-test("own PDF findings drive this posting's visualization and evidence without synthetic my scores", async ({
+test("unscored findings remain evidence coverage and the long keyword list is removed", async ({
   page,
 }) => {
-  await page.setViewportSize({ width: 520, height: 950 });
   await account(page, true, myWorkspace);
-  await page.goto(detail);
-  await expect(page.locator(".personal-comparison-summary")).toContainText(
-    "내 분석 자료 1개",
+  await page.goto(analysis);
+  await expect(page.locator(".personal-comparison-footer")).toContainText(
+    "자료 추가",
   );
-  await expect(page.locator(".personal-comparison-summary")).toContainText(
-    "근거 후보 1개",
+  await expect(page.locator(".personal-comparison-footer")).not.toContainText(
+    "분석 자료 1개",
   );
-  await expect(page.locator(".personal-radar-card svg")).toHaveCount(1);
   await expect(page.locator(".personal-radar-card")).toContainText(
-    "LV·합격 점수가 아닙니다",
+    "LV, 합격 점수가 아닙니다",
   );
-  const requirement = page
-    .locator(".personal-keyword-list > li")
-    .filter({ hasText: "PostgreSQL 또는 MariaDB" });
-  await requirement.locator("summary").click();
-  await expect(requirement).toContainText("내 이력서.pdf");
-  await expect(requirement).toContainText("인덱스와 쿼리를 개선");
-  await expect(requirement.locator(".personal-keyword-level")).toContainText(
-    "산정 전",
-  );
-  await expect(page.getByText("내 LV도 예시로 표시해요.")).toHaveCount(0);
-  await page.evaluate(() => window.scrollTo(0, 0));
-  await page.locator(".personal-job-comparison").screenshot({
-    path: "work/job-review-own-sources.png",
-    style: screenshotStyle,
-  });
+  await expect(
+    page.locator(
+      ".personal-keyword-list, .personal-keyword-level, .personal-keyword-evidence",
+    ),
+  ).toHaveCount(0);
 });
 
-test("confirmed scores apply only to the exact posting keyword with owned evidence", async ({
+test("exact confirmed sentence LV is visible on a chart point", async ({
   page,
 }) => {
   await account(page, true, myWorkspace);
@@ -153,59 +155,30 @@ test("confirmed scores apply only to the exact posting keyword with owned eviden
       },
     }),
   );
-  await page.goto(detail);
-  await expect(
-    page.getByRole("heading", { name: "공고별 내 역량", exact: true }),
-  ).toBeVisible();
-  const row = page
-    .locator(".personal-keyword-list > li")
-    .filter({ hasText: keyword.text });
-  await expect(row.locator(".personal-keyword-level")).toContainText("72");
-  await expect(row.locator(".personal-keyword-level")).toContainText(
-    "평가 완료",
+  await page.goto(analysis);
+  const point = page.locator(
+    '.radar-point[aria-label="데이터베이스: 내 LV 72"]',
   );
+  await point.focus();
+  await expect(point.getByRole("tooltip")).toContainText("내 LV 72");
+  await point.press("Escape");
+  await expect(point.getByRole("tooltip")).toHaveCount(0);
 });
 
-test("private comparison failures cannot hide public posting contents", async ({
+test("private analysis errors do not prevent returning to the public posting", async ({
   page,
 }) => {
   await account(page, true, myWorkspace);
   await page.route("**/api/career", (route) =>
     route.fulfill({ status: 503, json: { error: "Unavailable" } }),
   );
-  await page.goto(detail);
+  await page.goto(analysis);
   await expect(
     page.locator(".personal-comparison-message[role=alert]"),
-  ).toContainText("공고는 계속 열람");
-  await expect(
-    page.locator("#job-public-content .job-posting-section"),
-  ).toHaveCount(4);
-  await expect(page).toHaveURL(/\/jobs\?/);
-});
-
-test("different posting requirements produce different matches for the same member", async ({
-  page,
-}) => {
-  await account(page, true, myWorkspace);
-  await page.route("**/api/jobs/keywords?**", (route) => {
-    const id = new URL(route.request().url()).searchParams.get("jobId");
-    return route.fulfill({
-      json: {
-        source: "SAVED_REVIEW",
-        keywords: examples.examples.filter((keyword) =>
-          keyword.categoryCodes.includes(id === "study-demo-data" ? "D" : "B"),
-        ),
-      },
-    });
-  });
-  await page.goto(detail);
-  await expect(page.locator(".personal-comparison-summary")).toContainText(
-    "근거 후보 0개",
-  );
-  await page.goto("/jobs?job=study-demo-data&demo=low");
-  await expect(page.locator(".personal-comparison-summary")).toContainText(
-    "근거 후보 1개",
-  );
+  ).toBeVisible();
+  await page.getByRole("tab", { name: "공고 내용", exact: true }).click();
+  await expect(page.locator(".job-posting-section")).toHaveCount(4);
+  await expect(page.locator(".personal-job-comparison")).toHaveCount(0);
 });
 
 test("old technology scores cannot become keyword LVs, exact reviewed scores need owned evidence", () => {
@@ -238,12 +211,55 @@ test("old technology scores cannot become keyword LVs, exact reviewed scores nee
   ).toBeNull();
 });
 
-test("member comparison fits mobile and remains accessible", async ({
+test("saved LV points show instant hover, keyboard and tap values without text lists", async ({
   page,
 }) => {
   await account(page, true, myWorkspace);
-  await page.goto(detail);
-  await expect(page.locator(".personal-radar-card svg")).toHaveCount(1);
+  await page.route("**/api/jobs/my-levels?**", (route) =>
+    route.fulfill({
+      json: {
+        jobId: "study-demo-backend",
+        taxonomyVersion: examples.version,
+        source: "RDS",
+        sources: [
+          { id: "demo-pdf", kind: "PDF", title: "이력서.pdf", simulated: true },
+        ],
+        levels: examples.examples.map((keyword, index) => ({
+          keywordId: keyword.id,
+          text: keyword.text,
+          categoryCodes: keyword.categoryCodes,
+          score: 30 + index * 7,
+          referenceScore: 65 + index * 3,
+          referenceKind: "SYNTHETIC_APPLICANTS",
+          evaluationKind: "DEMO",
+          evaluatedAt: "2026-11-23",
+        })),
+      },
+    }),
+  );
+  await page.goto(analysis);
+  const radar = page.getByTestId("saved-level-radar");
+  await expect(radar).toBeVisible();
+  const point = radar
+    .locator(".radar-point")
+    .filter({ has: page.locator('[data-series-point="mine"]') })
+    .first();
+  await point.hover();
+  await expect(point.getByRole("tooltip")).toContainText(/내 LV \d+/);
+  await page.mouse.move(0, 0);
+  await point.focus();
+  await expect(point.getByRole("tooltip")).toBeVisible();
+  await point.press("Escape");
+  await expect(point.getByRole("tooltip")).toHaveCount(0);
+  await point.locator("circle").first().click();
+  await expect(point.getByRole("tooltip")).toBeVisible();
+  await expect(
+    page.locator(
+      ".personal-keyword-list, .job-posting-section, .job-original-link",
+    ),
+  ).toHaveCount(0);
+  await page.mouse.move(0, 0);
+  await page.getByRole("tab", { name: "역량 분석", exact: true }).focus();
   for (const width of [390, 320]) {
     await page.setViewportSize({ width, height: 950 });
     expect(
@@ -252,7 +268,6 @@ test("member comparison fits mobile and remains accessible", async ({
       ),
     ).toBe(true);
   }
-  await page.screenshot({ path: "work/job-review-mobile.png", fullPage: true });
   expect(
     (
       await new AxeBuilder({ page })

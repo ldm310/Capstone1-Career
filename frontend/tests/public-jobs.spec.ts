@@ -13,7 +13,7 @@ test("job rows paginate, bookmark, persist, filter and link to stats", async ({
   await expect(page.locator(".public-job-card")).toHaveCount(7);
   await expect(page.locator(".public-job-source").first()).toHaveAttribute(
     "href",
-    "/jobs?job=fixture-0&view=stats#job-personal-comparison",
+    "/jobs?job=fixture-0&view=stats",
   );
   await page
     .getByRole("button", {

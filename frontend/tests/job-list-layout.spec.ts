@@ -18,7 +18,7 @@ test("job rows retain existing fields without placeholder logos or reference-onl
     "정규직",
     "하이브리드 근무",
     "공고의 역량 키워드와 내 경험을 비교해요",
-    "마감일 원문 확인",
+    "마감일 미등록",
   ])
     await expect(first).toContainText(text);
   await expect(
@@ -47,7 +47,7 @@ test("job rows retain existing fields without placeholder logos or reference-onl
       exact: true,
     }),
   ).toHaveAttribute("aria-pressed", "true");
-  await first.getByRole("link", { name: "역량 비교", exact: true }).click();
+  await first.getByRole("link", { name: "역량 분석", exact: true }).click();
   await expect(page).toHaveURL(/job=fixture-0&view=stats/);
 });
 

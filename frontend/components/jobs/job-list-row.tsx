@@ -63,13 +63,10 @@ export function JobListRow({
         <div className="job-list-deadline">
           {job.closesAt
             ? `${new Date(job.closesAt).toLocaleDateString("ko-KR")} 마감`
-            : "마감일 원문 확인"}
+            : "마감일 미등록"}
         </div>
-        <Link
-          className="public-job-source"
-          href={`${statsHref}#job-personal-comparison`}
-        >
-          역량 비교
+        <Link className="public-job-source" href={statsHref}>
+          역량 분석
         </Link>
         {onToggle && (
           <button

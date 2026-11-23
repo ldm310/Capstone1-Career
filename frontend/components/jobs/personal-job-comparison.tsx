@@ -13,6 +13,7 @@ import type { Workspace } from "@/types/workspace";
 import type { SkillReview } from "@/types/growth";
 import type { PostingLevels } from "@/types/posting-level";
 import { SavedLevelRadar } from "./saved-level-radar";
+import { RadarPoint } from "./radar-point";
 
 interface Result {
   jobId: string;
@@ -81,7 +82,7 @@ function EvidenceRadar({ rows }: { rows: PersonalKeyword[] }) {
       </header>
       <svg
         viewBox="0 0 460 350"
-        role="img"
+        role="group"
         aria-label={`${label}. ${axes.map((axis) => `${axis.name}: ${axis.value === null ? "평가 자료 없음" : axis.value}${hasLevels ? "" : `, 후보 ${axis.linked}/${axis.total}개`}`).join(". ")}`}
       >
         <title>{label}</title>
@@ -120,7 +121,7 @@ function EvidenceRadar({ rows }: { rows: PersonalKeyword[] }) {
               >
                 {axis.label.map((line, i) => (
                   <tspan key={line} x={text.x} dy={i ? 14 : 0}>
-                    {line}
+                    {line.replaceAll("·", ", ")}
                   </tspan>
                 ))}
               </text>
@@ -153,19 +154,24 @@ function EvidenceRadar({ rows }: { rows: PersonalKeyword[] }) {
           if (axis.value === null) return null;
           const p = point(index, axis.value * 1.02);
           return (
-            <circle key={axis.code} cx={p.x} cy={p.y} r="3" fill="#315e7e">
-              <title>
-                {axis.name}: {axis.value}
-                {hasLevels ? " LV" : "% 근거 후보 연결"}
-              </title>
-            </circle>
+            <RadarPoint
+              key={axis.code}
+              x={p.x}
+              y={p.y}
+              color="#315e7e"
+              category={axis.name.replaceAll("·", ", ")}
+              series={hasLevels ? "내" : "근거 후보 연결률"}
+              unit={hasLevels ? "LV" : "%"}
+              score={axis.value}
+              viewWidth={460}
+            />
           );
         })}
       </svg>
       <p className="personal-comparison-note">
         {hasLevels
-          ? "평가가 완료된 역량 문장·키워드만 평균에 포함합니다."
-          : "근거 후보 연결률은 LV·합격 점수가 아닙니다. 연결된 내용은 항목별로 확인할 수 있습니다."}{" "}
+          ? "평가가 완료된 역량 문장, 키워드만 평균에 포함합니다."
+          : "근거 후보 연결률은 LV, 합격 점수가 아닙니다. 연결된 내용은 항목별로 확인할 수 있습니다."}{" "}
         공고에 해당 요건이 없는 카테고리는 평가하지 않습니다.
       </p>
     </section>
@@ -307,80 +313,46 @@ export function PersonalJobComparison({ jobId }: { jobId: string }) {
     <section
       id="job-personal-comparison"
       className="personal-job-comparison"
-      aria-labelledby="personal-comparison-title"
+      aria-label="역량 분석"
     >
-      <header>
-        <h3 id="personal-comparison-title">내 자료 기반 역량 비교</h3>
-        <p>이 공고의 역량 키워드를 등록한 GitHub·PDF 분석 자료와 비교합니다.</p>
-      </header>
       {!current ? (
-        <p role="status">
-          개인 비교 정보를 불러오는 중입니다. 공고 내용은 위에서 확인할 수
-          있습니다.
-        </p>
+        <p role="status">역량 분석을 불러오는 중입니다.</p>
       ) : (
         <>
           {current.error ? (
             <div className="personal-comparison-message" role="alert">
-              <p>{current.error} 공고는 계속 열람할 수 있습니다.</p>
+              <p>{current.error}</p>
               <button onClick={retry}>다시 확인</button>
             </div>
           ) : current.viewer === "visitor" ? (
             <div className="personal-comparison-message">
-              <h4>개인 역량 비교 로그인</h4>
+              <h3>개인 역량 분석</h3>
               <p>
-                공고 열람은 로그인 없이 가능합니다. 본인 자료를 이용한 비교는
-                로그인 후 사용할 수 있습니다.
+                로그인 후 GitHub, PDF 자료로 공고별 역량을 확인할 수 있습니다.
               </p>
-              <Link href="/sign-in">로그인 · 회원가입</Link>
+              <Link href="/sign-in">로그인, 회원가입</Link>
             </div>
           ) : !current.sourceCount ? (
             <div className="personal-comparison-message">
-              <h4>분석 자료 미등록</h4>
-              <p>
-                GitHub 링크나 PDF를 분석하면 이 공고에서 본인 자료를 확인할 수
-                있습니다.
-              </p>
-              <Link href="/analysis">자료 등록·분석</Link>
+              <h3>분석 자료 미등록</h3>
+              <p>GitHub 링크 또는 PDF 이력서를 등록해 주세요.</p>
+              <Link href="/analysis">자료 등록, 분석</Link>
             </div>
           ) : (
             <>
-              <div className="personal-comparison-summary">
-                <span>
-                  내 분석 자료 <b>{current.sourceCount}개</b>
-                </span>
-                <span>
-                  공고 역량 키워드 <b>{current.keywords.length}개</b>
-                </span>
-                <span>
-                  근거 후보{" "}
-                  <b>
-                    {current.rows.filter((row) => row.evidence.length).length}개
-                  </b>
-                </span>
-              </div>
               {current.saved ? (
                 <SavedLevelRadar levels={current.saved.levels} />
               ) : (
                 !!current.rows.length && <EvidenceRadar rows={current.rows} />
               )}
-              {current.saved && (
-                <p className="personal-comparison-note">
-                  저장 위치: RDS · 등록 자료:{" "}
-                  {current.saved.sources
-                    .map((source) => source.kind)
-                    .join(" · ")}
-                  {current.saved.sources.some((source) => source.simulated)
-                    ? " (등록 가정)"
-                    : ""}
-                </p>
-              )}
+              <div className="personal-comparison-footer">
+                <Link href="/analysis">자료 추가</Link>
+              </div>
             </>
           )}
           {current.keywordError && (
-            <p className="personal-comparison-note">
-              {current.keywordError}{" "}
-              <button onClick={retry}>다시 불러오기</button>
+            <p className="personal-comparison-note" role="status">
+              {current.keywordError} <button onClick={retry}>다시 확인</button>
             </p>
           )}
           {current.levelError && (
@@ -388,117 +360,14 @@ export function PersonalJobComparison({ jobId }: { jobId: string }) {
               {current.levelError} <button onClick={retry}>다시 확인</button>
             </p>
           )}
-          {current.example && (
-            <p className="personal-comparison-note">
-              저장된 분류 문장으로 구성한 공고 요건 예시입니다. 개인 자료는
-              로그인한 회원 본인의 자료만 사용합니다.
-            </p>
-          )}
-          {!current.keywordError && !current.keywords.length && (
-            <p className="personal-comparison-note">
-              이 공고의 검토 완료 역량 키워드가 아직 없습니다. 공고 본문과
-              자격요건은 계속 확인할 수 있습니다.
-            </p>
-          )}
-          {!!current.keywords.length && (
-            <ul className="personal-keyword-list">
-              {current.keywords.map((keyword) => {
-                const row = current.rows.find((item) => item.id === keyword.id);
-                return (
-                  <li key={keyword.id}>
-                    <div className="personal-keyword-heading">
-                      <div>
-                        <h4>{keyword.text}</h4>
-                        <p>
-                          {skillCategories
-                            .filter((category) =>
-                              keyword.categoryCodes.includes(category.code),
-                            )
-                            .map((category) => category.name)
-                            .join(" · ")}
-                        </p>
-                      </div>
-                      {current.viewer === "member" &&
-                        current.sourceCount > 0 && (
-                          <span className="personal-keyword-level">
-                            LV <b>{row?.myLevel ?? "—"}</b>
-                            <small>
-                              {row?.assessed
-                                ? current.saved?.levels.some(
-                                    (level) =>
-                                      level.keywordId === keyword.id &&
-                                      level.evaluationKind === "DEMO",
-                                  )
-                                  ? "더미 평가"
-                                  : "평가 완료"
-                                : "산정 전"}
-                            </small>
-                          </span>
-                        )}
-                    </div>
-                    {current.saved?.levels.some(
-                      (level) =>
-                        level.keywordId === keyword.id &&
-                        level.evaluationKind === "DEMO",
-                    ) ? (
-                      <p className="personal-comparison-note">
-                        GitHub·PDF 등록을 가정한 더미 LV입니다. 실제 자료를
-                        평가한 결과가 아닙니다.
-                      </p>
-                    ) : (
-                      row &&
-                      current.sourceCount > 0 && (
-                        <details className="personal-keyword-evidence">
-                          <summary>
-                            {row.assessed ? "평가 근거" : "근거 후보"}{" "}
-                            {row.evidence.length}개
-                          </summary>
-                          {row.evidence.length ? (
-                            <>
-                              <p>
-                                연결 후보는 원문 확인이 필요합니다. 기술명
-                                일치만으로 LV을 부여하지 않습니다.
-                              </p>
-                              {row.evidence.map((evidence) => (
-                                <article key={evidence.id}>
-                                  <strong>{evidence.title}</strong>
-                                  <blockquote>{evidence.quote}</blockquote>
-                                  <a
-                                    href={evidence.url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                  >
-                                    내 자료 원문
-                                  </a>
-                                </article>
-                              ))}
-                            </>
-                          ) : (
-                            <p>
-                              현재 분석 자료에서 연결된 근거 후보가 없습니다.
-                              역량 부족을 뜻하지 않습니다.
-                            </p>
-                          )}
-                        </details>
-                      )
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-          {current.viewer === "member" && current.sourceCount > 0 && (
-            <>
+          {!current.keywordError &&
+            current.viewer === "member" &&
+            current.sourceCount > 0 &&
+            !current.keywords.length && (
               <p className="personal-comparison-note">
-                {current.saved?.levels.some(
-                  (level) => level.evaluationKind === "DEMO",
-                )
-                  ? "더미 계정의 LV는 화면 검증용 저장값입니다."
-                  : "LV는 해당 역량 문장·키워드의 확정 평가 결과가 있을 때만 표시합니다."}
+                이 공고의 분류된 역량 정보가 아직 없습니다.
               </p>
-              <Link href="/analysis">분석 자료 추가</Link>
-            </>
-          )}
+            )}
         </>
       )}
     </section>

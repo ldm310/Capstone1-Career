@@ -86,15 +86,14 @@ test("catalog filters and comparison URL stay inside jobs", async ({
         exact: true,
       }),
     })
-    .getByRole("link", { name: "역량 비교", exact: true })
+    .getByRole("link", { name: "역량 분석", exact: true })
     .click();
-  await expect(page).toHaveURL(
-    /\/jobs\?job=fixture-0&view=stats#job-personal-comparison$/,
-  );
+  await expect(page).toHaveURL(/\/jobs\?job=fixture-0&view=stats$/);
   await expect(
-    page.getByRole("navigation", { name: "공고 상세 메뉴" }).getByRole("link"),
-  ).toHaveText(["공고 내용", "역량 비교"]);
-  await expect(page.locator(".job-public-content")).toBeVisible();
+    page.getByRole("tablist", { name: "공고 상세 메뉴" }).getByRole("tab"),
+  ).toHaveText(["공고 내용", "역량 분석"]);
+  await expect(page.locator(".job-public-content")).toBeHidden();
+  await expect(page.locator(".personal-job-comparison")).toBeVisible();
 });
 
 test("old links preserve destination and removed sections are gone", async ({

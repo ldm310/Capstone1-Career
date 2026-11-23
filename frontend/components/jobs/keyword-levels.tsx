@@ -72,7 +72,7 @@ export function KeywordLevels({ jobId }: { jobId: string }) {
                           )?.name,
                       )
                       .filter(Boolean)
-                      .join(" · ")}
+                      .join(",  ")}
                   </p>
                 </div>
                 <span className="job-keyword-lv">
@@ -93,7 +93,7 @@ export function KeywordLevels({ jobId }: { jobId: string }) {
           이 공고에는 검토가 완료된 역량 키워드가 아직 없어요.
         </p>
       )}
-      <Link href="/analysis">내 자료 추가·분석하기 →</Link>
+      <Link href="/analysis">내 자료 추가, 분석하기 →</Link>
     </section>
   );
 }

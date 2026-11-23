@@ -1,5 +1,6 @@
 import { skillCategories } from "@/lib/skill-categories";
 import type { SavedPostingLevel } from "@/types/posting-level";
+import { RadarPoint } from "./radar-point";
 
 export function SavedLevelRadar({ levels }: { levels: SavedPostingLevel[] }) {
   const axes = skillCategories.flatMap((category) => {
@@ -57,7 +58,7 @@ export function SavedLevelRadar({ levels }: { levels: SavedPostingLevel[] }) {
     >
       <header>
         <h4>공고별 LV 비교</h4>
-        <p>카테고리별 역량 문장 LV 평균 · 0–100</p>
+        <p>카테고리별 역량 문장 LV 평균, 0–100</p>
       </header>
       <div className="saved-level-legend">
         {hasReference && (
@@ -73,7 +74,7 @@ export function SavedLevelRadar({ levels }: { levels: SavedPostingLevel[] }) {
       {axes.length >= 3 ? (
         <svg
           viewBox="0 0 520 400"
-          role="img"
+          role="group"
           aria-label={description}
           data-testid="saved-level-radar"
         >
@@ -116,7 +117,7 @@ export function SavedLevelRadar({ levels }: { levels: SavedPostingLevel[] }) {
                 >
                   {axis.label.map((line, i) => (
                     <tspan key={line} x={label.x} dy={i ? 14 : 0}>
-                      {line}
+                      {line.replaceAll("·", ", ")}
                     </tspan>
                   ))}
                 </text>
@@ -169,41 +170,30 @@ export function SavedLevelRadar({ levels }: { levels: SavedPostingLevel[] }) {
             ].map((series) => {
               const p = point(index, (series.score / 100) * 118);
               return (
-                <circle
+                <RadarPoint
                   key={`${axis.code}-${series.kind}`}
-                  data-series-point={series.kind}
-                  cx={p.x}
-                  cy={p.y}
-                  r="4"
-                  fill="white"
-                  stroke={series.color}
-                  strokeWidth="2.5"
-                >
-                  <title>
-                    {axis.name}:{" "}
-                    {series.kind === "mine" ? "내 LV" : referenceLabel}{" "}
-                    {series.score.toFixed(1)}
-                  </title>
-                </circle>
+                  kind={series.kind}
+                  x={p.x}
+                  y={p.y}
+                  color={series.color}
+                  category={axis.name.replaceAll("·", ", ")}
+                  series={series.kind === "mine" ? "내" : referenceLabel}
+                  score={series.score}
+                />
               );
             }),
           )}
         </svg>
       ) : (
         <p className="personal-comparison-note">
-          비교 카테고리가 3개 미만입니다. 아래 역량 문장별 LV를 확인해 주세요.
+          {axes
+            .map((axis) => `${axis.name} LV ${axis.mine.toFixed(1)}`)
+            .join(",  ")}
         </p>
       )}
       <p className="personal-comparison-note">
-        중심 0 · 바깥선 100. 각 점은 해당 카테고리의 역량 문장 LV 평균입니다.
-        공고에 요건이 없는 카테고리는 제외합니다.
+        중심 0, 바깥선 100, 점에 마우스를 올리거나 선택하면 LV 표시
       </p>
-      {demo && (
-        <p className="personal-comparison-note">
-          화면 검증용 더미 평가입니다. GitHub·PDF 등록을 가정한 값이며 실제
-          역량·지원자 통계가 아닙니다.
-        </p>
-      )}
     </section>
   );
 }

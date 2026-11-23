@@ -1,5 +1,26 @@
 /* Readability layer: loaded last so it can raise text size and contrast
    without touching each component's own stylesheet. */
+.kakao-login-button {
+  width: 100%;
+  border: 0;
+  border-radius: 8px;
+  padding: 14px;
+  margin: 20px 0 8px;
+  background: #fee500;
+  color: #191919;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.kakao-login-button:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+.kakao-login-note {
+  font-size: 12px;
+  color: #536c80;
+  margin: 0 0 20px;
+}
 :root {
   --read-text: #1f3445;
   --read-muted: #4a6072;

@@ -42,6 +42,7 @@ export function AnalysisFlow() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [complete, setComplete] = useState(false);
+  const [preview, setPreview] = useState(false);
   const lock = useRef(false);
   const heading = useRef<HTMLHeadingElement>(null);
   const done = sources.filter((source) => source.state === "done").length;
@@ -157,7 +158,11 @@ export function AnalysisFlow() {
             body.set("source", "cv");
           }
           const response = await fetch(
-            source.kind === "pdf" ? "/api/documents" : "/api/analyze",
+            source.kind === "pdf"
+              ? "/api/documents"
+              : preview
+                ? "/api/analysis-preview"
+                : "/api/analyze",
             {
               method: "POST",
               ...(body
@@ -270,7 +275,7 @@ export function AnalysisFlow() {
           <p>Word 양식에 작성한 뒤 PDF로 저장해 업로드하세요.</p>
           <div className="analysis-template-links">
             <a href="/downloads/career-resume-template.docx" download>
-              Career 이력서 양식 다운로드 · Word
+              Career 이력서 양식 다운로드, Word
             </a>
             <a href="/downloads/career-resume-template.pdf" download>
               PDF 양식 받기
@@ -291,7 +296,7 @@ export function AnalysisFlow() {
             채용공고는 로그인 없이 볼 수 있어요. 내 자료를 분석하려면 로그인해
             주세요.
           </p>
-          <Link href="/sign-in">로그인 · 회원가입</Link>
+          <Link href="/sign-in">로그인, 회원가입</Link>
         </aside>
       )}
       <fieldset
@@ -328,6 +333,25 @@ export function AnalysisFlow() {
               링크 추가
             </button>
           </div>
+          <div className="analysis-preview-controls">
+            <button
+              type="button"
+              onClick={() => {
+                setUrl("https://github.com/career-demo/order-service");
+                setPreview(true);
+              }}
+            >
+              예시 링크 사용
+            </button>
+            <label>
+              <input
+                type="checkbox"
+                checked={preview}
+                onChange={(event) => setPreview(event.target.checked)}
+              />
+              GitHub 분석 미리보기
+            </label>
+          </div>
         </form>
         <div className="analysis-source-block">
           <div className="analysis-source-heading">
@@ -348,7 +372,7 @@ export function AnalysisFlow() {
               }}
             />
             <strong>PDF 파일 추가</strong>
-            <span>여러 파일 선택 가능 · 파일당 10MB 이하</span>
+            <span>여러 파일 선택 가능, 파일당 10MB 이하</span>
           </label>
         </div>
       </fieldset>
@@ -375,7 +399,7 @@ export function AnalysisFlow() {
                       : source.error ||
                         (source.kind === "github"
                           ? "공개 GitHub 저장소"
-                          : `${((source.file?.size ?? 0) / 1_000_000).toFixed(1)}MB · PDF`)}
+                          : `${((source.file?.size ?? 0) / 1_000_000).toFixed(1)}MB,  PDF`)}
                 </small>
               </div>
               {source.state === "done" ? (

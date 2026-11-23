@@ -8,6 +8,7 @@ export interface Finding {
   detectedAt: string;
 }
 export interface AnalysisRun {
+  simulated?: boolean;
   id: string;
   sourceId?: string;
   title: string;

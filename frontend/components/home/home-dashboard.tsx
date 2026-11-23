@@ -20,6 +20,9 @@ export function HomeDashboard() {
           <Link className="cta" href="/analysis">
             자료 분석
           </Link>
+          <Link className="home-panel-action" href="/experience">
+            역량 체험하기
+          </Link>
         </div>
         <SkyPlayback />
       </section>
@@ -28,7 +31,7 @@ export function HomeDashboard() {
           <section className="home-panel">
             <header>
               <div>
-                <span className="home-panel-eyebrow">01 · ANALYSIS</span>
+                <span className="home-panel-eyebrow">01 ANALYSIS</span>
                 <h2>자료 분석</h2>
               </div>
             </header>
@@ -43,7 +46,7 @@ export function HomeDashboard() {
           <section className="home-panel">
             <header>
               <div>
-                <span className="home-panel-eyebrow">02 · JOBS</span>
+                <span className="home-panel-eyebrow">02 JOBS</span>
                 <h2>채용공고</h2>
               </div>
             </header>

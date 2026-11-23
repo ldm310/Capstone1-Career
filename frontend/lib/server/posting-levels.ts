@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import type { PostingLevels } from "@/types/posting-level";
 
 const shared = globalThis as unknown as { careerLevelPool?: Pool };
-function pool() {
+export function profilePool() {
   if (!process.env.CAREER_PROFILE_DATABASE_URL) return null;
   return (shared.careerLevelPool ??= new Pool({
     connectionString: process.env.CAREER_PROFILE_DATABASE_URL,
@@ -27,7 +27,7 @@ export async function postingLevels(
   jobId: string,
   version: string,
 ): Promise<PostingLevels | null> {
-  const connection = pool();
+  const connection = profilePool();
   if (!connection) return null;
   const namespace = process.env.CAREER_PROFILE_NAMESPACE || "local-review";
   const { rows } = await connection.query(
@@ -39,9 +39,11 @@ export async function postingLevels(
     FROM public.career_lv_posting_keyword_level l
     WHERE namespace=$1 AND subject_id=$2 AND job_id=$3 AND taxonomy_version=$4
       AND (evaluation_kind='CONFIRMED' OR
-        (evaluation_kind='DEMO' AND subject_id='demo-user' AND EXISTS (
+        (evaluation_kind='DEMO' AND EXISTS (
           SELECT 1 FROM public.career_lv_member m
-          WHERE m.namespace=l.namespace AND m.subject_id=l.subject_id AND m.is_demo)))
+          WHERE m.namespace=l.namespace AND m.subject_id=l.subject_id
+            AND ((l.subject_id='demo-user' AND m.is_demo)
+              OR (m.preview_enabled AND l.method_version='preview-fixture-v1')))))
     ORDER BY keyword_id`,
     [namespace, subject, jobId, version],
   );
