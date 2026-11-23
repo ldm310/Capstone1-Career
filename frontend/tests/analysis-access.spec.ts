@@ -16,7 +16,7 @@ test("visitors can download both templates and browse jobs but cannot start extr
     page.getByRole("button", { name: "분석 시작하기", exact: true }),
   ).toBeDisabled();
   const word = page.getByRole("link", {
-    name: "Career 이력서 양식 다운로드 · Word",
+    name: "Career 이력서 양식 다운로드, Word",
     exact: true,
   });
   const download = page.waitForEvent("download");

@@ -1,3 +1,25 @@
+.analysis-preview-controls {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+  font-size: 13px;
+  color: #536c80;
+}
+.analysis-preview-controls label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.analysis-preview-controls button {
+  border: 0;
+  background: none;
+  color: #315e7e;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 6px 0;
+}
 .analysis-flow {
   max-width: 760px;
   margin: 0 auto 70px;

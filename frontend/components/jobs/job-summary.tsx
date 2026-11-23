@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { CalendarClock, Info, MapPin, Star, TrainFront } from "lucide-react";
+import { Info, MapPin, Star, TrainFront } from "lucide-react";
 import { unknownLocation, type PublicJob } from "@/types/public-job";
 import { experienceLabels, jobExperience } from "@/lib/job-filters";
 import { useSavedJobs } from "@/lib/saved-jobs";
@@ -41,7 +41,13 @@ function Rows({ rows }: { rows: [string, string | undefined | null][] }) {
 }
 
 // 공고 상세 맨 위 요약: 회사, 제목, 저장 버튼과 핵심 조건 표.
-export function JobSummary({ job }: { job: PublicJob }) {
+export function JobSummary({
+  job,
+  allowSave = true,
+}: {
+  job: PublicJob;
+  allowSave?: boolean;
+}) {
   const saved = useSavedJobs();
   const [message, setMessage] = useState("");
   const [now] = useState(() => Date.now());
@@ -56,22 +62,24 @@ export function JobSummary({ job }: { job: PublicJob }) {
       <div className="job-summary-top">
         <div className="job-summary-title">
           <span className="job-summary-company">
-            {job.company}
+            {job.company.replace(/\s*·\s*/g, ", ")}
             {job.dummy && <small className="dummy-label">예시</small>}
           </span>
           <h2>{job.title}</h2>
         </div>
         <div className="job-summary-actions">
-          <button
-            type="button"
-            className="plain-button job-save"
-            aria-pressed={isSaved}
-            aria-label={isSaved ? "공고 저장 취소" : "공고 저장"}
-            onClick={async () => setMessage(await saved.toggle(job))}
-          >
-            <Star size={22} fill={isSaved ? "currentColor" : "none"} />
-            <span>{isSaved ? "저장됨" : "저장"}</span>
-          </button>
+          {allowSave && (
+            <button
+              type="button"
+              className="plain-button job-save"
+              aria-pressed={isSaved}
+              aria-label={isSaved ? "공고 저장 취소" : "공고 저장"}
+              onClick={async () => setMessage(await saved.toggle(job))}
+            >
+              <Star size={22} fill={isSaved ? "currentColor" : "none"} />
+              <span>{isSaved ? "저장됨" : "저장"}</span>
+            </button>
+          )}
           <div className="job-apply">
             {left && (
               <b className={`job-dday${left === "마감" ? " is-closed" : ""}`}>
@@ -81,31 +89,37 @@ export function JobSummary({ job }: { job: PublicJob }) {
           </div>
         </div>
       </div>
-      <div className="job-summary-grid">
-        <Rows
-          rows={[
-            ["경력", experience || "원문 확인"],
-            ["학력", d.education],
-            ["근무형태", job.employment],
-            ["모집 인원", d.headcount],
-          ]}
-        />
-        <Rows
-          rows={[
-            ["급여", d.salary],
-            ["직급/직책", d.position],
-            ["근무지역", job.location],
-            ["근무방식", job.workplace],
-          ]}
-        />
-      </div>
-      {!!job.skills?.length && (
-        <div className="job-summary-skills" aria-label="요구 기술">
-          {job.skills.map((s) => (
-            <span key={s}>{s}</span>
-          ))}
+      <details className="job-summary-facts">
+        <summary>채용 조건</summary>
+        <div className="job-summary-grid">
+          <Rows
+            rows={[
+              ["경력", experience],
+              ["학력", d.education],
+              ["근무형태", job.employment],
+              ["모집 인원", d.headcount],
+            ]}
+          />
+          <Rows
+            rows={[
+              ["급여", d.salary],
+              ["직급/직책", d.position],
+              [
+                "근무지역",
+                job.location === unknownLocation ? null : job.location,
+              ],
+              ["근무방식", job.workplace],
+            ]}
+          />
         </div>
-      )}
+        {!!job.skills?.length && (
+          <div className="job-summary-skills" aria-label="요구 기술">
+            {job.skills.map((s) => (
+              <span key={s}>{s}</span>
+            ))}
+          </div>
+        )}
+      </details>
       <span className="sr-only" role="status">
         {message}
       </span>
@@ -165,48 +179,45 @@ export function JobExtras({ job }: { job: PublicJob }) {
           </div>
         </section>
       )}
-      <section aria-labelledby="job-period-title">
-        <h3 id="job-period-title">접수 기간, 방법</h3>
-        <div className="job-box job-period">
-          <div className="job-period-time">
-            {job.closesAt ? (
-              <>
-                <span>남은 기간</span>
-                <Countdown until={job.closesAt} />
-                <dl>
-                  {d.startsAt && (
+      {(job.closesAt || d.applyMethod || d.documents?.length) && (
+        <section aria-labelledby="job-period-title">
+          <h3 id="job-period-title">접수 기간, 방법</h3>
+          <div className="job-box job-period">
+            <div className="job-period-time">
+              {job.closesAt ? (
+                <>
+                  <span>남은 기간</span>
+                  <Countdown until={job.closesAt} />
+                  <dl>
+                    {d.startsAt && (
+                      <div>
+                        <dt>시작일</dt>
+                        <dd>{dateTime(d.startsAt)}</dd>
+                      </div>
+                    )}
                     <div>
-                      <dt>시작일</dt>
-                      <dd>{dateTime(d.startsAt)}</dd>
+                      <dt className="is-end">마감일</dt>
+                      <dd className="is-end">{dateTime(job.closesAt)}</dd>
                     </div>
-                  )}
-                  <div>
-                    <dt className="is-end">마감일</dt>
-                    <dd className="is-end">{dateTime(job.closesAt)}</dd>
-                  </div>
-                </dl>
-              </>
-            ) : (
-              <p>
-                <CalendarClock size={18} aria-hidden="true" />
-                마감일은 원문에서 확인해 주세요.
-              </p>
-            )}
+                  </dl>
+                </>
+              ) : null}
+            </div>
+            <div className="job-period-method">
+              <Rows
+                rows={[
+                  ["지원 방법", d.applyMethod],
+                  ["제출 서류", d.documents?.join(", ")],
+                ]}
+              />
+            </div>
           </div>
-          <div className="job-period-method">
-            <Rows
-              rows={[
-                ["지원 방법", d.applyMethod ?? "원문 확인"],
-                ["제출 서류", d.documents?.join(", ")],
-              ]}
-            />
-          </div>
-        </div>
-        <p className="job-note">
-          <Info size={15} aria-hidden="true" />
-          마감일은 기업 사정이나 조기 마감으로 바뀔 수 있어요.
-        </p>
-      </section>
+          <p className="job-note">
+            <Info size={15} aria-hidden="true" />
+            마감일은 기업 사정이나 조기 마감으로 바뀔 수 있어요.
+          </p>
+        </section>
+      )}
       {c && (
         <section aria-labelledby="job-company-title">
           <h3 id="job-company-title">기업 정보</h3>

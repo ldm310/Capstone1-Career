@@ -55,7 +55,7 @@ function ComparisonRadar({
       <header className="comparison-card-heading">
         <div>
           <h3>{title}</h3>
-          <p>키워드 LV 평균 · 0–100</p>
+          <p>키워드 LV 평균, 0–100</p>
         </div>
         <div className="comparison-legend" aria-label="차트 범례">
           <span>

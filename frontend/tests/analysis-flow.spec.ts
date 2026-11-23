@@ -155,7 +155,7 @@ test("public jobs and home need no session, old skills URLs redirect, and analys
   await page.goto("/#market-preview");
   await expect(
     page.getByRole("navigation", { name: "주 메뉴" }).getByRole("link"),
-  ).toHaveText(["홈", "채용공고", "분석"]);
+  ).toHaveText(["홈", "채용공고", "분석", "공지사항"]);
   await expect(page.locator(".home-radar")).toHaveCount(0);
   await page.goto("/my-skills");
   await expect(page).toHaveURL(/\/jobs$/);

@@ -121,7 +121,7 @@ export function LiveJobsSection({
         <>
           <aside className="study-preview-invite">
             <strong>역량 비교 예시</strong>
-            <Link href="/jobs?demo=low">예시 보기 →</Link>
+            <Link href="/experience">역량 체험하기 →</Link>
           </aside>
           <div className="public-jobs-toolbar">
             <span className="catalog-results-label">검색</span>

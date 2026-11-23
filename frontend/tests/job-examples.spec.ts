@@ -9,7 +9,12 @@ test("official cards show no verdict; only explicitly selected examples show sat
   await page.goto("/jobs");
   await expect(page.locator(".public-job-card")).toHaveCount(7);
   await expect(page.locator(".qualification-summary")).toHaveCount(0);
-  await page.getByRole("link", { name: "예시 보기" }).click();
+  await page.getByRole("link", { name: "역량 체험하기" }).click();
+  await expect(page).toHaveURL(/\/experience$/);
+  await expect(page.getByTestId("saved-level-radar")).toBeVisible();
+  await expect(page.locator(".qualification-summary")).toHaveCount(0);
+  // Older explicit scenario URLs remain available, but are no longer the experience entry.
+  await page.goto("/jobs?demo=low");
   await expect(page.locator(".qualification-heading").first()).toContainText(
     "만족",
   );
@@ -55,11 +60,10 @@ test("job detail uses category stats tabs and preserves the original posting", a
 }) => {
   await page.goto("/jobs?job=study-demo-backend&demo=low");
   await expect(
-    page.getByRole("navigation", { name: "공고 상세 메뉴" }).getByRole("link"),
-  ).toHaveText(["스탯 분석", "지원 조건"]);
-  await expect(page.locator(".category-radar")).toHaveCount(2);
+    page.getByRole("tablist", { name: "공고 상세 메뉴" }).getByRole("tab"),
+  ).toHaveText(["공고 내용", "역량 분석"]);
+  await expect(page.locator(".job-public-content")).toBeVisible();
   await expect(page.locator(".applicant-stats")).toHaveCount(0);
-  await page.locator(".job-original-panel > summary").click();
   await expect(page.locator(".job-posting-section h3")).toHaveText([
     "주요 업무",
     "자격요건",
@@ -92,19 +96,14 @@ test("dummy detail opens stats first and condition info separately", async ({
   page,
 }) => {
   await page.goto("/jobs?job=dummy%3Abackend-platform");
-  await expect(page.locator(".comparison-radar-card")).toHaveCount(2);
-  await page.locator(".job-original-panel > summary").click();
+  await expect(page.locator(".job-public-content")).toBeVisible();
   await expect(page.locator(".job-posting-section h3").first()).toHaveText(
     "회사 소개",
   );
-  await expect(page.locator(".job-original-link")).toHaveAttribute(
-    "href",
-    /^\/postings\//,
-  );
-  await page.getByRole("link", { name: "지원 조건", exact: true }).click();
-  await expect(page.locator(".application-condition-rows")).toContainText(
-    "3.8",
-  );
+  await expect(page.locator(".job-original-link")).toHaveCount(0);
+  await page.getByRole("tab", { name: "역량 분석", exact: true }).click();
+  await expect(page.locator(".personal-job-comparison")).toBeVisible();
+  await expect(page.locator(".job-public-content")).toBeHidden();
   await expect(page.locator(".category-radar")).toHaveCount(0);
 });
 
@@ -112,7 +111,7 @@ test("detail omits lower bars while catalog keeps the cohort average", async ({
   page,
 }) => {
   await page.goto("/jobs?job=dummy%3Abackend-platform");
-  await expect(page.getByText("가상 합격자 50명 기준")).toBeVisible();
+  await expect(page.locator(".job-public-content")).toBeVisible();
   await expect(
     page.locator(".passed-preferred, .applicant-stats, [role=progressbar]"),
   ).toHaveCount(0);
@@ -123,17 +122,13 @@ test("detail omits lower bars while catalog keeps the cohort average", async ({
   ).toContainText("공고의 역량 키워드와 내 경험을 비교해요");
 });
 
-test("dummy jobs link to a placeholder original; real jobs without a link say so", async ({
+test("detail removes original lookup links and unavailable-source messages", async ({
   page,
 }) => {
   await page.goto("/jobs?job=dummy%3Adata-engineer");
-  const original = page.locator(".job-original-link");
-  await expect(original).toHaveAttribute(
-    "href",
-    "/postings/dummy%3Adata-engineer",
-  );
-  const posting = await page.request.get("/postings/dummy%3Adata-engineer");
-  expect(await posting.text()).toContain("예시 원문 페이지예요");
+  await expect(
+    page.locator(".job-original-link, .original-missing"),
+  ).toHaveCount(0);
   await page.route("**/api/jobs?**", (route) =>
     route.fulfill({
       json: {
@@ -158,7 +153,7 @@ test("dummy jobs link to a placeholder original; real jobs without a link say so
     }),
   );
   await page.goto("/jobs?job=no-link");
-  await expect(page.locator(".job-source-row .original-missing")).toHaveText(
-    "원문을 찾을 수 없습니다.",
-  );
+  await expect(
+    page.locator(".job-original-link, .original-missing"),
+  ).toHaveCount(0);
 });
