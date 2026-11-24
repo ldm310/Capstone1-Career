@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ListPagination } from "@/components/shared/list-pagination";
 import { ReviewReason } from "./review-reason";
 
-type Status = "OPEN" | "SKIPPED" | "RETRY_REQUESTED" | "RUNNING" | "RESOLVED";
+type Status = "OPEN" | "SKIPPED" | "RETRY_REQUESTED" | "RESOLVED";
 type Item = {
   id: string;
   postingNo: string;
@@ -11,17 +11,11 @@ type Item = {
   company: string;
   title: string;
   sourceUrl: string;
-  stage: string;
-  errorCode: string;
-  failureCount: number;
   status: Status;
   feedback: string;
-  actorName: string | null;
-  lastFailedAt: string | null;
   updatedAt: string;
-  revision: number;
+  revision: string;
   reviewReasons: Array<Record<string, unknown>>;
-  sourceRunId: string | null;
 };
 type List = {
   total: number;
@@ -32,18 +26,9 @@ type List = {
 };
 const labels: Record<Status, string> = {
   OPEN: "검토 대기",
-  SKIPPED: "넘김",
+  SKIPPED: "제외 (넘김)",
   RETRY_REQUESTED: "재추출 요청",
-  RUNNING: "처리 중",
-  RESOLVED: "해결",
-};
-const stageLabels: Record<string, string> = {
-  REVIEW: "추출 결과 검토",
-  EXTRACTION: "역량 추출",
-  SAVE: "결과 저장",
-  RAW: "본문 수집",
-  OCR: "이미지 인식",
-  UNKNOWN: "추출 기록 확인",
+  RESOLVED: "정상 확인",
 };
 function sourceLink(value: string) {
   try {
@@ -146,7 +131,7 @@ export function ExtractionReviewBoard() {
       setFeedback("");
       setMessage(
         action === "PASS"
-          ? "공고를 넘겼습니다. 자동 재추출 대상에서 제외됩니다."
+          ? "공고를 제외로 저장했습니다."
           : "피드백과 재추출 요청을 저장했습니다.",
       );
       await load();
@@ -164,12 +149,8 @@ export function ExtractionReviewBoard() {
           <strong>{loaded ? (data.counts.OPEN ?? 0) : "—"}</strong>
         </div>
         <div>
-          <span>재추출 요청 / 처리 중</span>
-          <strong>
-            {loaded
-              ? (data.counts.RETRY_REQUESTED ?? 0) + (data.counts.RUNNING ?? 0)
-              : "—"}
-          </strong>
+          <span>재추출 요청</span>
+          <strong>{loaded ? (data.counts.RETRY_REQUESTED ?? 0) : "—"}</strong>
         </div>
         <div>
           <span>넘긴 공고</span>
@@ -182,7 +163,7 @@ export function ExtractionReviewBoard() {
       </p>
       {loaded && (
         <p className="review-worker">
-          최근 파이프라인 처리:{" "}
+          최근 추출 결과 저장:{" "}
           {data.lastPipelineAt
             ? new Date(data.lastPipelineAt).toLocaleString("ko-KR", {
                 timeZone: "Asia/Seoul",
@@ -263,8 +244,7 @@ export function ExtractionReviewBoard() {
           </div>
         ) : (
           data.items.map((item) => {
-            const locked =
-              !!busy || ["RUNNING", "RESOLVED"].includes(item.status);
+            const locked = !!busy || item.status !== "OPEN";
             const link = sourceLink(item.sourceUrl);
             return (
               <article key={item.id} className="review-row">
@@ -294,7 +274,7 @@ export function ExtractionReviewBoard() {
                     <strong>
                       검토 사유 {item.reviewReasons?.length || 1}개
                     </strong>
-                    <span>{stageLabels[item.stage] || "역량 추출"}</span>
+                    <span>추출 결과 검토</span>
                     {item.reviewReasons?.length ? (
                       <ul className="review-reasons">
                         {item.reviewReasons.map((reason, index) => (
@@ -304,13 +284,7 @@ export function ExtractionReviewBoard() {
                         ))}
                       </ul>
                     ) : (
-                      <p>{item.errorCode || "검토 사유 확인 필요"}</p>
-                    )}
-                    {item.failureCount > 0 && (
-                      <span>추가 추출 실패 {item.failureCount}회</span>
-                    )}
-                    {item.failureCount >= 2 && item.status === "OPEN" && (
-                      <small>자동 재시도 보류</small>
+                      <p>검토 사유 확인 필요</p>
                     )}
                     <time dateTime={item.updatedAt}>
                       {new Date(item.updatedAt).toLocaleString("ko-KR", {
@@ -322,7 +296,7 @@ export function ExtractionReviewBoard() {
                     <button
                       type="button"
                       onClick={() => void act(item, "PASS")}
-                      disabled={locked || item.status === "SKIPPED"}
+                      disabled={locked}
                     >
                       넘기기 (PASS)
                     </button>
@@ -368,8 +342,9 @@ export function ExtractionReviewBoard() {
                       placeholder="예: 이미지 하단의 자격요건이 누락됐습니다. 해당 영역의 OCR 결과를 확인해 주세요."
                     />
                     <p>
-                      요청을 대기열에 저장합니다. 연결된 파이프라인이 실행되면
-                      피드백을 함께 전달합니다.
+                      추출 결과에 피드백과 재추출 요청을 저장합니다.
+                      파이프라인은 다음 실행에서 처리 대상 공고의 피드백을
+                      읽습니다.
                     </p>
                     <div>
                       <button
