@@ -60,3 +60,30 @@ def test_team_can_write_only_review_columns(db):
             db.execute("UPDATE extraction_run SET is_current = false WHERE id = %s", (run,))
     finally:
         db.execute("RESET ROLE")
+
+
+def test_pending_includes_sent_back_with_feedback(db):
+    """현재 결과가 '다시'인 진행 공고는 피드백과 함께 밀린 공고로 — 다음 ① 이 다시 추출한다.
+    공고 정보(직무·경력)는 DB 에서 읽어 지워지지 않는다. 마감된 공고는 다시 추출하지 않는다."""
+    import db_queries as q
+    add_posting(db, "1")                                                        # 실행 없음 → 밀린 공고, 피드백 ''
+    review(db, add_run(db, add_posting(db, "2")), "다시", "공통지원요건은 자리가 아님")
+    review(db, add_run(db, add_posting(db, "3")), "정상")
+    review(db, add_run(db, add_posting(db, "4")), "제외")
+    p5 = add_posting(db, "5")
+    review(db, add_run(db, p5, current=False), "다시", "옛 피드백")               # 다시 뽑은 결과가 현재 → 아님
+    add_run(db, p5)
+    review(db, add_run(db, add_posting(db, "6", status="마감")), "다시", "마감됨")  # 마감 → 아님
+    rows = q.pending_postings(db)
+    assert [(r["rec_idx"], r["feedback"]) for r in rows] == [("1", ""), ("2", "공통지원요건은 자리가 아님")]
+    assert rows[1]["role"] == "백엔드" and rows[1]["career"] == "신입 · 경력"      # 공고 정보는 DB 에서(지워지지 않음)
+
+
+def test_open_postings_skips_excluded(db):
+    """'제외'한 공고는 변경·마감 확인 대상이 아니다. 아는 번호에는 남아 새 공고로 다시 잡히지 않는다."""
+    import db_queries as q
+    review(db, add_run(db, add_posting(db, "A")), "제외")
+    review(db, add_run(db, add_posting(db, "B")), "정상")
+    add_posting(db, "C")
+    assert [r["rec_idx"] for r in q.open_postings(db)] == ["B", "C"]
+    assert "A" in q.known_posting_nos(db)
