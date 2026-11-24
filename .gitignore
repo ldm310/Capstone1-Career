@@ -1,0 +1,9 @@
+.env
+node_modules
+/work/
+/.next/
+/.career-data/
+/.vscode/
+/next-env.d.ts
+/tsconfig.tsbuildinfo
+/gitignore.backup-*.txt

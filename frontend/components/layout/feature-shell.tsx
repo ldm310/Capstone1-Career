@@ -1,0 +1,68 @@
+"use client";
+import Link from "next/link";
+import { usePathname, useSearchParams } from "next/navigation";
+import { Header } from "./header";
+import {
+  featureSections,
+  selectedSectionTab,
+  type FeatureSection,
+} from "@/lib/feature-sections";
+export function FeatureShell({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname(),
+    params = useSearchParams();
+  const section =
+    (Object.keys(featureSections) as FeatureSection[]).find(
+      (key) => featureSections[key].path === pathname,
+    ) || "skills";
+  const info = featureSections[section],
+    tab = selectedSectionTab(section, params.get("tab"));
+  const isJobDetail =
+    (section === "jobs" && !!params.get("job")) || section === "experience";
+  return (
+    <div
+      className={`feature-site sky-home${isJobDetail ? " is-job-detail" : ""}`}
+    >
+      <a className="skip-link" href="#feature-content">
+        본문으로 바로가기
+      </a>
+      <Header />
+      <main id="feature-content" className="feature-content home-width">
+        {!isJobDetail && (
+          <div className="feature-breadcrumb">
+            <Link href="/">홈</Link>
+            <span aria-hidden="true">/</span>
+            <span>{info.title}</span>
+          </div>
+        )}
+        {isJobDetail ? (
+          <h1 className="sr-only">채용공고 상세</h1>
+        ) : (
+          <header className="feature-page-heading">
+            <span>CAREER</span>
+            <h1>{info.title}</h1>
+            <p>{info.description}</p>
+          </header>
+        )}
+        {info.tabs.length > 1 && (
+          <nav className="feature-tabs" aria-label={`${info.title} 하위 메뉴`}>
+            {info.tabs.map(([key, label], index) => (
+              <Link
+                key={key}
+                href={index === 0 ? info.path : `${info.path}?tab=${key}`}
+                aria-current={tab === key ? "page" : undefined}
+              >
+                {label}
+              </Link>
+            ))}
+          </nav>
+        )}
+        <div className="feature-body" key={tab}>
+          {children}
+        </div>
+      </main>
+      <footer className="home-footer home-width">
+        <Link href="/">Career</Link>
+      </footer>
+    </div>
+  );
+}

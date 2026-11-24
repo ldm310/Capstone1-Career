@@ -1,0 +1,363 @@
+.sky-experience {
+  --green: #315a7b;
+  --primary: #315a7b;
+  --green-soft: #eef4f8;
+  --foreground: #1e3448;
+  color: #1e3448;
+  background: #f8fafc;
+}
+.sky-home {
+  transition:
+    opacity 0.65s ease,
+    transform 0.85s cubic-bezier(0.2, 0.7, 0.2, 1);
+  transform-origin: 50% 20%;
+}
+.sky-phase-intro .sky-home {
+  opacity: 0;
+  transform: scale(0.97);
+  height: 100svh;
+  overflow: hidden;
+}
+.sky-phase-leaving .sky-home {
+  opacity: 1;
+  transform: scale(1);
+  height: 100svh;
+  overflow: hidden;
+}
+.sky-intro {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: #b6d6ed;
+  overflow: hidden;
+  isolation: isolate;
+  transition:
+    opacity 0.8s ease,
+    visibility 0.8s;
+}
+.intro-sky-photo,
+.home-sky-photo {
+  position: absolute;
+  inset: 0;
+  background-image: url("/images/career-sky.jpg");
+  background-size: cover;
+  background-position: center;
+  pointer-events: none;
+}
+.intro-sky-photo {
+  inset: -5%;
+  animation: sky-drift 32s ease-in-out infinite alternate;
+  filter: saturate(0.65);
+  z-index: -2;
+}
+.intro-atmosphere {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(180deg, #bbd5e630, #d6e6ef24 50%, #f3f7fa75);
+  pointer-events: none;
+}
+.intro-kicker {
+  position: absolute;
+  top: 9%;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: var(--tracking-label);
+  color: #244d6d;
+}
+.intro-title-group {
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  transform-style: preserve-3d;
+  margin-top: 0;
+  will-change: transform;
+}
+.intro-word {
+  font-family: var(--font-geist-sans), sans-serif;
+  font-size: clamp(100px, 19vw, 290px);
+  line-height: 1.15;
+  letter-spacing: -0.07em;
+  font-weight: 650;
+  color: #f9fcff;
+  text-shadow:
+    0 1px 0 #e7f0f8,
+    0 2px 0 #d9e7f1,
+    0 3px 0 #cedfeb,
+    0 4px 0 #c1d5e5,
+    0 5px 0 #b4ccdf,
+    0 6px 0 #a9c3d8,
+    0 7px 0 #9ebbd2,
+    0 8px 0 #94b1c9,
+    0 9px 0 #88a7c1,
+    0 10px 0 #7f9fb9,
+    0 20px 30px #294b6a30,
+    0 40px 70px #294b6a20;
+  transform: translateZ(65px);
+  padding-right: 0.06em;
+}
+.intro-subtitle {
+  font-size: clamp(17px, 2vw, 26px);
+  font-weight: 550;
+  letter-spacing: var(--tracking-heading);
+  line-height: 1.65;
+  margin-top: 25px;
+  transform: translateZ(35px);
+  text-align: center;
+  color: #1d405e;
+}
+.intro-mobile-break {
+  display: none;
+}
+.intro-click {
+  margin-top: 28px;
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  gap: 16px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #254d6c;
+}
+.intro-click-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 10px 2px 12px;
+  border-bottom: 1px solid #4c728f;
+  font-size: 17px;
+  font-weight: 550;
+  line-height: 1.5;
+  letter-spacing: var(--tracking-heading);
+  color: #274f6f;
+}
+.intro-click-link > svg {
+  flex-shrink: 0;
+  transition: transform 0.2s;
+}
+.intro-keyboard {
+  font-size: 12px;
+  color: #365c79;
+  font-weight: 400;
+}
+.intro-bottom {
+  position: absolute;
+  bottom: 28px;
+  left: 40px;
+  right: 40px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  letter-spacing: var(--tracking-label);
+  color: #315672;
+}
+.sky-phase-leaving .sky-intro {
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
+}
+.sky-phase-leaving .intro-title-group {
+  animation: career-depart 0.8s cubic-bezier(0.3, 0.1, 0.2, 1) forwards;
+}
+.intro-replay {
+  position: fixed;
+  bottom: 18px;
+  left: 20px;
+  z-index: 35;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  background: #fffffff2;
+  border: 1px solid #dce5ec;
+  border-radius: 30px;
+  padding: 9px 13px;
+  color: #45627a;
+  box-shadow: 0 3px 15px #233b4e09;
+}
+.sky-home .site-header {
+  background: #f2f7fbdc;
+  border-color: #dce7f0;
+  backdrop-filter: blur(14px);
+}
+.sky-home .brand-mark span {
+  background: #315a7b;
+}
+.sky-home .brand {
+  color: #1e3448;
+}
+.sky-home .header-nav {
+  font-size: 13px;
+  color: #45627a;
+}
+.sky-home .cta {
+  background: #315a7b;
+  border-color: #315a7b;
+  box-shadow: none;
+  border-radius: 8px;
+}
+.sky-home .cta:hover {
+  background: #244764;
+}
+.sky-home .cta-secondary {
+  color: #315a7b;
+  background: #ffffffd9;
+  border-color: #d6e2eb;
+}
+.sky-home .cta-secondary:hover {
+  background: white;
+}
+.sky-home .public-company-mark {
+  color: #315a7b;
+  background: #edf3f8;
+}
+.sky-home .public-job-category,
+.sky-home .public-job-source {
+  color: #315a7b;
+}
+.sky-home .public-job-card {
+  border-color: #dce6ed;
+}
+.sky-home .public-job-card:hover {
+  border-color: #8aafc9;
+}
+.sky-hero {
+  position: relative;
+  isolation: isolate;
+  padding: 78px 32px 24px;
+  background: #eef5fa;
+  overflow: hidden;
+}
+.home-sky-photo {
+  z-index: -2;
+  opacity: 0.63;
+  background-position: center 43%;
+  filter: saturate(0.5);
+}
+.sky-hero:before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(180deg, #eef5fa66 0%, #eff6fa7a 35%, #f8fafc 91%);
+}
+.sky-hero-copy {
+  text-align: center;
+  margin: 0 auto;
+  max-width: 850px;
+}
+.sky-eyebrow {
+  font-size: 12px;
+  color: #335976;
+  letter-spacing: var(--tracking-label);
+}
+.sky-hero h1 {
+  font-size: clamp(35px, 4.5vw, 64px);
+  font-weight: 600;
+  line-height: 1.33;
+  letter-spacing: var(--tracking-heading);
+  margin: 24px 0;
+}
+.sky-hero h1:focus {
+  outline: none;
+}
+.sky-hero h1 span {
+  color: #315a7b;
+}
+.sky-hero-copy > p {
+  font-size: 15px;
+  line-height: 1.95;
+  color: #38566e;
+}
+.sky-hero-actions {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin: 27px 0 16px;
+}
+.sky-hero-actions .cta {
+  font-size: 13px;
+  min-height: 46px;
+  padding: 12px 19px;
+}
+.sky-hero-copy > small {
+  font-size: 12px;
+  color: #45627a;
+}
+@keyframes sky-drift {
+  from {
+    transform: scale(1.02) translate3d(-1%, 0, 0);
+  }
+  to {
+    transform: scale(1.1) translate3d(1.5%, -1%, 0);
+  }
+}
+@keyframes career-depart {
+  to {
+    opacity: 0;
+    filter: blur(8px);
+    scale: 1.18;
+    translate: 0 -24px;
+  }
+}
+@media (max-width: 700px) {
+  .intro-kicker {
+    top: 12%;
+    font-size: 12px;
+  }
+  .intro-word {
+    font-family: var(--font-geist-sans), sans-serif;
+    font-size: 23vw;
+  }
+  .intro-title-group {
+    margin-top: 0;
+  }
+  .intro-subtitle {
+    font-size: 19px;
+    margin-top: 24px;
+  }
+  .intro-mobile-break {
+    display: block;
+  }
+  .intro-click {
+    margin-top: 28px;
+  }
+  .intro-bottom {
+    font-size: 12px;
+    left: 22px;
+    right: 22px;
+  }
+  .sky-hero {
+    padding: 52px 20px 24px;
+  }
+  .sky-hero h1 {
+    font-size: clamp(29px, 6.7vw, 42px);
+  }
+  .sky-hero-copy > p {
+    font-size: 13px;
+  }
+  .sky-hero-actions {
+    flex-wrap: wrap;
+  }
+  .sky-hero-copy > small {
+    font-size: 12px;
+  }
+  .intro-replay {
+    bottom: 12px;
+    left: 12px;
+    font-size: 12px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .intro-sky-photo {
+    animation: none;
+  }
+  .sky-home,
+  .sky-intro {
+    transition: none;
+  }
+  .sky-phase-leaving .intro-title-group {
+    animation: none;
+  }
+}

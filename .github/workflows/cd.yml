@@ -1,5 +1,5 @@
 # CD: develop·main 에 합쳐지면 바뀐 파트만 배포한다(develop → main PR 은 사람이 올림 — 사용자 결정).
-#   develop → 웹 스테이징(EC2 3001번, https://staging.15-164-137-78.sslip.io)
+#   develop → 읽기 전용 RDS 백엔드(EC2 내부 18081번) + 웹 스테이징(3001번)
 #   main    → 웹 운영(EC2 3000번) + job-skill(RDS 마이그레이션 → 노트북 Airflow 전용 폴더)
 # 모두 몇 번 돌려도 같은 결과. 그 커밋에 웹 코드(frontend/)가 없으면 웹은 건드리지 않는다.
 # 해 둘 것(맨 위 README '관리자 설정'): Secrets RDS_HOST·RDS_PASSWORD, 러너 두 대 — 노트북(career-laptop)·EC2(career-ec2).
@@ -21,6 +21,7 @@ jobs:
     outputs:
       job_skill: ${{ steps.diff.outputs.job_skill }}
       web: ${{ steps.diff.outputs.web }}
+      staging_backend: ${{ steps.diff.outputs.staging_backend }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -32,24 +33,95 @@ jobs:
         run: |
           # 손으로 돌렸거나 비교할 커밋이 없으면 모두 배포(어차피 멱등)
           if [ "${{ github.event_name }}" != push ] || ! files=$(git diff --name-only "$BASE" "$GITHUB_SHA" 2>/dev/null); then
-            files=$(printf 'job-skill/\nfrontend/\n')
+            files=$(printf 'job-skill/\nbackend/\nfrontend/\n')
           fi
           echo "$files"
           if echo "$files" | grep -qE '^(job-skill/|\.github/workflows/cd\.yml)'; then v=true; else v=false; fi
           echo "job_skill=$v" >> "$GITHUB_OUTPUT"
           if echo "$files" | grep -qE '^(frontend/|deploy/web/|\.github/workflows/cd\.yml)'; then v=true; else v=false; fi
+          if [ "$GITHUB_REF_NAME" = develop ] && echo "$files" | grep -qE '^(backend/|deploy/backend/)'; then v=true; fi
           echo "web=$v" >> "$GITHUB_OUTPUT"
+          if [ "$GITHUB_REF_NAME" = develop ] && echo "$files" | grep -qE '^(backend/|deploy/backend/|deploy/web/|\.github/workflows/cd\.yml)'; then v=true; else v=false; fi
+          echo "staging_backend=$v" >> "$GITHUB_OUTPUT"
+
+  staging-backend-build:
+    needs: changes
+    if: github.ref_name == 'develop' && needs.changes.outputs.staging_backend == 'true'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          architecture: x64
+          cache: gradle
+      - name: Build isolated staging application and Java runtime
+        shell: bash
+        run: |
+          java -jar backend/gradle/wrapper/gradle-wrapper.jar -p backend bootJar --no-daemon
+          mkdir -p "$RUNNER_TEMP/backend-bundle"
+          cp backend/build/libs/backend-0.0.1-SNAPSHOT.jar "$RUNNER_TEMP/backend-bundle/app.jar"
+          "$JAVA_HOME/bin/jlink" --add-modules ALL-MODULE-PATH --strip-debug --no-header-files --no-man-pages --compress=2 --output "$RUNNER_TEMP/backend-bundle/runtime"
+          tar -czf "$RUNNER_TEMP/backend-staging.tgz" -C "$RUNNER_TEMP/backend-bundle" .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: backend-staging-${{ github.sha }}
+          path: ${{ runner.temp }}/backend-staging.tgz
+          retention-days: 3
+
+  staging-backend:
+    needs: [changes, staging-backend-build]
+    if: github.ref_name == 'develop' && needs.changes.outputs.staging_backend == 'true'
+    runs-on: [self-hosted, career-ec2]
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: backend-staging-${{ github.sha }}
+          path: ${{ runner.temp }}/backend-staging
+      - name: Deploy staging-only backend and verify read-only RDS connection
+        env:
+          RDS_HOST: ${{ secrets.STAGING_RDS_HOST || secrets.RDS_HOST }}
+          RDS_PASSWORD: ${{ secrets.STAGING_RDS_PASSWORD || secrets.RDS_PASSWORD }}
+          RDS_DATABASE: ${{ vars.STAGING_RDS_DATABASE || vars.RDS_DATABASE }}
+          RDS_USERNAME: ${{ vars.STAGING_RDS_USERNAME || vars.RDS_USERNAME }}
+          RDS_PORT: ${{ vars.STAGING_RDS_PORT || vars.RDS_PORT }}
+        run: bash deploy/backend/deploy_staging.sh "$GITHUB_SHA" "$RUNNER_TEMP/backend-staging/backend-staging.tgz"
 
   web:
-    needs: changes
-    if: needs.changes.outputs.web == 'true'
+    needs: [changes, staging-backend-build, staging-backend]
+    if: >-
+      always() && needs.changes.result == 'success' && needs.changes.outputs.web == 'true' &&
+      ((needs.staging-backend-build.result == 'success' && needs.staging-backend.result == 'success') ||
+       (needs.staging-backend-build.result == 'skipped' && needs.staging-backend.result == 'skipped'))
     runs-on: [self-hosted, career-ec2]   # EC2 에 설치한 러너(ubuntu 계정, 서비스)
     steps:
       - uses: actions/checkout@v4      # 배포 스크립트만 쓰려고(웹은 deploy.sh 가 판마다 따로 받음)
+      - name: Configure staging member, LV, notice and optional Kakao connection
+        if: github.ref_name == 'develop'
+        env:
+          RDS_HOST: ${{ secrets.STAGING_RDS_HOST || secrets.RDS_HOST }}
+          RDS_PASSWORD: ${{ secrets.STAGING_RDS_PASSWORD || secrets.RDS_PASSWORD }}
+          RDS_DATABASE: ${{ vars.STAGING_RDS_DATABASE || vars.RDS_DATABASE }}
+          RDS_USERNAME: ${{ vars.STAGING_RDS_USERNAME || vars.RDS_USERNAME }}
+          RDS_PORT: ${{ vars.STAGING_RDS_PORT || vars.RDS_PORT }}
+          KAKAO_REST_API_KEY: ${{ secrets.STAGING_KAKAO_REST_API_KEY }}
+          KAKAO_CLIENT_SECRET: ${{ secrets.STAGING_KAKAO_CLIENT_SECRET }}
+          KAKAO_REDIRECT_URI: ${{ vars.STAGING_KAKAO_REDIRECT_URI || 'https://staging.15-164-137-78.sslip.io/api/auth/kakao/callback' }}
+        run: python3 deploy/backend/staging_config.py profile-env --path "$HOME/career-data-staging/.env" --ca-path "$HOME/career-data-staging/rds-ca.pem"
       - name: EC2 웹 배포(develop → 스테이징, main → 운영)
         env:
           TARGET: ${{ github.ref_name == 'main' && 'production' || 'staging' }}
         run: bash deploy/web/deploy.sh "$TARGET" "$GITHUB_SHA"
+      - name: Verify staging frontend reads live backend postings
+        if: github.ref_name == 'develop'
+        run: python3 deploy/backend/staging_config.py verify-web
+      - name: Verify staging notice RDS connection
+        if: github.ref_name == 'develop'
+        run: python3 deploy/backend/staging_config.py verify-profile
 
   rds-migrate:
     needs: changes

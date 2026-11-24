@@ -1,0 +1,413 @@
+/* Shared page rhythm. Scoped selectors also cover route-specific styles. */
+.feature-site .feature-content {
+  padding-top: 32px;
+  padding-bottom: 72px;
+}
+.feature-site .feature-breadcrumb {
+  margin-bottom: 28px;
+}
+.feature-site .feature-page-heading {
+  margin-bottom: 36px;
+}
+.feature-site .feature-page-heading h1 {
+  margin: 10px 0 14px;
+  line-height: 1.3;
+}
+.feature-site .feature-page-heading p {
+  max-width: 64ch;
+  margin: 0;
+  line-height: 1.8;
+}
+.feature-site .feature-tabs {
+  margin: 0 0 32px;
+  gap: 28px;
+}
+.feature-site .feature-body {
+  min-width: 0;
+}
+
+/* Analysis: one clear title, readable guidance and spaced form groups. */
+.feature-site .analysis-flow {
+  padding: 40px;
+  border-radius: 16px;
+}
+.feature-site .analysis-flow h2 {
+  font-size: 28px;
+  line-height: 1.4;
+  letter-spacing: -0.025em;
+  margin-bottom: 16px;
+}
+.feature-site .analysis-flow h3 {
+  font-size: 17px;
+  line-height: 1.5;
+  margin-bottom: 10px;
+}
+.feature-site .analysis-steps {
+  gap: 24px;
+  margin-bottom: 32px;
+  font-size: 13px;
+}
+.feature-site .analysis-intro {
+  margin-bottom: 32px;
+  font-size: 15px;
+  line-height: 1.8;
+}
+.feature-site .analysis-template {
+  display: block;
+  padding: 24px;
+  margin-bottom: 24px;
+}
+.feature-site .analysis-template p,
+.feature-site .analysis-login-note p,
+.feature-site .analysis-source-heading p {
+  font-size: 14px;
+  line-height: 1.8;
+}
+.feature-site .analysis-template p {
+  margin-bottom: 18px;
+}
+.feature-site .analysis-template small,
+.feature-site .analysis-template-links a,
+.feature-site .analysis-login-note a {
+  font-size: 13px;
+  line-height: 1.7;
+}
+.feature-site .analysis-login-note {
+  padding: 24px;
+  margin-bottom: 28px;
+}
+.feature-site .analysis-login-note p {
+  margin-bottom: 16px;
+}
+.feature-site .analysis-inputs {
+  gap: 24px;
+}
+.feature-site .analysis-source-heading {
+  margin-bottom: 20px;
+}
+.feature-site .analysis-source-block {
+  padding: 24px;
+  border-radius: 12px;
+}
+.feature-site .analysis-url-row input {
+  min-height: 48px;
+  font-size: 14px;
+}
+.feature-site .analysis-url-row button {
+  min-height: 44px;
+  font-size: 13px;
+}
+.feature-site .analysis-file-picker {
+  padding: 28px 16px;
+  gap: 12px;
+}
+.feature-site .analysis-file-picker strong {
+  font-size: 15px;
+}
+.feature-site .analysis-file-picker span,
+.feature-site .analysis-selected-heading > span,
+.feature-site .analysis-empty,
+.feature-site .analysis-source-list small,
+.feature-site .analysis-bottom-note {
+  font-size: 13px;
+  line-height: 1.8;
+}
+.feature-site .analysis-selected-heading {
+  margin: 32px 0 18px;
+}
+.feature-site .analysis-selected-heading h3 {
+  margin: 0;
+  font-size: 16px;
+}
+.feature-site .analysis-source-list li {
+  gap: 16px;
+  padding: 20px 0;
+}
+.feature-site .analysis-source-list strong {
+  font-size: 14px;
+}
+.analysis-source-kind {
+  flex-shrink: 0;
+  width: 60px;
+  font-size: 12px;
+  color: #506578;
+}
+.feature-site .analysis-complete {
+  padding-top: 52px;
+  padding-bottom: 40px;
+}
+.feature-site .analysis-complete > p {
+  max-width: 44ch;
+  margin-inline: auto;
+}
+
+/* Catalog and detail: separate headings, filters, metadata and actions. */
+.sky-home .public-jobs-heading {
+  margin-bottom: 24px;
+  align-items: center;
+  gap: 20px;
+}
+.sky-home .public-jobs-heading h2 {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.5;
+}
+.feature-site .study-preview-invite {
+  margin-bottom: 28px;
+  padding: 20px 24px;
+  gap: 20px;
+}
+.feature-site .public-jobs-toolbar {
+  margin-bottom: 24px;
+  padding-bottom: 24px;
+  gap: 20px;
+}
+.feature-site .catalog-filter-bar {
+  gap: 12px;
+}
+.sky-home .public-feed-count {
+  margin: 24px 0 20px;
+}
+.sky-home .job-list .public-job-card h3 {
+  line-height: 1.6;
+}
+.sky-home .job-list .job-list-meta,
+.sky-home .job-list .public-job-category,
+.sky-home .job-list-main .passed-gap,
+.sky-home .job-list .public-job-source,
+.sky-home .job-list-deadline {
+  font-size: 13px;
+  line-height: 1.8;
+}
+.feature-site .study-back {
+  display: inline-flex;
+  margin-bottom: 24px;
+}
+.feature-site .job-detail-page .study-detail-tabs {
+  margin: 28px 0;
+}
+.feature-site .job-summary-actions {
+  align-items: center;
+  gap: 12px;
+}
+.feature-site .job-summary .job-save {
+  display: inline-flex;
+  width: auto;
+  min-height: 44px;
+  padding: 10px 14px;
+  gap: 8px;
+}
+.feature-site .job-summary .job-apply {
+  align-items: center;
+}
+.feature-site .job-summary .job-dday {
+  align-self: center;
+  padding: 5px 10px;
+  border-radius: 6px;
+  line-height: 1.5;
+}
+.feature-site .comparison-data-note {
+  margin-bottom: 20px;
+  font-size: 13px;
+  line-height: 1.8;
+}
+.feature-site .comparison-radar-card,
+.feature-site .application-conditions,
+.feature-site .job-keyword-levels {
+  padding: 28px;
+}
+.feature-site .comparison-charts {
+  gap: 24px;
+}
+.feature-site .application-conditions h3,
+.feature-site .job-keyword-levels h3 {
+  font-size: 20px;
+  font-weight: 650;
+  margin-bottom: 12px;
+  line-height: 1.5;
+}
+.feature-site .application-conditions header p,
+.feature-site .job-keyword-levels header p,
+.feature-site .job-keyword-note {
+  font-size: 14px;
+  line-height: 1.8;
+}
+.feature-site .job-keyword-levels ul {
+  margin-top: 24px;
+  margin-bottom: 24px;
+}
+.feature-site .job-keyword-levels li {
+  padding: 22px 0;
+  gap: 24px;
+}
+.feature-site .job-keyword-levels li strong {
+  font-size: 15px;
+  line-height: 1.8;
+}
+.feature-site .job-keyword-levels li p {
+  font-size: 13px;
+  margin-top: 10px;
+}
+.feature-site .job-keyword-levels > a {
+  margin-top: 20px;
+  font-size: 14px;
+}
+.feature-site .job-keyword-levels,
+.feature-site .job-original-panel {
+  margin-top: 32px;
+}
+.feature-site .application-condition-rows > div {
+  padding: 20px;
+  gap: 20px;
+}
+.feature-site .qualification-checks li {
+  padding: 18px 0;
+  font-size: 14px;
+}
+
+/* Account forms: labels and section boundaries remain distinct. */
+.feature-site .sign-in-panel {
+  padding: 36px;
+  border-radius: 16px;
+}
+.feature-site .sign-in-panel h1 {
+  margin-bottom: 16px;
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+.feature-site .sign-in-panel > p {
+  margin: 0 0 28px;
+  font-size: 14px;
+  line-height: 1.8;
+}
+.feature-site .sign-in-panel form {
+  gap: 22px;
+}
+.feature-site .sign-in-panel label {
+  gap: 10px;
+}
+.feature-site .sign-in-panel input {
+  min-height: 48px;
+}
+.feature-site .sign-in-panel > .header-login {
+  display: block;
+  margin: 20px auto 0;
+  white-space: normal;
+  line-height: 1.7;
+  padding: 8px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #315d80;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.feature-site .sign-in-demo {
+  margin-top: 28px;
+  padding: 22px;
+}
+.feature-site .sign-in-demo p {
+  overflow-wrap: anywhere;
+}
+.feature-site .mypage-profile {
+  gap: 28px;
+}
+.feature-site .mypage-card {
+  padding: 32px;
+}
+.feature-site .mypage-form h2 {
+  margin-bottom: 24px;
+}
+.feature-site .mypage-form fieldset {
+  gap: 22px 24px;
+  padding: 24px 0;
+}
+.feature-site .mypage-form legend:not(.sr-only) {
+  margin-bottom: 12px;
+}
+.feature-site .mypage-form label {
+  gap: 10px;
+}
+.feature-site .mypage-actions {
+  padding-top: 24px;
+  flex-wrap: wrap;
+}
+.feature-site .mypage-jobs {
+  gap: 20px;
+}
+.feature-site .mypage-jobs li {
+  padding: 24px;
+}
+.feature-site .mypage-empty {
+  padding: 56px 24px;
+  gap: 24px;
+}
+
+@media (max-width: 680px) {
+  .feature-site .feature-content {
+    padding-top: 24px;
+    padding-bottom: 48px;
+  }
+  .feature-site .feature-page-heading {
+    margin-bottom: 28px;
+  }
+  .feature-site .analysis-flow {
+    padding: 28px 22px;
+  }
+  .feature-site .analysis-flow h2 {
+    font-size: 24px;
+  }
+  .feature-site .analysis-steps {
+    gap: 14px;
+    font-size: 12px;
+    flex-wrap: wrap;
+  }
+  .feature-site .analysis-template,
+  .feature-site .analysis-login-note,
+  .feature-site .analysis-source-block {
+    padding: 20px;
+  }
+  .feature-site .analysis-template-links {
+    flex-direction: column;
+    gap: 14px;
+    align-items: flex-start;
+  }
+  .feature-site .analysis-url-row {
+    flex-direction: column;
+  }
+  .feature-site .analysis-selected-heading {
+    align-items: flex-start;
+  }
+  .sky-home .public-jobs-heading {
+    align-items: flex-start;
+    gap: 16px;
+  }
+  .feature-site .comparison-radar-card,
+  .feature-site .application-conditions,
+  .feature-site .job-keyword-levels {
+    padding: 22px 18px;
+  }
+  .feature-site .comparison-card-heading {
+    flex-wrap: wrap;
+    gap: 14px;
+  }
+  .feature-site .job-keyword-levels li {
+    gap: 16px;
+  }
+  .feature-site .application-condition-rows > div {
+    padding: 18px 14px;
+    gap: 12px;
+  }
+  .feature-site .sign-in-panel,
+  .feature-site .mypage-card {
+    padding: 26px 22px;
+  }
+  .feature-site .mypage-form fieldset {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 20px;
+  }
+  .feature-site .mypage-jobs li {
+    padding: 22px 18px;
+  }
+}

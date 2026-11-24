@@ -396,4 +396,55 @@ BEGIN
     END IF;
 END $$;
 
+-- 아래는 팀원 웹 관리자 페이지의 옛 검토 표(웹이 extraction_run 의 검토 칸을 쓰게 바뀌면 팀원이 지운다 — 2026-11-24)
+CREATE TABLE IF NOT EXISTS public.career_extraction_review (
+  id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  namespace TEXT NOT NULL,
+  site TEXT NOT NULL DEFAULT '사람인',
+  posting_no TEXT NOT NULL,
+  company TEXT NOT NULL DEFAULT '',
+  title TEXT NOT NULL DEFAULT '',
+  source_url TEXT NOT NULL DEFAULT '',
+  stage TEXT NOT NULL DEFAULT 'EXTRACTION',
+  error_code VARCHAR(160) NOT NULL DEFAULT '',
+  failure_count INTEGER NOT NULL DEFAULT 0 CHECK (failure_count >= 0),
+  status TEXT NOT NULL DEFAULT 'OPEN' CHECK (status IN ('OPEN','SKIPPED','RETRY_REQUESTED','RUNNING','RESOLVED')),
+  feedback TEXT NOT NULL DEFAULT '' CHECK (length(feedback) <= 2000),
+  actor_name TEXT,
+  request_id TEXT,
+  attempt_id TEXT,
+  claimed_at TIMESTAMPTZ,
+  last_failed_at TIMESTAMPTZ,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  revision INTEGER NOT NULL DEFAULT 0,
+  UNIQUE(namespace,site,posting_no)
+);
+CREATE INDEX IF NOT EXISTS career_extraction_review_queue_idx ON public.career_extraction_review(namespace,status,updated_at DESC,id);
+CREATE TABLE IF NOT EXISTS public.career_extraction_review_event (
+  id TEXT PRIMARY KEY,
+  review_id BIGINT NOT NULL REFERENCES public.career_extraction_review(id) ON DELETE CASCADE,
+  action TEXT NOT NULL CHECK (action IN ('PASS','RETRY','START','FAIL','RESOLVE')),
+  feedback TEXT NOT NULL DEFAULT '',
+  actor_id TEXT,
+  actor_name TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE public.career_extraction_review ADD COLUMN IF NOT EXISTS source_run_id BIGINT;
+ALTER TABLE public.career_extraction_review ADD COLUMN IF NOT EXISTS review_reasons JSONB NOT NULL DEFAULT '[]'::jsonb;
+CREATE OR REPLACE VIEW public.career_extraction_review_candidates AS
+SELECT p.site,p.site_posting_no AS posting_no,c.name AS company,p.title,
+  CASE WHEN p.site='사람인' AND p.site_posting_no ~ '^[0-9]+$'
+    THEN 'https://www.saramin.co.kr/zf_user/jobs/relay/view?rec_idx=' || p.site_posting_no ELSE '' END AS source_url,
+  e.id AS source_run_id,e.review_reasons,
+  left((SELECT string_agg(coalesce(reason->>'내용',reason::text),'; ' ORDER BY ordinal)
+    FROM jsonb_array_elements(e.review_reasons) WITH ORDINALITY AS reasons(reason,ordinal)),160) AS error_code
+FROM public.extraction_run e JOIN public.posting p ON p.id=e.posting_id JOIN public.company c ON c.id=p.company_id
+WHERE e.is_current AND e.review_result IS NULL AND jsonb_array_length(e.review_reasons)>0;
+-- Remove only untouched rows created by the former, incorrect no-extraction seed.
+-- The source postings and any administrator action history are preserved.
+DELETE FROM public.career_extraction_review r
+WHERE stage='UNKNOWN' AND failure_count=0 AND status='OPEN' AND feedback='' AND source_run_id IS NULL
+  AND NOT EXISTS(SELECT 1 FROM public.career_extraction_review_event e WHERE e.review_id=r.id);
+
 COMMIT;

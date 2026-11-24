@@ -1,0 +1,31 @@
+# Combine with compose.yaml. Credentials must be injected by the execution environment.
+services:
+  external-pass-batch:
+    profiles: [external-pass]
+    build:
+      context: .
+      dockerfile: data-pipeline/external-pass-crawler/Dockerfile
+    environment:
+      DATABASE_URL: ${EXTERNAL_DATABASE_URL:?Inject a scoped crawler database connection at runtime}
+      BACKEND_URL: ${EXTERNAL_BACKEND_URL:-http://backend:8080}
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    restart: "no"
+
+  external-pass-daily:
+    profiles: [external-pass]
+    build:
+      context: .
+      dockerfile: data-pipeline/external-pass-crawler/Dockerfile
+    image: career-external-pass-daily:latest
+    environment:
+      DATABASE_URL: ${EXTERNAL_DATABASE_URL:?Inject a scoped crawler database connection at runtime}
+    entrypoint: [python, -m, external_pass_crawler.daily]
+    command: [--serve, --hour, "9", --max-companies, "30"]
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped
