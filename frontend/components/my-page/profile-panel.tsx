@@ -15,6 +15,7 @@ interface Account {
   email: string;
   profile: Profile;
   demo: boolean;
+  passwordConfigured?: boolean;
 }
 async function post(body: object) {
   const r = await fetch("/api/account", {
@@ -59,6 +60,7 @@ export function ProfilePanel() {
                 email: d.user.email,
                 profile: { ...emptyProfile, ...d.profile },
                 demo: !!d.demo,
+                passwordConfigured: d.passwordConfigured !== false,
               }
             : null,
         );
@@ -259,12 +261,21 @@ export function ProfilePanel() {
         }}
       >
         <h2 id="password-form-title">비밀번호 변경</h2>
+        {account.passwordConfigured === false && (
+          <p className="mypage-note">
+            네이버로 가입한 계정입니다. 이메일 로그인용 비밀번호는 선택
+            사항입니다.{" "}
+            <Link href="/forgot-password">이메일로 비밀번호 설정</Link>
+          </p>
+        )}
         {account.demo && (
           <p className="mypage-note">
             데모 계정은 이메일과 비밀번호를 바꿀 수 없어요.
           </p>
         )}
-        <fieldset disabled={account.demo}>
+        <fieldset
+          disabled={account.demo || account.passwordConfigured === false}
+        >
           <legend className="sr-only">비밀번호</legend>
           <label>
             현재 비밀번호
@@ -306,7 +317,10 @@ export function ProfilePanel() {
           >
             {passwordStatus.text}
           </p>
-          <button className="career-primary" disabled={account.demo}>
+          <button
+            className="career-primary"
+            disabled={account.demo || account.passwordConfigured === false}
+          >
             변경
           </button>
         </div>

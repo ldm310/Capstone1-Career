@@ -10,6 +10,7 @@ Object.assign(process.env,{
  KAKAO_REST_API_KEY:'isolated-test-client',KAKAO_CLIENT_SECRET:'isolated-test-secret',
  KAKAO_REDIRECT_URI:'http://127.0.0.1:3108/api/auth/kakao/callback',
  CAREER_PUBLIC_URL:'http://127.0.0.1:3108',CAREER_MAIL_TRANSPORT:'file',
+ NAVER_CLIENT_ID:'isolated-naver-client',NAVER_CLIENT_SECRET:'isolated-naver-secret',NAVER_REDIRECT_URI:'http://127.0.0.1:3108/api/auth/naver/callback',
 });
 process.env.NODE_ENV='development';
 require('./kakao-fetch.cjs');

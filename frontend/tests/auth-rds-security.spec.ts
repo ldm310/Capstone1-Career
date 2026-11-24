@@ -15,7 +15,11 @@ test("RDS Kakao registration, password changes and email recovery preserve owner
     "Explicit RDS account integration opt-in",
   );
   test.setTimeout(90000);
-  loadEnvConfig(process.cwd(), false, { info() {}, error() {} });
+  loadEnvConfig(process.cwd(), true, { info() {}, error() {} });
+  test.skip(
+    process.env.CAREER_MAIL_TRANSPORT !== "file",
+    "Recovery integration requires a file mailbox; this test must never send real email",
+  );
   const base = "http://127.0.0.1:3000",
     headers = { origin: base };
   const namespace = process.env.CAREER_PROFILE_NAMESPACE || "local-review";

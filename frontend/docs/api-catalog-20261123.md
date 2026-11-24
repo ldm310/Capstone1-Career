@@ -51,6 +51,9 @@ Next 서버가 Spring 공고 API 또는 사용자용 RDS/SQLite에 연결한다.
 | DELETE | `/api/notices` | 공지 논리 삭제 | RDS ADMIN, id |
 | POST | `/api/admin/activate` | 일회용 링크로 관리자 초기 비밀번호 설정 | 유효 token/password 필요, 재사용 불가 |
 | GET | `/api/auth/kakao/status` | 카카오 연결 설정 여부 | 공개, 키/시크릿은 반환하지 않음 |
+| GET | `/api/auth/naver/status` | 네이버 연결 설정 여부 | 공개, Client ID·Secret은 반환하지 않음 |
+| GET | `/api/auth/naver` | 네이버 로그인 시작 | 설정 필요, next 내부 주소만 허용, 미설정 503 |
+| GET | `/api/auth/naver/callback` | state 검증 후 로그인·신규 회원 등록 | 이메일 제공 필수, 이메일만으로 기존 계정 자동 연결 금지, 신규 비밀번호 강제 없음 |
 | GET | `/api/auth/kakao` | 카카오 인가 시작 | 앱 설정 필요, 미설정 시 503 |
 | GET | `/api/auth/kakao/callback` | state 확인, 코드 교환, 기존 회원 로그인 또는 비밀번호 설정 화면 이동 | code/state, 실제 앱 설정 필요. 신규 회원은 비밀번호 설정 후 계정 생성 |
 | GET | `/api/admin/extraction-reviews` | extraction_run의 현재 검토 대상·사유·상태별 건수 | ADMIN 전용, status/q/offset. storage=extraction_run, total은 조건별 총 건수, 20개 단위. id는 추출 실행 ID, revision은 변경 확인용 문자열 |

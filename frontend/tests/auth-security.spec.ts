@@ -75,6 +75,122 @@ test.beforeEach(async ({ page }) => {
   );
 });
 
+test("Naver signup logs in without a required password and preserves provider identity and return path", async ({
+  page,
+  playwright,
+}) => {
+  const target = "/jobs?job=fixture-0&view=stats";
+  const email = `naver-${randomUUID()}@example.test`,
+    subject = "naver-" + randomUUID();
+  const start = await page.request.get(
+    "/api/auth/naver?" + new URLSearchParams({ next: target }),
+    { maxRedirects: 0 },
+  );
+  expect(start.status()).toBe(302);
+  const state = new URL(start.headers().location).searchParams.get("state")!;
+  const code = Buffer.from(JSON.stringify({ email, subject })).toString(
+    "base64url",
+  );
+  const callback = await page.request.get(
+    "/api/auth/naver/callback?" + new URLSearchParams({ state, code }),
+    { maxRedirects: 0 },
+  );
+  expect(callback.headers().location).toBe(base + target);
+  const account = await (await page.request.get("/api/account")).json();
+  expect(account.user.email).toBe(email);
+  expect(account.passwordConfigured).toBe(false);
+  const database = local();
+  expect(
+    database
+      .prepare(
+        "SELECT user_id,password_set_at FROM oauth_accounts WHERE provider='naver' AND subject=?",
+      )
+      .get(subject),
+  ).toMatchObject({ user_id: account.user.id, password_set_at: null });
+  database.close();
+  const another = await playwright.request.newContext({ baseURL: base });
+  try {
+    const second = await another.get("/api/auth/naver", { maxRedirects: 0 });
+    const againState = new URL(second.headers().location).searchParams.get(
+      "state",
+    )!;
+    const again = await another.get(
+      "/api/auth/naver/callback?" +
+        new URLSearchParams({ state: againState, code }),
+      { maxRedirects: 0 },
+    );
+    expect(again.headers().location).toBe(base + "/analysis");
+    expect((await (await another.get("/api/account")).json()).user.id).toBe(
+      account.user.id,
+    );
+    expect(
+      (
+        await another.get(
+          "/api/auth/naver/callback?" +
+            new URLSearchParams({ state: againState, code }),
+          { maxRedirects: 0 },
+        )
+      ).headers().location,
+    ).toContain("naver_state");
+  } finally {
+    await another.dispose();
+  }
+  await page.goto("/sign-in");
+  for (const width of [1440, 390, 320]) {
+    await page.setViewportSize({ width, height: 1000 });
+    const kakao = await page.locator(".kakao-login-form").boundingBox(),
+      naver = await page.locator(".naver-login-form").boundingBox();
+    expect(Math.abs(kakao!.width - naver!.width)).toBeLessThan(2);
+    expect(Math.abs(kakao!.y - naver!.y)).toBeLessThan(2);
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+  }
+});
+
+test("Naver rejects missing email, forged state and email-only links to existing accounts", async ({
+  page,
+}) => {
+  const existing = `naver-existing-${randomUUID()}@example.test`;
+  const member = await register(page.request, existing);
+  for (const [email, expected] of [
+    [undefined, "naver_email"],
+    [existing, "naver_existing"],
+  ] as const) {
+    const start = await page.request.get("/api/auth/naver", {
+      maxRedirects: 0,
+    });
+    const state = new URL(start.headers().location).searchParams.get("state")!;
+    const code = Buffer.from(
+      JSON.stringify({ subject: "new-" + randomUUID(), email }),
+    ).toString("base64url");
+    const result = await page.request.get(
+      "/api/auth/naver/callback?" + new URLSearchParams({ state, code }),
+      { maxRedirects: 0 },
+    );
+    expect(result.headers().location).toContain(expected);
+  }
+  const start = await page.request.get("/api/auth/naver", { maxRedirects: 0 });
+  expect(start.status()).toBe(302);
+  const invalid = await page.request.get(
+    "/api/auth/naver/callback?" +
+      new URLSearchParams({ state: "0".repeat(64), code: "not-a-valid-code" }),
+    { maxRedirects: 0 },
+  );
+  expect(invalid.headers().location).toContain("naver_state");
+  const database = local();
+  expect(
+    database
+      .prepare(
+        "SELECT user_id FROM oauth_accounts WHERE provider='naver' AND user_id=?",
+      )
+      .get(member.id),
+  ).toBeUndefined();
+  database.close();
+});
+
 test("optional email verification proves ownership once without changing login requirements", async ({
   page,
   playwright,
@@ -148,7 +264,7 @@ test("Kakao login and password-setup signup preserve a safe posting destination"
 }) => {
   const email = `return-kakao-${randomUUID()}@example.test`;
   const account = await register(page.request, email);
-  let database = local();
+  const database = local();
   database
     .prepare(
       "INSERT INTO oauth_accounts(provider,subject,user_id,password_set_at) VALUES('kakao',?,?,?)",

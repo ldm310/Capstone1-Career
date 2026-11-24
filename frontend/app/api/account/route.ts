@@ -22,6 +22,7 @@ import {
   createAccount,
   updateAccount as persistAccount,
   changeAccountPassword,
+  accountPasswordConfigured,
 } from "@/lib/server/accounts";
 import { finishKakaoRegistration } from "@/lib/server/kakao-registration";
 export const runtime = "nodejs";
@@ -34,6 +35,8 @@ export async function GET() {
     {
       user: current,
       guest,
+      passwordConfigured:
+        current && !guest ? await accountPasswordConfigured(current.id) : null,
       role: current && !guest ? await memberRole(current.id) : null,
       profile: currentProfile
         ? {

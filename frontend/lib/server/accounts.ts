@@ -158,23 +158,37 @@ export async function changeAccountPassword(
 export async function kakaoAccount(
   subject: string,
 ): Promise<Account | undefined> {
+  return oauthAccount("kakao", subject);
+}
+export async function oauthAccount(
+  provider: "kakao" | "naver",
+  subject: string,
+): Promise<Account | undefined> {
   const pool = accountPool();
   if (pool) {
     const { rows } = await pool.query<Account>(
       `SELECT a.subject_id AS id,a.email,a.name,a.password_hash AS password,a.age,a.school,a.major,(o.password_set_at IS NOT NULL) AS "passwordSet"
       FROM public.career_account_oauth o JOIN public.career_account a USING(namespace,subject_id)
-      WHERE o.namespace=$1 AND o.provider='kakao' AND o.provider_subject=$2`,
-      [namespace(), subject],
+      WHERE o.namespace=$1 AND o.provider=$2 AND o.provider_subject=$3`,
+      [namespace(), provider, subject],
     );
     return rows[0] ? cache(rows[0]) : undefined;
   }
   return db()
     .prepare(
-      "SELECT u.*,(o.password_set_at IS NOT NULL) AS passwordSet FROM oauth_accounts o JOIN users u ON u.id=o.user_id WHERE o.provider='kakao' AND o.subject=?",
+      "SELECT u.*,(o.password_set_at IS NOT NULL) AS passwordSet FROM oauth_accounts o JOIN users u ON u.id=o.user_id WHERE o.provider=? AND o.subject=?",
     )
-    .get(subject) as Account | undefined;
+    .get(provider, subject) as Account | undefined;
 }
 export async function createKakaoAccount(account: Account, subject: string) {
+  return createOAuthAccount(account, subject, "kakao", true);
+}
+export async function createOAuthAccount(
+  account: Account,
+  subject: string,
+  provider: "kakao" | "naver",
+  passwordSet = false,
+) {
   const pool = accountPool();
   if (pool) {
     const connection = await pool.connect();
@@ -194,8 +208,8 @@ export async function createKakaoAccount(account: Account, subject: string) {
         ],
       );
       await connection.query(
-        `INSERT INTO public.career_account_oauth(namespace,provider,provider_subject,subject_id,password_set_at) VALUES($1,'kakao',$2,$3,now())`,
-        [namespace(), subject, account.id],
+        `INSERT INTO public.career_account_oauth(namespace,provider,provider_subject,subject_id,password_set_at) VALUES($1,$2,$3,$4,CASE WHEN $5 THEN now() ELSE NULL END)`,
+        [namespace(), provider, subject, account.id, passwordSet],
       );
       await connection.query("COMMIT");
     } catch (error) {
@@ -222,13 +236,29 @@ export async function createKakaoAccount(account: Account, subject: string) {
     cache(account);
     local
       .prepare(
-        "INSERT INTO oauth_accounts(provider,subject,user_id,password_set_at) VALUES('kakao',?,?,?)",
+        "INSERT INTO oauth_accounts(provider,subject,user_id,password_set_at) VALUES(?,?,?,?)",
       )
-      .run(subject, account.id, Date.now());
+      .run(provider, subject, account.id, passwordSet ? Date.now() : null);
     local.exec("COMMIT");
     return account;
   } catch (error) {
     local.exec("ROLLBACK");
     throw error;
   }
+}
+
+export async function accountPasswordConfigured(id: string) {
+  const pool = accountPool();
+  if (pool) {
+    const { rows } = await pool.query(
+      "SELECT 1 FROM public.career_account_oauth WHERE namespace=$1 AND subject_id=$2 AND password_set_at IS NULL LIMIT 1",
+      [namespace(), id],
+    );
+    return rows.length === 0;
+  }
+  return !db()
+    .prepare(
+      "SELECT 1 FROM oauth_accounts WHERE user_id=? AND password_set_at IS NULL LIMIT 1",
+    )
+    .get(id);
 }
