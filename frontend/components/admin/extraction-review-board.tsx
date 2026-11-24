@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ListPagination } from "@/components/shared/list-pagination";
+import { ReviewReason } from "./review-reason";
 
 type Status = "OPEN" | "SKIPPED" | "RETRY_REQUESTED" | "RUNNING" | "RESOLVED";
 type Item = {
@@ -298,11 +299,7 @@ export function ExtractionReviewBoard() {
                       <ul className="review-reasons">
                         {item.reviewReasons.map((reason, index) => (
                           <li key={index}>
-                            {String(
-                              reason["내용"] ||
-                                reason.message ||
-                                "검토 사유 확인 필요",
-                            )}
+                            <ReviewReason reason={reason} />
                           </li>
                         ))}
                       </ul>
