@@ -96,10 +96,10 @@ export function SignInForm({
           </label>
         )}
         <label>
-          {mode === "register" ? "이메일" : "이메일 또는 아이디"}
+          이메일
           <input
-            type={mode === "register" ? "email" : "text"}
-            autoComplete={mode === "register" ? "email" : "username"}
+            type="email"
+            autoComplete="email"
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
