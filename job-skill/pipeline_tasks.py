@@ -65,7 +65,8 @@ def _has_images(run_dir: str) -> bool:
 def step_collect(run_dir: str, include_pending: bool, max_new: int | None = None) -> dict:
     """공고 목록 수집. 두 직무 목록을 경력 필터를 켜고 끝까지 본다(연속 멈춤 없음).
     새 공고 = 목록 − 아는 번호(DB 에 있는 공고) → targets.tsv. 버린 공고(교육생 등)는 excluded.json 에만 남긴다.
-    ①(include_pending): 밀린 공고(추출 결과가 없는 진행 공고)를 targets 맨 위에 두고, 같은 목록으로
+    ①(include_pending): 밀린 공고(추출 결과가 없거나 사람이 검토에서 '다시'로 돌려보낸 진행 공고)를 targets 맨 위에 두고
+      (돌려보낸 공고의 피드백은 feedback.json → LLM 입력 끝), 같은 목록으로
       - '수정'된 진행 공고와 목록에서 사라진 진행 공고를 골라 check.json(다음 태스크 변경 감지)
       - 목록에 보이는 공고의 마감일을 DB 에 반영(마감일은 본문 밖이라 지문으로는 안 잡힘)
     ③: 새 공고만."""
@@ -85,6 +86,10 @@ def step_collect(run_dir: str, include_pending: bool, max_new: int | None = None
     collect.write_targets(d, pending + new)
     out = {"new": len(new), "pending": len(pending), "excluded": len(excluded)}
     if include_pending:
+        sent_back = {r["rec_idx"]: r["feedback"] for r in pending if r.get("feedback")}
+        with open(os.path.join(d, "feedback.json"), "w", encoding="utf-8") as f:   # 줄바꿈이 있을 수 있어 targets.tsv 와 따로
+            json.dump(sent_back, f, ensure_ascii=False)
+        out["다시"] = len(sent_back)
         check, counts = recheck.select_recheck(listed, rows, today)
         with open(os.path.join(d, "check.json"), "w", encoding="utf-8") as f:
             json.dump(check, f, ensure_ascii=False, default=str)
@@ -289,7 +294,8 @@ def daily_report(run_dir: str, got: dict, seen: dict, today_cost: float) -> str:
     def out(why: str, order: tuple[str, ...]) -> str:
         return " · ".join(f"{'확인 오류' if k == '오류' else k} {seen.get(why, {}).get(k, 0)}" for k in order)
 
-    rows = [("수집", f"새 공고 {got.get('new', 0)} · 밀린 공고 {got.get('pending', 0)}"),
+    rows = [("수집", f"새 공고 {got.get('new', 0)} · 밀린 공고 {got.get('pending', 0)}"
+                    + (f" (검토 다시 {got['다시']})" if got.get("다시") else "")),
             ("변경 감지", f"수정 {got.get('수정', 0)} → {out('수정', ('바뀜', '그대로', '마감', '오류'))}"),
             ("마감 확인", f"목록에 없음 {got.get('목록에 없음', 0)} → {out('목록에 없음', ('마감', '바뀜', '그대로', '오류'))}"),
             ("마감일", f"목록에서 바뀐 공고 {got.get('마감일 바뀜', 0)}"),

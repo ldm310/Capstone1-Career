@@ -298,7 +298,27 @@ def test_daily_collect_writes_targets_check_and_excluded(daily, tmp_path):
     assert json.loads((tmp_path / "excluded.json").read_text(encoding="utf-8")) == [["X9", "교육생"]]
     check = json.loads((tmp_path / "check.json").read_text(encoding="utf-8"))
     assert [(r["rec_idx"], r["reason"]) for r in check] == [("O1", "수정"), ("O2", "목록에 없음")]
-    assert res == {"new": 2, "pending": 1, "excluded": 1, "진행": 2, "수정": 1, "목록에 없음": 1, "마감일 바뀜": 2}
+    assert res == {"new": 2, "pending": 1, "다시": 0, "excluded": 1, "진행": 2, "수정": 1, "목록에 없음": 1, "마감일 바뀜": 2}
+
+
+def test_daily_collect_writes_feedback(daily, monkeypatch, tmp_path):
+    """사람이 '다시'로 돌려보낸 공고의 피드백은 feedback.json 으로 LLM 추출까지 간다(작업 목록 TSV 에는 안 넣음 — 줄바꿈)."""
+    monkeypatch.setattr(daily.db_queries, "pending_postings", lambda conn: [
+        {"rec_idx": "P1", **ROW, "feedback": "자리를 하나로\n경력 3년 이상"}, {"rec_idx": "P2", **ROW, "feedback": ""}])
+    res = daily.step_collect(str(tmp_path), include_pending=True)
+    assert json.loads((tmp_path / "feedback.json").read_text(encoding="utf-8")) == {"P1": "자리를 하나로\n경력 3년 이상"}
+    assert [r["rec_idx"] for r in daily.collect.read_targets(str(tmp_path))][:2] == ["P1", "P2"]
+    assert res["다시"] == 1
+
+
+def test_daily_report_counts_sent_back(tmp_path):
+    """결과 알림 수집 줄: 밀린 공고 가운데 검토 '다시'가 있으면 그 수를 함께, 없으면 예전 그대로."""
+    import pipeline_tasks
+    _report_run(tmp_path)
+    msg = pipeline_tasks.daily_report(str(tmp_path), {"new": 2, "pending": 3, "다시": 1}, {}, 0.0)
+    assert "• 수집: 새 공고 2 · 밀린 공고 3 (검토 다시 1)" in msg.splitlines()
+    msg = pipeline_tasks.daily_report(str(tmp_path), {"new": 2, "pending": 3, "다시": 0}, {}, 0.0)
+    assert "• 수집: 새 공고 2 · 밀린 공고 3" in msg.splitlines()
 
 
 def test_daily_collect_updates_deadlines_from_list(daily, tmp_path):

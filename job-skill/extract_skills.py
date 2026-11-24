@@ -32,12 +32,13 @@ import numpy as np
 from PIL import Image
 
 from capdict import CapDict, check_dictionary, load_dictionary
-from common import IMG_DIR, OUT_DIR, PAGE_DIR, images_by_posting, load_targets
+from common import DATA, IMG_DIR, OUT_DIR, PAGE_DIR, images_by_posting, load_targets
 from html_text import BODY, html_text
 from table_layout import table_text
 
 PF = os.path.join(OUT_DIR, "page_filter")
 EX = os.path.join(OUT_DIR, "extract")
+FEEDBACK = os.path.join(DATA, "feedback.json")  # ① 목록 수집이 쓴 검토 '다시' 피드백(공고번호 → 글). ③ 에는 없다
 # 답 길이 상한(생각하는 몫 포함). 8,000 이면 모집 부문이 많은 긴 공고의 답이 중간에 잘렸다(③ 1,494건 중 7건)
 MAX_OUTPUT_TOKENS = 16000
 PRICES = {"gpt-5.6-terra": (2.00, 12.00), "gpt-5.6-luna": (0.20, 1.20), "gpt-5.6-sol": (4.00, 20.00)}  # USD/1M, 2026-10-02 확인
@@ -361,6 +362,7 @@ def posting_inputs() -> dict[str, dict]:
     sec_path = os.path.join(PF, "sections.json")
     data = json.load(open(sec_path, encoding="utf-8")) if os.path.exists(sec_path) else {"readers": {"paddle": []}}
     by_rid = {p["rec_idx"]: p for p in data["readers"]["paddle"]}
+    feedback = json.load(open(FEEDBACK, encoding="utf-8")) if os.path.exists(FEEDBACK) else {}
     out = {}
     for t in load_targets():
         rid = t["rec_idx"]
@@ -389,7 +391,7 @@ def posting_inputs() -> dict[str, dict]:
                     parts.append(tx)
         if parts:
             out[rid] = {"text": "\n\n".join(parts), "kept": kept, "dropped": dropped, "role": t.get("role", ""), "company": t.get("company", ""),
-                        "career": t.get("career", "")}
+                        "career": t.get("career", ""), "feedback": feedback.get(rid, "")}
     return out
 
 
@@ -566,9 +568,12 @@ def unit_checks(r: dict, inp: dict) -> list[dict]:
 
 
 def llm_input(inp: dict, extra: str = "") -> str:
-    """LLM 에 보내는 입력 글(머리 3줄 + 공고 글). extra 는 다시 부를 때 끝에 붙이는 힌트."""
+    """LLM 에 보내는 입력 글(머리 3줄 + 공고 글). 사람이 검토에서 '다시'로 돌려보낸 공고는 그 피드백을 붙인다
+    (피드백이 없으면 예전과 같은 글 — 입력 지문이 바뀌지 않게). extra 는 다시 부를 때 끝에 붙이는 힌트."""
     return (f"사람인 직무 분류: {inp['role'] or '(모름)'} (참고용, 다른 직무 부문도 모두 정리)\n회사: {inp.get('company') or '(모름)'}\n"
             + (f"사람인 목록 경력 조건: {inp['career']}\n" if inp.get("career") else "") + f"\n{inp['text']}"
+            + (f"\n\n[검토 피드백] 사람이 앞선 정리를 보고 남긴 말이다. 반영해서 정리하라.\n{inp['feedback']}"
+               if inp.get("feedback") else "")
             + (f"\n\n[다시 확인] 앞선 정리에서 아래 문제가 보였다. 고쳐서 다시 정리하라.\n{extra}" if extra else ""))
 
 
