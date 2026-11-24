@@ -1,12 +1,13 @@
 import { defineConfig } from "@playwright/test";
 
-// Server-side API contracts use a local HTTP stub; no browser or external service.
+// Server-side contracts use local HTTP stubs and an isolated local PostgreSQL DB.
 export default defineConfig({
   testDir: "./tests",
   testMatch: [
     "backend-jobs.spec.ts",
     "backend-api-contract.spec.ts",
     "hiring-cohort.spec.ts",
+    "extraction-review-storage.spec.ts",
   ],
   workers: 1,
   reporter: "list",
