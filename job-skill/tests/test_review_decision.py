@@ -3,13 +3,14 @@
 값은 extraction_run 의 review_result·review_feedback·reviewed_at 에 쓰고, 팀원(웹) 계정은 이 세 칸만 쓸 수 있다."""
 from __future__ import annotations
 
+import json
 import os
 
 import psycopg
 import pytest
 
 from conftest import HERE
-from test_db_queries import add_posting, add_run
+from test_db_queries import _load, _write_run, add_posting, add_run
 
 MIGRATION_010 = os.path.join(HERE, "db", "migrations", "010_review_decision.sql")
 
@@ -87,3 +88,18 @@ def test_open_postings_skips_excluded(db):
     add_posting(db, "C")
     assert [r["rec_idx"] for r in q.open_postings(db)] == ["B", "C"]
     assert "A" in q.known_posting_nos(db)
+
+
+def test_load_saves_rerun_after_sent_back(db, db_url, tmp_path):
+    """'다시'로 돌려보낸 결과와 입력이 같아도(같은 피드백으로 또 돌려보냄) 새 결과로 넣는다 — 안 그러면
+    '이미 넣은 결과'로 건너뛰어 매일 추출만 하고 저장은 안 된다. 같은 결과를 또 넣으면(DB 저장 재시도) 하나만."""
+    _write_run(tmp_path, "지어낸 공고 본문 내용입니다")
+    res = tmp_path / "out" / "extract" / "gpt-5.6-luna-ex"
+    res.mkdir(parents=True)
+    (res / "D.json").write_text(json.dumps({"rec_idx": "D", "model": "gpt-5.6-luna", "input_hash": "c" * 64,
+                                            "input_tokens": 10, "output_tokens": 5, "positions": []}), encoding="utf-8")
+    _load(tmp_path, db_url)
+    db.execute("UPDATE extraction_run SET review_result = '다시', review_feedback = '자리를 하나로', reviewed_at = now()")
+    _load(tmp_path, db_url)                       # 다시 뽑은 결과(입력 지문 같음)
+    _load(tmp_path, db_url)                       # DB 저장 재시도
+    assert db.execute("SELECT review_result, is_current FROM extraction_run ORDER BY id").fetchall() == [("다시", False), (None, True)]

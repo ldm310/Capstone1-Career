@@ -440,8 +440,10 @@ def insert_run(conn, posting_id: int, r: dict, inp: dict | None, path: str, cap_
     pv = r.get("prompt_version") or "unknown"
     dv = r.get("dict_version") or "unknown"
     ih = r.get("input_hash") or (sha256(llm_input(inp)) if inp else "0" * 64)
+    # 사람이 '다시'로 돌려보낸 결과는 입력이 같아도 새로 넣는다(같은 피드백으로 또 돌려보내면 입력 지문이 같다)
     if conn.execute("""SELECT 1 FROM extraction_run WHERE posting_id = %s AND model = %s AND prompt_version = %s
-                       AND dict_version = %s AND input_hash = %s""", (posting_id, model, pv, dv, ih)).fetchone():
+                       AND dict_version = %s AND input_hash = %s AND review_result IS DISTINCT FROM '다시'""",
+                    (posting_id, model, pv, dv, ih)).fetchone():
         return None
     pin, pout = PRICES.get(model, (0, 0))
     cost = r.get("cost_usd", round(r["input_tokens"] / 1e6 * pin + r["output_tokens"] / 1e6 * pout, 6))
