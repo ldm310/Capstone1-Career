@@ -18,6 +18,8 @@ type Item = {
   lastFailedAt: string | null;
   updatedAt: string;
   revision: number;
+  reviewReasons: Array<Record<string, unknown>>;
+  sourceRunId: string | null;
 };
 type List = {
   items: Item[];
@@ -33,6 +35,7 @@ const labels: Record<Status, string> = {
   RESOLVED: "해결",
 };
 const stageLabels: Record<string, string> = {
+  REVIEW: "추출 결과 검토",
   EXTRACTION: "역량 추출",
   SAVE: "결과 저장",
   RAW: "본문 수집",
@@ -165,8 +168,8 @@ export function ExtractionReviewBoard() {
         </div>
       </div>
       <p className="review-policy">
-        2회 실패한 공고는 자동 재시도를 보류합니다. 재추출이 필요하면 수정
-        방향을 피드백으로 남겨 주세요.
+        추출 결과의 모집 직무나 경력 조건 등에 확인이 필요한 공고입니다. 검토
+        사유를 확인하고 넘기거나 재추출 피드백을 남겨 주세요.
       </p>
       {loaded && (
         <p className="review-worker">
@@ -246,7 +249,7 @@ export function ExtractionReviewBoard() {
           <div className="review-empty">
             <h2>해당 공고가 없습니다</h2>
             <p>
-              파이프라인에서 기록한 실패 공고와 미추출 공고가 여기에 표시됩니다.
+              현재 추출 결과에 검토 필요 표시가 있는 공고가 여기에 표시됩니다.
             </p>
           </div>
         ) : (
@@ -280,17 +283,27 @@ export function ExtractionReviewBoard() {
                       {labels[item.status]}
                     </span>
                     <strong>
-                      {item.failureCount
-                        ? `실패 ${item.failureCount}회`
-                        : "추출 기록 없음"}
+                      검토 사유 {item.reviewReasons?.length || 1}개
                     </strong>
                     <span>{stageLabels[item.stage] || "역량 추출"}</span>
-                    <p>
-                      {item.errorCode ||
-                        (item.failureCount
-                          ? "실패 사유 확인 필요"
-                          : "아직 성공한 추출 기록이 없습니다.")}
-                    </p>
+                    {item.reviewReasons?.length ? (
+                      <ul className="review-reasons">
+                        {item.reviewReasons.map((reason, index) => (
+                          <li key={index}>
+                            {String(
+                              reason["내용"] ||
+                                reason.message ||
+                                "검토 사유 확인 필요",
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p>{item.errorCode || "검토 사유 확인 필요"}</p>
+                    )}
+                    {item.failureCount > 0 && (
+                      <span>추가 추출 실패 {item.failureCount}회</span>
+                    )}
                     {item.failureCount >= 2 && item.status === "OPEN" && (
                       <small>자동 재시도 보류</small>
                     )}

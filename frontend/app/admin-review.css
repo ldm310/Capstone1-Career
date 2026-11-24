@@ -139,6 +139,13 @@
 .review-failure p {
   overflow-wrap: anywhere;
 }
+.review-reasons {
+  margin: 0;
+  padding-left: 18px;
+  list-style: disc;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
 .review-failure small {
   color: #9b4533;
   font-size: 12px;
