@@ -23,7 +23,8 @@ def review(conn, run_id, result, feedback=None):
 def test_review_values_and_feedback_rule(db):
     """값은 정상·제외·다시만. '다시'는 피드백이 꼭 있어야 하고(빈칸만이면 안 됨), 결과와 시각은 함께."""
     run = add_run(db, add_posting(db, "1"))
-    for result, fb in (("다시", None), ("다시", "  "), ("문제없음", None)):
+    for result, fb in (("다시", None), ("다시", "  "), ("다시", "\n"), ("다시", "\t \r\n"), ("다시", "　 "),
+                       ("문제없음", None)):                       # 줄바꿈·탭·전각/줄바꿈 없는 공백만 있어도 빈 피드백
         with pytest.raises(psycopg.errors.CheckViolation):
             review(db, run, result, fb)
     with pytest.raises(psycopg.errors.CheckViolation):          # 결과만 있고 시각 없음

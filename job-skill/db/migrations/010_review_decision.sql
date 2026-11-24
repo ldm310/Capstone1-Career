@@ -13,7 +13,8 @@ UPDATE extraction_run SET review_result = '정상' WHERE review_result IN ('문�
 ALTER TABLE extraction_run
     ADD CONSTRAINT extraction_run_review_result_check CHECK (review_result IN ('정상', '제외', '다시')),
     ADD CONSTRAINT extraction_run_review_feedback_check
-        CHECK (review_result IS DISTINCT FROM '다시' OR btrim(coalesce(review_feedback, '')) <> '');
+        CHECK (review_result IS DISTINCT FROM '다시'   -- 공백·탭·줄바꿈·전각/줄바꿈 없는 공백만 있으면 빈 피드백
+               OR btrim(coalesce(review_feedback, ''), E' \t\r\n 　') <> '');
 
 COMMENT ON COLUMN extraction_run.review_result  IS '검토 결과 (정상: 결과 맞음 / 제외: 앞으로 자동 처리·웹에서 뺌 / 다시: 피드백을 붙여 다음 ① 때 다시 추출, 안 봤으면 비움)';
 COMMENT ON COLUMN extraction_run.review_feedback IS '검토 피드백 (다시일 때 꼭, 다시 추출할 때 LLM 입력 끝에 붙인다)';

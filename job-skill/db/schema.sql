@@ -269,7 +269,8 @@ CREATE TABLE extraction_run (
     run_at           timestamptz   NOT NULL DEFAULT now(),
     CHECK ((review_result IS NULL) = (reviewed_at IS NULL)),
     CONSTRAINT extraction_run_review_feedback_check
-        CHECK (review_result IS DISTINCT FROM '다시' OR btrim(coalesce(review_feedback, '')) <> '')
+        CHECK (review_result IS DISTINCT FROM '다시'   -- 공백·탭·줄바꿈·전각/줄바꿈 없는 공백만 있으면 빈 피드백
+               OR btrim(coalesce(review_feedback, ''), E' \t\r\n 　') <> '')
 );
 COMMENT ON TABLE  extraction_run                IS '추출 실행';
 COMMENT ON COLUMN extraction_run.id             IS '실행ID';
