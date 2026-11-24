@@ -73,8 +73,8 @@
 
 ## 어디에
 
-- 사용자 브랜치 `feature/job-skill-aws`(노트북 Airflow 가 쓰는 브랜치)와 `feature/job-skill`에 같은 커밋으로 넣는다(지금까지 하던 대로).
-- RDS 에 010 을 적용하는 것은 따로 사용자에게 묻고 한다.
+- 지금 작업 폴더의 브랜치 `feature/requirement-embedding`(노트북 Airflow 가 쓰는 브랜치, `feature/job-skill-aws` 위)에 넣는다.
+- RDS 에 010 을 적용하는 것은 따로 사용자에게 묻고 한다. RDS 에는 아직 `schema_migration` 표가 없어 `migrate` 대신 010 파일만 직접 적용한다(008 직무 칸 때와 같음).
 - 시험: 보류 작업의 시험(`test_db_queries`, `test_run_model`, `test_pipeline_tasks`)을 새 값에 맞춰 살리고, 마이그레이션·권한 시험을 더한다.
 
 ## 만드는 사람에게 맡기는 것
