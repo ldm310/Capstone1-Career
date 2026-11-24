@@ -72,14 +72,29 @@ test("admin review enforces permissions and persists pass, feedback, audit and c
       ["one", namespace],
       ["race", namespace],
       ["other", namespace + "-test-other"],
+      ["missing", namespace],
     ]) {
       const row = await db.query(
-        "INSERT INTO public.career_extraction_review(namespace,site,posting_no,company,title,stage,error_code,failure_count,last_failed_at) VALUES($1,'TEST',$2,'검증 기업',$3,'EXTRACTION','응답 형식 오류',2,now()) RETURNING id::text",
-        [ns, marker + suffix, "예시 추출 오류 " + suffix],
+        "INSERT INTO public.career_extraction_review(namespace,site,posting_no,company,title,stage,error_code,failure_count,last_failed_at) VALUES($1,'TEST',$2,'검증 기업',$3,$4,'응답 형식 오류',2,now()) RETURNING id::text",
+        [
+          ns,
+          marker + suffix,
+          "예시 추출 오류 " + suffix,
+          suffix === "missing" ? "UNKNOWN" : "REVIEW",
+        ],
       );
       ids.push(row.rows[0].id);
     }
     const api = base + "/api/admin/extraction-reviews";
+    const filtered = await (
+      await page.request.get(api + "?q=" + marker)
+    ).json();
+    expect(filtered.items).toHaveLength(2);
+    expect(
+      filtered.items.every(
+        (item: { stage: string }) => item.stage === "REVIEW",
+      ),
+    ).toBe(true);
     expect(
       (
         await page.request.patch(api, {

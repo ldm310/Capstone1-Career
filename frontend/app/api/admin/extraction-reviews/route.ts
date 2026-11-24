@@ -12,6 +12,7 @@ import {
   reviewColumns,
   reviewDatabase,
   reviewNamespace,
+  syncReviewCandidates,
 } from "@/lib/server/extraction-review";
 export const runtime = "nodejs";
 const headers = { "Cache-Control": "private, no-store" };
@@ -53,14 +54,15 @@ export async function GET(request: Request) {
     const { status, q, offset } = input.data;
     const db = reviewDatabase(),
       namespace = reviewNamespace();
+    await syncReviewCandidates();
     const rows = await db.query(
       `SELECT ${reviewColumns} FROM public.career_extraction_review
-      WHERE namespace=$1 AND ($2='ALL' OR status=$2) AND ($3='' OR company ILIKE $4 OR title ILIKE $4 OR posting_no ILIKE $4)
+      WHERE namespace=$1 AND stage='REVIEW' AND ($2='ALL' OR status=$2) AND ($3='' OR company ILIKE $4 OR title ILIKE $4 OR posting_no ILIKE $4)
       ORDER BY updated_at DESC,id DESC LIMIT 21 OFFSET $5`,
       [namespace, status, q, `%${q}%`, offset],
     );
     const counts = await db.query(
-      "SELECT status,count(*)::int AS count FROM public.career_extraction_review WHERE namespace=$1 GROUP BY status",
+      "SELECT status,count(*)::int AS count FROM public.career_extraction_review WHERE namespace=$1 AND stage='REVIEW' GROUP BY status",
       [namespace],
     );
     const worker = await db.query(
@@ -114,7 +116,7 @@ export async function PATCH(request: Request) {
     try {
       await connection.query("BEGIN");
       const selected = await connection.query(
-        "SELECT status,revision FROM public.career_extraction_review WHERE namespace=$1 AND id=$2 FOR UPDATE",
+        "SELECT status,revision FROM public.career_extraction_review WHERE namespace=$1 AND id=$2 AND stage='REVIEW' FOR UPDATE",
         [reviewNamespace(), id],
       );
       const row = selected.rows[0];
