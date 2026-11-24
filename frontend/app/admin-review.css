@@ -229,14 +229,6 @@
   color: #233f52;
   margin-bottom: 8px;
 }
-.review-pagination {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 20px;
-  font-size: 13px;
-  color: #536c80;
-}
 .review-success {
   padding: 14px 18px;
   border-radius: 8px;

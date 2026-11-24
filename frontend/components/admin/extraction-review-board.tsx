@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { ListPagination } from "@/components/shared/list-pagination";
 
 type Status = "OPEN" | "SKIPPED" | "RETRY_REQUESTED" | "RUNNING" | "RESOLVED";
 type Item = {
@@ -22,6 +23,7 @@ type Item = {
   sourceRunId: string | null;
 };
 type List = {
+  total: number;
   items: Item[];
   counts: Partial<Record<Status, number>>;
   nextOffset: number | null;
@@ -52,6 +54,7 @@ function sourceLink(value: string) {
 }
 export function ExtractionReviewBoard() {
   const [data, setData] = useState<List>({
+    total: 0,
     items: [],
     counts: {},
     nextOffset: null,
@@ -83,6 +86,11 @@ export function ExtractionReviewBoard() {
       if (!response.ok)
         throw new Error(body.error || "목록을 불러오지 못했습니다.");
       if (request === version.current) {
+        const lastOffset = Math.max(0, (Math.ceil(body.total / 20) - 1) * 20);
+        if (offset > lastOffset) {
+          setOffset(lastOffset);
+          return;
+        }
         setData(body);
         setLoaded(true);
         setError("");
@@ -391,29 +399,22 @@ export function ExtractionReviewBoard() {
           })
         )}
       </div>
-      <nav className="review-pagination" aria-label="공고 검토 페이지">
-        <button
-          onClick={() => {
-            setOffset(Math.max(0, offset - 20));
+      {loaded && !error && !loading && (
+        <ListPagination
+          total={data.total}
+          offset={offset}
+          pageSize={20}
+          loading={!!busy}
+          label="공고 검토 페이지"
+          onChange={(next) => {
+            setOffset(next);
             setSelected(null);
+            document
+              .querySelector(".review-toolbar")
+              ?.scrollIntoView({ block: "start" });
           }}
-          disabled={loading || offset === 0}
-        >
-          이전
-        </button>
-        <span>{Math.floor(offset / 20) + 1} 페이지</span>
-        <button
-          onClick={() => {
-            if (data.nextOffset !== null) {
-              setOffset(data.nextOffset);
-              setSelected(null);
-            }
-          }}
-          disabled={loading || data.nextOffset === null}
-        >
-          다음
-        </button>
-      </nav>
+        />
+      )}
     </section>
   );
 }
