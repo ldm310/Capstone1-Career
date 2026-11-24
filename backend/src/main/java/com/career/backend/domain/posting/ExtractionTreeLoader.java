@@ -38,6 +38,11 @@ class ExtractionTreeLoader {
                 .map(this::load);
     }
 
+    boolean isExcluded(Long postingId) {
+        return extractionRunRepository.findByPostingIdAndCurrentTrue(postingId)
+                .map(run -> "제외".equals(run.getReviewResult())).orElse(false);
+    }
+
     private ExtractionTree load(ExtractionRun run) {
         List<RecruitUnit> units =
                 recruitUnitRepository.findByRunIdOrderBySeq(run.getId());

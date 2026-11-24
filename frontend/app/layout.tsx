@@ -26,7 +26,7 @@ export const metadata: Metadata = {
     default: "Career - 경험에서 시작하는 커리어",
     template: "%s | Career",
   },
-  description: "GitHub와 PDF 이력서로 경험을 분석하고 채용공고에서 역량을 비교해요.",
+  description: "GitHub와 PDF 이력서로 경험을 분석하고 채용 공고에서 역량을 비교해요.",
 };
 export default function RootLayout({
   children,

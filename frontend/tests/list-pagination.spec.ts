@@ -25,7 +25,7 @@ test("job pages show totals, replace rows, reset filters and handle no results",
     });
   });
   await page.goto("/jobs");
-  const navigation = page.getByRole("navigation", { name: "채용공고 페이지" });
+  const navigation = page.getByRole("navigation", { name: "채용 공고 페이지" });
   await expect(navigation).toContainText("총 27개, 1–12개 표시");
   await expect(navigation).toContainText("1 / 3 페이지");
   await expect(

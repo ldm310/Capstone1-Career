@@ -1,15 +1,10 @@
-import {
-  workplaceKey,
-  experienceLabels,
-  jobExperience,
-  sortPublicJobs,
-  type ExperienceKind,
-} from "@/lib/job-filters";
-import { collectedJobs } from "@/lib/server/job-feed";
-import { backendJob, backendJobs } from "@/lib/server/backend-jobs";
+import { experienceLabels, type ExperienceKind } from "@/lib/job-filters";
+import { after } from "next/server";
+import { collectedJobs, cachedJobFeed } from "@/lib/server/job-feed";
+import { backendJob } from "@/lib/server/backend-jobs";
+import { searchJobCatalog } from "@/lib/server/job-catalog";
 import { dummyJobs } from "@/lib/dummy-jobs";
 import type { PublicJob } from "@/types/public-job";
-const minimumJobs = 6;
 export const runtime = "nodejs";
 export async function GET(request: Request) {
   const params = new URL(request.url).searchParams;
@@ -28,12 +23,11 @@ export async function GET(request: Request) {
     .split(",")
     .filter(Boolean);
   if (
-    !["all", "remote", "hybrid", "on-site"].includes(workplace) ||
+    !["all", "remote", "hybrid", "on-site", "unknown"].includes(workplace) ||
     !["newest", "closing", "company"].includes(sort) ||
     experience.some((value) => !Object.hasOwn(experienceLabels, value)) ||
-    !Number.isInteger(offset) ||
+    !Number.isSafeInteger(offset) ||
     offset < 0 ||
-    offset > 10000 ||
     !Number.isInteger(limit) ||
     limit < 1 ||
     limit > 24 ||
@@ -76,52 +70,58 @@ export async function GET(request: Request) {
         { headers: { "Cache-Control": "no-store" } },
       );
     }
-    // 수집에 실패해도 더미 공고로 목록을 채운다. 실패 안내는 화면에 띄우지 않는다.
-    // 백엔드 공고(BACKEND_URL)가 있으면 먼저 보여준다.
-    const [collected, fromBackend] = await Promise.all([
-      collectedJobs().catch(() => ({
-        jobs: [] as PublicJob[],
-        checkedAt: new Date().toISOString(),
-      })),
-      backendJobs(),
-    ]);
-    const feed = {
-      ...collected,
-      jobs: [...fromBackend, ...collected.jobs],
+    const emptyFeed = {
+      jobs: [] as PublicJob[],
+      checkedAt: new Date().toISOString(),
     };
-    const matches = (job: PublicJob) =>
-      (!jobId || job.id === jobId) &&
-      (role === "all" || job.category === role) &&
-      (!location || job.location.toLowerCase().includes(location)) &&
-      (workplace === "all" || workplaceKey(job.workplace) === workplace) &&
-      (!experience.length ||
-        experience.some((value) =>
-          jobExperience(job).includes(value as ExperienceKind),
-        )) &&
-      `${job.company} ${job.title} ${(job.skills || []).join(" ")}`
-        .toLowerCase()
-        .includes(query);
-    // 조건에 맞는 실제 공고가 최소 개수보다 적으면 같은 조건의 더미 공고로 채운다.
-    // 상세 조회는 모든 더미에서 찾는다.
-    const real = feed.jobs.filter(matches),
-      dummies = dummyJobs.filter(matches);
-    const filtered = jobId
-      ? [...real, ...dummies]
-      : [...real, ...dummies.slice(0, Math.max(0, minimumJobs - real.length))];
-    const sorted = sortPublicJobs(filtered, sort);
+    const collected = jobId
+      ? await collectedJobs().catch(() => emptyFeed)
+      : (cachedJobFeed() ?? emptyFeed);
+    if (!jobId)
+      after(async () => {
+        await collectedJobs().catch(() => undefined);
+      });
+    if (jobId) {
+      const job = collected.jobs.find((item) => item.id === jobId);
+      return Response.json(
+        {
+          jobs: job ? [job] : [],
+          total: job ? 1 : 0,
+          nextOffset: null,
+          checkedAt: collected.checkedAt,
+          unavailableSources: [],
+        },
+        { headers: { "Cache-Control": "no-store" } },
+      );
+    }
+    const { profilePool } = await import("@/lib/server/posting-levels");
+    const database = profilePool();
+    if (!database) throw new Error("채용 공고 DB 연결 설정이 필요합니다.");
+    const page = await searchJobCatalog(
+      database,
+      {
+        query,
+        role,
+        location,
+        workplace,
+        sort,
+        experience: experience as ExperienceKind[],
+        offset,
+        limit,
+      },
+      collected.jobs,
+    );
     return Response.json(
       {
-        ...feed,
+        ...page,
+        checkedAt: new Date().toISOString(),
         unavailableSources: [],
-        jobs: sorted.slice(offset, offset + limit),
-        total: filtered.length,
-        nextOffset: offset + limit < filtered.length ? offset + limit : null,
       },
       { headers: { "Cache-Control": "no-store" } },
     );
   } catch {
     return Response.json(
-      { error: "채용공고를 불러오지 못했어요. 잠시 후 다시 시도해 주세요." },
+      { error: "채용 공고를 불러오지 못했어요. 잠시 후 다시 시도해 주세요." },
       { status: 502 },
     );
   }

@@ -25,6 +25,53 @@ async function addGithub(page: Page, name: string) {
   await page.getByRole("button", { name: "링크 추가", exact: true }).click();
 }
 
+for (const example of [false, true]) {
+  test(`GitHub alone completes without a PDF (${example ? "example button" : "manual link"})`, async ({
+    page,
+  }) => {
+    await prepare(page);
+    const sent: string[] = [];
+    let pdfRequests = 0;
+    await page.route("**/api/documents", async (route) => {
+      pdfRequests++;
+      await route.fulfill({
+        status: 400,
+        json: { error: "Unexpected PDF request" },
+      });
+    });
+    await page.route(
+      example ? "**/api/analysis-preview" : "**/api/analyze",
+      async (route) => {
+        sent.push(route.request().postDataJSON().url);
+        await route.fulfill({ json: { workspace: { runs: [] } } });
+      },
+    );
+    await page.goto("/analysis");
+    if (example)
+      await page
+        .getByRole("button", { name: "예시 링크 사용", exact: true })
+        .click();
+    else await addGithub(page, "only-github");
+    await expect(page.locator(".analysis-source-list li")).toHaveCount(1);
+    await expect(page.getByLabel("공개 GitHub 저장소 URL")).toHaveValue("");
+    const start = page.getByRole("button", {
+      name: "분석 시작하기",
+      exact: true,
+    });
+    await expect(start).toBeEnabled();
+    await start.click();
+    await expect(
+      page.getByRole("heading", { name: "분석 완료", exact: true }),
+    ).toBeVisible();
+    expect(sent).toEqual([
+      example
+        ? "https://github.com/career-demo/order-service"
+        : "https://github.com/example/only-github",
+    ]);
+    expect(pdfRequests).toBe(0);
+  });
+}
+
 test("mixed sources are optional, multiple, submitted once and complete without a standalone LV result", async ({
   page,
 }) => {
@@ -67,7 +114,7 @@ test("mixed sources are optional, multiple, submitted once and complete without 
   );
   await page.screenshot({ path: "work/analysis-complete.png", fullPage: true });
   await page
-    .getByRole("link", { name: "채용공고에서 내 역량 확인하기" })
+    .getByRole("link", { name: "채용 공고에서 내 역량 확인하기" })
     .click();
   await expect(page).toHaveURL(/\/jobs$/);
   await expect(page.locator(".job-list-row")).toHaveCount(7);
@@ -155,7 +202,7 @@ test("public jobs and home need no session, old skills URLs redirect, and analys
   await page.goto("/#market-preview");
   await expect(
     page.getByRole("navigation", { name: "주 메뉴" }).getByRole("link"),
-  ).toHaveText(["홈", "채용공고", "분석", "공지사항"]);
+  ).toHaveText(["홈", "채용 공고", "분석", "공지사항"]);
   await expect(page.locator(".home-radar")).toHaveCount(0);
   await page.goto("/my-skills");
   await expect(page).toHaveURL(/\/jobs$/);

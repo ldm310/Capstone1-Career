@@ -2,6 +2,29 @@
   display: grid;
   gap: 24px;
 }
+.closed-postings-list {
+  display: grid;
+  gap: 16px;
+}
+.closed-postings-list article {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 24px;
+}
+.closed-postings-list h3 {
+  margin: 12px 0;
+  overflow-wrap: anywhere;
+}
+.closed-postings-list p {
+  margin: 8px 0;
+  line-height: 1.6;
+}
+@media (max-width: 600px) {
+  .closed-postings-list article {
+    flex-direction: column;
+  }
+}
 .review-summary {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -46,6 +69,20 @@
 .review-search {
   flex: 1;
   min-width: 180px;
+}
+.review-search input {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+.review-toolbar button {
+  white-space: nowrap;
+}
+@media (max-width: 600px) {
+  .review-toolbar .review-search {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
 }
 .review-toolbar input,
 .review-toolbar select {

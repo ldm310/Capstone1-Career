@@ -25,6 +25,11 @@ Next 서버가 Spring 공고 API 또는 사용자용 RDS/SQLite에 연결한다.
 |---|---|---|---|
 | GET | `/api/account` | 로그인 사용자, 게스트 여부, 프로필, 데모 여부 | 공개, 비로그인은 user=null |
 | POST | `/api/account` | 회원가입, 로그인, 로그아웃, 프로필/비밀번호 변경 | action에 따라 다름 |
+| POST | `/api/account/recovery` | 비밀번호 재설정 링크 요청 | 공개, email. 가입 여부와 무관한 동일 응답. 현재 로컬 메일함 저장 |
+| POST | `/api/account/password-reset` | 재설정 링크로 비밀번호 변경 | 공개, token/password/confirmation. 30분, 일회용. 모든 기존 세션 종료 |
+| GET | `/api/account/email-verification` | 본인 이메일 선택 인증 상태 | 로그인 필요. 인증은 로그인 필수 조건이 아님 |
+| POST | `/api/account/email-verification` | 선택 인증 메일 요청 및 인증 확인 | action=request는 로그인 필요, 본인 이메일만 발송. action=confirm은 token 필요, 30분 일회용 |
+| DELETE | `/api/auth/kakao/registration` | 카카오 가입 대기 취소 | 같은 출처 Origin, HttpOnly 가입 쿠키 사용 |
 | POST | `/api/guest` | 별도 게스트 세션 생성 | 레거시, 실제 역량 추출 권한 없음 |
 | GET | `/api/career` | 로그인한 사용자의 workspace | 세션 필요 |
 | POST | `/api/career` | 설정/답변/과제/기존 저장 공고 갱신 | 세션 필요, action 사용 |
@@ -32,7 +37,7 @@ Next 서버가 Spring 공고 API 또는 사용자용 RDS/SQLite에 연결한다.
 | POST | `/api/analysis-preview` | 임의 GitHub 형식 링크로 흐름 미리보기 및 사용자별 예시 LV 저장 | 일반 회원, 외부 GitHub/LLM 호출 없음 |
 | POST | `/api/documents` | PDF 업로드, 텍스트와 기술 근거 추출 | 일반 회원, multipart, PDF 10MB 이하 |
 | GET | `/api/documents/{id}` | 본인 문서 다운로드 | 본인 세션, view=text로 추출 텍스트 조회 |
-| GET | `/api/jobs` | 공고 목록/검색/필터/상세 | 공개, Spring 공고 + 외부 수집 자료 |
+| GET | `/api/jobs` | 공고 목록/검색/필터/상세 | 공개. 목록은 RDS 전체 진행 공고를 DB에서 검색·정렬·페이지 처리하며 상세는 Spring API 사용 |
 | GET | `/api/jobs/posting` | Lever 공고 본문 읽기 | 공개, url 파라미터, 지원 URL만 |
 | GET | `/api/jobs/keywords` | 공고의 검수된 역량 문장/카테고리 | 공개, jobId 필요 |
 | GET | `/api/jobs/my-levels` | 본인 공고/역량 문장별 RDS LV | 일반 회원, jobId와 version 필요, userId 입력으로 사용자 변경 불가 |
@@ -46,10 +51,15 @@ Next 서버가 Spring 공고 API 또는 사용자용 RDS/SQLite에 연결한다.
 | DELETE | `/api/notices` | 공지 논리 삭제 | RDS ADMIN, id |
 | POST | `/api/admin/activate` | 일회용 링크로 관리자 초기 비밀번호 설정 | 유효 token/password 필요, 재사용 불가 |
 | GET | `/api/auth/kakao/status` | 카카오 연결 설정 여부 | 공개, 키/시크릿은 반환하지 않음 |
+| GET | `/api/auth/naver/status` | 네이버 연결 설정 여부 | 공개, Client ID·Secret은 반환하지 않음 |
+| GET | `/api/auth/naver` | 네이버 로그인 시작 | 설정 필요, next 내부 주소만 허용, 미설정 503 |
+| GET | `/api/auth/naver/callback` | state 검증 후 로그인·신규 회원 등록 | 이메일 제공 필수, 이메일만으로 기존 계정 자동 연결 금지, 신규 비밀번호 강제 없음 |
 | GET | `/api/auth/kakao` | 카카오 인가 시작 | 앱 설정 필요, 미설정 시 503 |
-| GET | `/api/auth/kakao/callback` | state 확인, 코드 교환, 기존 로컬 로그인 세션 생성 | code/state, 실제 앱 설정 필요 |
+| GET | `/api/auth/kakao/callback` | state 확인, 코드 교환, 기존 회원 로그인 또는 비밀번호 설정 화면 이동 | code/state, 실제 앱 설정 필요. 신규 회원은 비밀번호 설정 후 계정 생성 |
 | GET | `/api/admin/extraction-reviews` | extraction_run의 현재 검토 대상·사유·상태별 건수 | ADMIN 전용, status/q/offset. storage=extraction_run, total은 조건별 총 건수, 20개 단위. id는 추출 실행 ID, revision은 변경 확인용 문자열 |
-| PATCH | `/api/admin/extraction-reviews` | 추출 실행의 review_result/review_feedback/reviewed_at 직접 저장 | ADMIN, 같은 출처 Origin, id/revision/action(PASS→제외 또는 RETRY→다시)/feedback. 아직 검토되지 않은 현재 결과만 처리하며 중복·오래된 요청은 409 |
+| GET | `/api/admin/closed-postings` | 마감 공고 보관 목록 | ADMIN 전용, q/offset, 20개 단위, total/items. 원문 마감 또는 한국 시간 마감일 경과 |
+| PATCH | `/api/admin/extraction-reviews` | 추출 실행의 review_result/review_feedback/reviewed_at 직접 저장 | ADMIN, 같은 출처 Origin, id/revision/action(PASS→제외, RETRY→다시, APPROVE→정상, RESTORE→검토 대기)/feedback. 현재 결과와 revision 검증. 마감 공고 정상 등록·재추출 금지. 중복·오래된 요청은 409 |
+| POST | `/api/admin/extraction-reviews` | 마감일 경과 검토 대기 일괄 넘김 | ADMIN, 같은 출처 Origin, action=PASS_EXPIRED. 한국 시간 마감일 경과 + 현재 결과 + 미검토 + 검토 사유 있는 공고만 갱신 |
 | GET | `/api/growth` | 기존 기술 검토/성장 과제 상태 | 세션 필요, 현재 주 화면에서 사용하지 않는 레거시 |
 | POST | `/api/growth` | 기존 검토, 과제 시작/제출/일정 | 세션 필요, 문장 LV 확정 모델은 아님 |
 | GET | `/api/share` | 본인 공개 공유 링크 | 세션 필요, 레거시 |
@@ -60,7 +70,7 @@ Next 서버가 Spring 공고 API 또는 사용자용 RDS/SQLite에 연결한다.
 
 | API | action | 본문 주요 필드 |
 |---|---|---|
-| POST /api/account | register | name, email, password(10~128자) 필수. age(0~120 정수), school, major 선택 |
+| POST /api/account | register | name, email, password(10~128자) 필수. confirmation은 화면에서 필수이며 카카오 가입 API에서도 필수. age(0~120 정수), school, major 선택. kakao=true이면 서버 가입 쿠키와 고정 이메일 검증 |
 | POST /api/account | login | email, password |
 | POST /api/account | logout | 없음 |
 | POST /api/account | update | name, email, profile |
@@ -79,8 +89,16 @@ Next 서버가 Spring 공고 API 또는 사용자용 RDS/SQLite에 연결한다.
 ### 공고 조회 파라미터
 
 `GET /api/jobs`: id, offset, limit(1~24), role(all/data/backend), q, location,
-workplace(all/remote/hybrid/on-site), sort(newest/closing/company), experience(쉼표로 복수 선택).
+workplace(all/remote/hybrid/on-site/unknown), sort(newest/closing/company), experience(쉼표로 복수 선택).
 백엔드 공고 ID는 `be:4562`처럼 표시한다.
+
+목록 검색은 회사명·공고 제목·현재 추출 결과에 연결된 기술명의 대소문자 무시 부분 일치다.
+최근 200개 제한이나 전체 공고의 상세 선조회가 없다. 기존과 같이 데이터·백엔드로 분류되는
+`status='진행'` 공고를 대상으로 하고, 한 SQL에서 전체 건수와 요청한 페이지만 반환한다.
+목록은 `CAREER_PROFILE_DATABASE_URL`의 기존 읽기 권한을 사용하고, 공고 상세는 `BACKEND_URL`을 사용한다.
+기업 채용 페이지의 수집 자료는 캐시에서 합치고 응답 후 갱신하므로 외부 수집 지연이 목록 응답을 막지 않는다.
+실제 목록에 예시를 추가하지 않는다. 마감일은 한국 시간 기준 당일까지 노출하며 지난 공고는 관리자 마감 공고 탭에서 조회한다.
+브라우저에서 페이지별 결과를 다시 필터하거나 정렬하지 않으며 입력 검색은 마지막 타이핑 후 350ms에 요청한다.
 
 `GET /api/jobs/keywords?jobId=be:4562`
 

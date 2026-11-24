@@ -2,7 +2,8 @@
 import { useState } from "react";
 import Link from "next/link";
 import { ArrowRight, Bookmark, BriefcaseBusiness, MapPin } from "lucide-react";
-import { useSavedJobs } from "@/lib/saved-jobs";
+import { useSavedJobs, type SaveResult } from "@/lib/saved-jobs";
+import { SaveFeedback } from "@/components/shared/save-feedback";
 import { LoadingSpinner } from "@/components/shared/loading-spinner";
 import { roleLabels } from "@/lib/korean";
 import { dDay } from "@/components/jobs/job-summary";
@@ -10,19 +11,42 @@ import { PassedGap } from "@/components/jobs/passed-gap";
 
 // 저장한 공고 목록. 카드를 누르면 공고 상세로, 책갈피를 누르면 저장을 취소한다.
 export function SavedJobsPanel() {
-  const { jobs, toggle } = useSavedJobs();
-  const [message, setMessage] = useState("");
+  const { jobs, toggle, error, loading, retry } = useSavedJobs();
+  const [message, setMessage] = useState<SaveResult | null>(null);
+  const feedback = (
+    <SaveFeedback result={message} onDismiss={() => setMessage(null)} />
+  );
   const [now] = useState(() => Date.now());
-  if (!jobs) return <LoadingSpinner inline />;
+  if (error)
+    return (
+      <>
+        <div className="mypage-empty" role="alert">
+          <h2>저장 목록을 불러오지 못했습니다</h2>
+          <p>{error}</p>
+          <button
+            className="career-primary"
+            disabled={loading}
+            onClick={() => void retry()}
+          >
+            다시 시도
+          </button>
+        </div>
+        {feedback}
+      </>
+    );
+  if (!jobs || (loading && !jobs.length)) return <LoadingSpinner inline />;
   if (!jobs.length)
     return (
-      <div className="mypage-empty">
-        <Bookmark size={28} aria-hidden="true" />
-        <p>저장한 공고가 없어요.</p>
-        <Link className="cta" href="/jobs">
-          공고 보러 가기 <ArrowRight size={16} />
-        </Link>
-      </div>
+      <>
+        <div className="mypage-empty">
+          <Bookmark size={28} aria-hidden="true" />
+          <p>저장한 공고가 없어요.</p>
+          <Link className="cta" href="/jobs">
+            공고 보러 가기 <ArrowRight size={16} />
+          </Link>
+        </div>
+        {feedback}
+      </>
     );
   return (
     <section aria-labelledby="saved-title">
@@ -86,9 +110,7 @@ export function SavedJobsPanel() {
           );
         })}
       </ul>
-      <span className="sr-only" role="status">
-        {message}
-      </span>
+      {feedback}
     </section>
   );
 }

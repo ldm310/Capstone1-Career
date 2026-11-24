@@ -35,7 +35,7 @@ export function FeatureShell({ children }: { children: React.ReactNode }) {
           </div>
         )}
         {isJobDetail ? (
-          <h1 className="sr-only">채용공고 상세</h1>
+          <h1 className="sr-only">채용 공고 상세</h1>
         ) : (
           <header className="feature-page-heading">
             <span>CAREER</span>

@@ -34,7 +34,7 @@ test("home destinations are readable, accessible and responsive", async ({
   await page.setViewportSize({ width: 1440, height: 1000 });
   await expect(
     page.getByRole("navigation", { name: "주 메뉴" }).getByRole("link"),
-  ).toHaveText(["홈", "채용공고", "내 역량", "내 자료"]);
+  ).toHaveText(["홈", "채용 공고", "내 역량", "내 자료"]);
   const audit = await new AxeBuilder({ page })
     .withTags(["wcag2a", "wcag2aa", "wcag21aa"])
     .analyze();
@@ -43,7 +43,7 @@ test("home destinations are readable, accessible and responsive", async ({
   await page.getByRole("button", { name: "메뉴 열기" }).click();
   await page
     .getByRole("navigation", { name: "주 메뉴" })
-    .getByRole("link", { name: "채용공고", exact: true })
+    .getByRole("link", { name: "채용 공고", exact: true })
     .click();
   await expect(page).toHaveURL(/\/jobs$/);
   await expect(page.getByRole("button", { name: "메뉴 열기" })).toHaveAttribute(

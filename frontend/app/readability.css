@@ -67,6 +67,75 @@
   color: #536c80;
   margin: 0 0 20px;
 }
+.social-login-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 24px;
+}
+.career-workspace .sign-in-panel .social-login-row form {
+  margin: 0;
+  width: 100%;
+  min-width: 0;
+}
+.career-workspace .sign-in-panel .social-login-row button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  height: 48px;
+  min-height: 48px;
+  padding: 0 8px;
+  margin: 0;
+  border: 0;
+  border-radius: 10px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.career-workspace .sign-in-panel .social-login-row .kakao-login-button {
+  background: #fee500;
+  color: #191919;
+}
+.career-workspace .sign-in-panel .social-login-row .naver-login-button {
+  background: #03a94d;
+  color: white;
+}
+.social-login-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 20px;
+  width: 20px;
+  height: 24px;
+}
+.social-login-row .social-login-icon img {
+  display: block;
+  width: 24px;
+  height: 24px;
+  max-width: none;
+  flex-shrink: 0;
+}
+.social-login-label {
+  display: block;
+  font: inherit;
+  line-height: 1;
+}
+.career-workspace .sign-in-panel .social-login-row button:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+@media (max-width: 360px) {
+  .career-workspace .sign-in-panel .social-login-row button {
+    font-size: 12px;
+    gap: 6px;
+    padding-inline: 4px;
+  }
+}
 :root {
   --read-text: #1f3445;
   --read-muted: #4a6072;
@@ -366,6 +435,47 @@ small,
   inset: 0;
   border-radius: inherit;
   z-index: 0;
+}
+.save-feedback {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  max-width: min(480px, calc(100vw - 32px));
+  padding: 16px 20px;
+  border: 1px solid #b6d4c2;
+  border-radius: 12px;
+  background: #edf6f1;
+  color: #244e38;
+  box-shadow: 0 8px 24px #203d5226;
+}
+.save-feedback.is-error {
+  background: #fff3ef;
+  border-color: #e7bdb2;
+  color: #8a3623;
+}
+.save-feedback p {
+  margin: 0;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.save-feedback button {
+  flex-shrink: 0;
+  background: none;
+  border: 1px solid currentColor;
+  border-radius: 6px;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+@media (max-width: 600px) {
+  .save-feedback {
+    left: 16px;
+    right: 16px;
+    bottom: 16px;
+  }
 }
 .card-click .card-link:focus-visible {
   outline: none;

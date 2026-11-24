@@ -65,6 +65,11 @@ class SkillCategoryControllerTest {
         mvc.perform(get("/api/postings/1"))
                 .andExpect(jsonPath("$.analysis.recruitUnits[0].items[0].requirements[0].capabilityName").value("관계형 DB"));
         mvc.perform(get("/api/postings/2/skill-categories"))
+                .andExpect(status().isNotFound());
+        jdbc.update("update public.posting set status='진행' where id=2");
+        context.getBean(jakarta.persistence.EntityManager.class).clear();
+        mvc.perform(get("/api/postings/2/skill-categories"))
+                .andExpect(status().isOk())
                 .andExpect(jsonPath("$.analysisStatus").value("NOT_ANALYZED"))
                 .andExpect(jsonPath("$.recruitUnits", hasSize(0)));
         mvc.perform(get("/api/postings/999/skill-categories")).andExpect(status().isNotFound());

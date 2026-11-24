@@ -261,7 +261,7 @@ export async function jobAnalysis(
   return {
     id: randomUUID(),
     company: company || "직접 입력 공고",
-    title: title || "채용공고",
+    title: title || "채용 공고",
     url: urlString,
     required: [...required],
     preferred: [...preferred],

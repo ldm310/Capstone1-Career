@@ -9,6 +9,7 @@
     "lint": "eslint",
     "test:e2e": "playwright test",
     "test:api-contract": "playwright test --config=playwright.contract.config.ts",
+    "test:auth": "playwright test --config=playwright.auth.config.ts",
     "typecheck": "tsc --noEmit",
     "format": "prettier --write app components mock types lib tests playwright.config.ts"
   },
@@ -20,6 +21,7 @@
     "mammoth": "^1.12.3",
     "motion": "^13.4.3",
     "next": "16.3.6",
+    "nodemailer": "^10.6.1",
     "pdf-parse": "^2.4.5",
     "pg": "^8.23.1",
     "react": "19.2.8",
@@ -34,6 +36,7 @@
     "@playwright/test": "^1.63.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^24.19.0",
+    "@types/nodemailer": "^8.0.2",
     "@types/pg": "^8.23.1",
     "@types/react": "^19",
     "@types/react-dom": "^19",

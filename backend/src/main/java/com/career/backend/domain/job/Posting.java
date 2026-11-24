@@ -5,6 +5,7 @@ import org.hibernate.annotations.Immutable;
 
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.time.ZoneId;
 
 @Entity
 @Immutable
@@ -103,7 +104,7 @@ public class Posting {
     }
 
     public String getStatus() {
-        return status;
+        return deadline != null && deadline.isBefore(LocalDate.now(ZoneId.of("Asia/Seoul"))) ? CLOSED : status;
     }
 
     public LocalDate getDeadline() {

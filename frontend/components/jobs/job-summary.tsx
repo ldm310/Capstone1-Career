@@ -3,7 +3,8 @@ import { useEffect, useState } from "react";
 import { Info, MapPin, Star, TrainFront } from "lucide-react";
 import { unknownLocation, type PublicJob } from "@/types/public-job";
 import { experienceLabels, jobExperience } from "@/lib/job-filters";
-import { useSavedJobs } from "@/lib/saved-jobs";
+import { useSavedJobs, type SaveResult } from "@/lib/saved-jobs";
+import { SaveFeedback } from "@/components/shared/save-feedback";
 
 const dayMs = 86400000;
 // 마감까지 남은 날짜. 마감일이 없으면 null, 지났으면 "마감".
@@ -49,7 +50,7 @@ export function JobSummary({
   allowSave?: boolean;
 }) {
   const saved = useSavedJobs();
-  const [message, setMessage] = useState("");
+  const [message, setMessage] = useState<SaveResult | null>(null);
   const [now] = useState(() => Date.now());
   const d = job.details ?? {};
   const left = dDay(job.closesAt, now);
@@ -120,9 +121,7 @@ export function JobSummary({
           </div>
         )}
       </details>
-      <span className="sr-only" role="status">
-        {message}
-      </span>
+      <SaveFeedback result={message} onDismiss={() => setMessage(null)} />
     </header>
   );
 }

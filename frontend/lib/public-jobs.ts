@@ -93,7 +93,7 @@ export async function getPublicJobs() {
   );
   if (results.every((result) => result.status === "rejected"))
     throw new Error(
-      "채용공고를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.",
+      "채용 공고를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.",
     );
   const jobs = results
     .flatMap((result) => (result.status === "fulfilled" ? result.value : []))

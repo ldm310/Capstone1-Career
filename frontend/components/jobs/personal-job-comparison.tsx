@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { usePathname, useSearchParams } from "next/navigation";
+import { signInUrl } from "@/lib/login-destination";
 import { currentFindings } from "@/lib/workspace-selectors";
 import { skillCategories } from "@/lib/skill-categories";
 import {
@@ -179,6 +181,11 @@ function EvidenceRadar({ rows }: { rows: PersonalKeyword[] }) {
 }
 
 export function PersonalJobComparison({ jobId }: { jobId: string }) {
+  const pathname = usePathname(),
+    params = useSearchParams();
+  const loginUrl = signInUrl(
+    pathname + (params.size ? "?" + params.toString() : ""),
+  );
   const [result, setResult] = useState<Result | null>(null);
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
@@ -330,7 +337,7 @@ export function PersonalJobComparison({ jobId }: { jobId: string }) {
               <p>
                 로그인 후 GitHub, PDF 자료로 공고별 역량을 확인할 수 있습니다.
               </p>
-              <Link href="/sign-in">로그인, 회원가입</Link>
+              <Link href={loginUrl}>로그인, 회원가입</Link>
             </div>
           ) : !current.sourceCount ? (
             <div className="personal-comparison-message">
