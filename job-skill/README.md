@@ -179,6 +179,7 @@ docker compose -f docker-compose.airflow.yml exec airflow-scheduler python -m py
    REVOKE REFERENCES ON tech_capability FROM team;                      -- 팀이 통째로 고칠 수 있는 연결 표라 FK 는 빼둠
    ALTER DEFAULT PRIVILEGES FOR ROLE career IN SCHEMA public GRANT SELECT, REFERENCES ON TABLES TO team;   -- 앞으로 만들 표도
    GRANT INSERT, UPDATE, DELETE ON capability, tech, tech_capability, exclude_word TO team;              -- 표준화 사전: 쓰기
+   GRANT UPDATE (review_result, review_feedback, reviewed_at) ON extraction_run TO team;                 -- 사람 검토 칸만 쓰기(2026-11-24, 마이그레이션 010 도 같은 것을 한다)
    -- 팀원마다 (비밀번호는 실행할 때 정하고 1:1 로 전한다)
    CREATE ROLE dongmin LOGIN PASSWORD '...' IN ROLE team;
    ALTER ROLE dongmin SET role = 'team';                                -- 팀원이 만든 표의 주인 = team(서로 고칠 수 있게)

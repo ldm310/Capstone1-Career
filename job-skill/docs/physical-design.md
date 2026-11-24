@@ -86,13 +86,30 @@
 | 비용 | `cost_usd` | numeric(10,6) | NOT NULL, 0 이상 |
 | 다시 부름 | `retried` | boolean | NOT NULL, 기본값 false |
 | 확인 필요 사유 | `review_reasons` | jsonb | NOT NULL, 기본값 `[]`, 목록이어야 함 |
-| 확인 결과 | `review_result` | text | 문제없음/고침 |
+| 확인 결과 | `review_result` | text | 정상/제외/다시, 안 봤으면 비움 |
+| 피드백 | `review_feedback` | text | 다시일 때 꼭 채움(빈칸만이면 안 됨) |
 | 확인 시각 | `reviewed_at` | timestamptz | 확인 결과와 함께 채움(둘 다 있거나 둘 다 비거나) |
 | 표준화 전 답 | `llm_output_raw` | jsonb | 2026-10-27 이전 결과는 비어 있음(그 뒤로는 항상 채움) |
 | 현재 사용 | `is_current` | boolean | NOT NULL, 기본값 false, **공고마다 최대 하나** |
 | 실행 시각 | `run_at` | timestamptz | NOT NULL, 기본값 지금 |
 
 확인 필요 사유는 `[{"검사": 1, "내용": "경력 조건 '신입 · 경력' / 만든 자리: 신입만"}]` 모양으로 넣는다. 검사 번호는 1(신입·경력), 2(모집 직무), 3(빈 내용)이다.
+
+사람 검토(2026-11-24 사용자 결정)는 관리자 페이지에서 현재 결과를 보고 셋 중 하나를 고른다.
+
+| 확인 결과 | 뜻 | 그 뒤 |
+|---|---|---|
+| 정상 | 결과가 맞음 | 검토 목록에서 빠진다. 공고가 수정되면 평소처럼 다시 추출한다. |
+| 제외 | 이 공고는 다루지 않음 | 수정돼도 다시 추출하지 않고, 변경·마감 확인도 하지 않는다. 웹에 보이지 않는다. |
+| 다시 | 피드백을 적어 재추출 | 다음 ① 매일 수집 때 피드백을 LLM 입력 끝에 붙여 다시 추출한다. 새 결과가 현재 사용이 되고, 옛 결과는 '다시'와 피드백을 단 채 남는다. 마감된 공고는 다시 추출하지 않는다. |
+
+- 검토 목록: 현재 사용이고, 확인 필요 사유가 있고, 확인 결과가 빈 결과(부분 색인 `extraction_run_review_queue`).
+- 팀원(`team`)은 이 표를 읽기만 하되 `review_result`, `review_feedback`, `reviewed_at` 세 칸만 쓸 수 있다.
+
+```sql
+UPDATE extraction_run SET review_result = '다시', review_feedback = '공통지원요건은 자리가 아님. 자리는 백엔드 1개', reviewed_at = now()
+WHERE id = 981 AND is_current AND review_result IS NULL;   -- 아직 아무도 안 본 현재 결과만(둘이 동시에 눌러도 한 번만)
+```
 
 **모집 단위 `recruit_unit`**
 | 한글 | 영어 | 자료형 | 제약 |
@@ -220,6 +237,9 @@ SELECT changed_at, changed_by, table_name, action, old_row, new_row FROM diction
 | 사전을 바꾸면 기록이 남음 | DB: 트리거 `dictionary_change_log`, `TRUNCATE` 막음 |
 | 스킬이 아닌 낱말(기술 아님·일반 낱말)이 사용 중인 기술·능력 이름을 가리지 않음 | DB: 트리거 `dictionary_no_hidden_name` (넣거나 고칠 때 오류로 알림) |
 | 확인 결과와 확인 시각은 함께 | DB: `CHECK` |
+| 확인 결과가 '다시'면 피드백이 있어야 함 | DB: `CHECK extraction_run_review_feedback_check` |
+| 팀원은 추출 실행의 검토 칸 세 개만 씀 | DB: 칸 단위 권한 `GRANT UPDATE (review_result, review_feedback, reviewed_at)` |
+| '다시'는 다음 ① 때 다시 추출, '제외'는 변경·마감 확인 안 함 | 파이프라인 코드 (`db_queries.pending_postings`, `open_postings`) |
 | 0~3년 공고만 수집, 교육생 제외 | 수집 코드 (`sample_random.py`의 `min_years`) |
 | 원본 해시가 바뀌면 다시 추출 | 수정 확인 코드 (아직 없음) |
 | IT 아닌 자리는 항목 없음 | 저장 코드 (`it_job=false`면 빈 목록) |
@@ -247,7 +267,7 @@ PostgreSQL은 FK 칸에 색인을 자동으로 만들지 않는다. 그래서 �
 | FK 칸 전부 (`company_id`, `posting_id`, `run_id`, …) | 표 잇기(JOIN) |
 | `posting (status, last_checked_at)` | 3일마다 수정 확인할 공고 고르기 |
 | `requirement (capability_id)`, `requirement_tech (tech_id)` | 능력별·기술별 통계와 매칭 |
-| `extraction_run_review_queue` (부분 색인) | 사람이 확인할 목록 (확인 필요 사유가 있고 아직 확인 안 함) |
+| `extraction_run_review_queue` (부분 색인) | 사람이 확인할 목록 (확인 필요 사유가 있고 확인 결과가 빔) |
 | `capability/tech (aliases)` GIN | 별칭으로 찾기 ("스프링 부트" → Spring Boot) |
 | `dictionary_change (changed_at)` | 최근 사전 변경 보기 |
 
