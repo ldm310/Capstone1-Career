@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "점검 결과 (점검 에이전트 출력을 레포·사람·키로 풀어 쓴 것, to_stat.py --verdicts 입력)",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": ["repo", "person", "key", "verdict"],
+    "properties": {
+      "repo": {"type": "string"}, "person": {"type": "string"}, "key": {"type": "string"},
+      "verdict": {"enum": ["pass", "reject", "unsure"]},
+      "reason_code": {"enum": ["R1", "R2", "R3", "R4", null]},
+      "reason": {"type": "string"}
+    }
+  }
+}

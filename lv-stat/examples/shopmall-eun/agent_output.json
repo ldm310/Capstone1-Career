@@ -1,0 +1,44 @@
+[
+ {
+  "id": "0000",
+  "verdict": "pass",
+  "reason_code": null,
+  "reason": "예시"
+ },
+ {
+  "id": "0001",
+  "verdict": "pass",
+  "reason_code": null,
+  "reason": "예시"
+ },
+ {
+  "id": "0002",
+  "verdict": "pass",
+  "reason_code": null,
+  "reason": "예시"
+ },
+ {
+  "id": "0003",
+  "verdict": "pass",
+  "reason_code": null,
+  "reason": "예시"
+ },
+ {
+  "id": "0004",
+  "verdict": "pass",
+  "reason_code": null,
+  "reason": "예시"
+ },
+ {
+  "id": "0005",
+  "verdict": "pass",
+  "reason_code": null,
+  "reason": "예시"
+ },
+ {
+  "id": "0006",
+  "verdict": "unsure",
+  "reason_code": null,
+  "reason": "예시: 판단할 정보 부족"
+ }
+]

@@ -1,0 +1,58 @@
+[
+ {
+  "repo": "demo/shopmall",
+  "person": "eun",
+  "key": "무중단 배포",
+  "verdict": "pass",
+  "reason_code": null,
+  "reason": "예시"
+ },
+ {
+  "repo": "demo/shopmall",
+  "person": "eun",
+  "key": "Kubernetes 운영 설정",
+  "verdict": "pass",
+  "reason_code": null,
+  "reason": "예시"
+ },
+ {
+  "repo": "demo/shopmall",
+  "person": "eun",
+  "key": "동시성 제어",
+  "verdict": "pass",
+  "reason_code": null,
+  "reason": "예시"
+ },
+ {
+  "repo": "demo/shopmall",
+  "person": "eun",
+  "key": "운영 대응 이력",
+  "verdict": "pass",
+  "reason_code": null,
+  "reason": "예시"
+ },
+ {
+  "repo": "demo/shopmall",
+  "person": "eun",
+  "key": "이벤트 기반 아키텍처",
+  "verdict": "pass",
+  "reason_code": null,
+  "reason": "예시"
+ },
+ {
+  "repo": "demo/shopmall",
+  "person": "eun",
+  "key": "메시지 큐",
+  "verdict": "pass",
+  "reason_code": null,
+  "reason": "예시"
+ },
+ {
+  "repo": "demo/shopmall",
+  "person": "eun",
+  "key": "모니터링 설정",
+  "verdict": "unsure",
+  "reason_code": null,
+  "reason": "예시: 판단할 정보 부족"
+ }
+]

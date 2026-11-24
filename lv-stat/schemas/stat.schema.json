@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "stat (사람 하나, pipeline/to_stat.py 출력)",
+  "type": "object",
+  "required": ["person", "repos", "stat", "weak"],
+  "properties": {
+    "person": {"type": "string"},
+    "repos": {"type": "array", "items": {"type": "string"}},
+    "stat": {
+      "type": "object",
+      "description": "역량 키 -> LV. 키의 LV = 점검을 통과한 근거 중 최고 LV",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["lv", "kind", "source", "evidence"],
+        "properties": {
+          "lv": {"type": "integer", "minimum": 1, "maximum": 5},
+          "kind": {"enum": ["tool", "activity"]},
+          "source": {"enum": ["own", "lifted", "implied"], "description": "own: 직접 근거 / lifted: 그 도구로 한 활동의 LV / implied: 다른 도구가 뜻하는 상위 이름"},
+          "by": {"type": ["string", "null"], "description": "lifted면 활동 이름, implied면 원래 도구 이름"},
+          "evidence": {"type": "array", "items": {"type": "object", "properties": {"repo": {"type": "string"}, "where": {"type": "string"}}}}
+        }
+      }
+    },
+    "weak": {"type": "object", "description": "정황: 점검에서 모름으로 나온 활동, import만 있는 도구"}
+  }
+}

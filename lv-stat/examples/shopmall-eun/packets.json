@@ -1,0 +1,91 @@
+[
+ {
+  "id": "0000",
+  "repo": "demo/shopmall",
+  "judgment": "무중단 배포",
+  "lv": 5,
+  "claim": "서비스를 멈추지 않고 배포하는 구성(blue-green, canary, 롤링)을 만들었다",
+  "person": "eun",
+  "evidence": "k8s/order-deployment.yaml:10",
+  "path": "k8s/order-deployment.yaml",
+  "snippet": "      1 apiVersion: apps/v1\n      2 kind: Deployment\n      3 metadata:\n      4   name: order\n      5 spec:\n      6   replicas: 2\n      7   strategy:\n      8     type: RollingUpdate\n      9     rollingUpdate:\n>>   10       maxUnavailable: 0\n     11   template:\n     12     spec:\n     13       containers:\n     14         - name: order\n     15           image: shop/order:latest\n     16           readinessProbe:\n     17             httpGet:\n     18               path: /actuator/health\n     19               port: 8080\n     20           livenessProbe:\n     21             httpGet:\n     22               path: /actuator/health\n     23               port: 8080",
+  "commit_subject": "infra: k8s 배포 설정, 모니터링",
+  "file_lines": 23
+ },
+ {
+  "id": "0001",
+  "repo": "demo/shopmall",
+  "judgment": "Kubernetes 운영 설정",
+  "lv": 4,
+  "claim": "Kubernetes에 probe와 자원 제한·오토스케일 같은 운영 설정을 했다",
+  "person": "eun",
+  "evidence": "k8s/order-deployment.yaml:16",
+  "path": "k8s/order-deployment.yaml",
+  "snippet": "      1 apiVersion: apps/v1\n      2 kind: Deployment\n      3 metadata:\n      4   name: order\n      5 spec:\n      6   replicas: 2\n      7   strategy:\n      8     type: RollingUpdate\n      9     rollingUpdate:\n     10       maxUnavailable: 0\n     11   template:\n     12     spec:\n     13       containers:\n     14         - name: order\n     15           image: shop/order:latest\n>>   16           readinessProbe:\n     17             httpGet:\n     18               path: /actuator/health\n     19               port: 8080\n     20           livenessProbe:\n     21             httpGet:\n     22               path: /actuator/health\n     23               port: 8080",
+  "commit_subject": "infra: k8s 배포 설정, 모니터링",
+  "file_lines": 23
+ },
+ {
+  "id": "0002",
+  "repo": "demo/shopmall",
+  "judgment": "동시성 제어",
+  "lv": 4,
+  "claim": "동시에 들어오는 요청에서 데이터가 어긋나지 않게 잠금·버전·격리 수준으로 제어했다",
+  "person": "eun",
+  "evidence": "order-service/src/main/java/com/shop/order/product/StockRepository.java:10",
+  "path": "order-service/src/main/java/com/shop/order/product/StockRepository.java",
+  "snippet": "      1 package com.shop.order.product;\n      2 \n      3 import jakarta.persistence.LockModeType;\n      4 \n      5 import org.springframework.data.jpa.repository.JpaRepository;\n      6 import org.springframework.data.jpa.repository.Lock;\n      7 import org.springframework.data.jpa.repository.Query;\n      8 \n      9 public interface StockRepository extends JpaRepository<Stock, Long> {\n>>   10     @Lock(LockModeType.PESSIMISTIC_WRITE)\n     11     @Query(\"select s from Stock s where s.productId = :productId\")\n     12     Stock findForUpdate(Long productId);\n     13 }",
+  "commit_subject": "feat: payment-service 분리, 주문 이벤트 연동, 재고 락",
+  "file_lines": 13
+ },
+ {
+  "id": "0003",
+  "repo": "demo/shopmall",
+  "judgment": "운영 대응 이력",
+  "lv": 4,
+  "claim": "배포 뒤에 장애·긴급 수정을 처리한 커밋이 있다",
+  "person": "eun",
+  "evidence": "커밋 814cc09 \"hotfix: 결제 중복 승인 장애 수정\" 외 1개 (배포 설정 이후)",
+  "path": null
+ },
+ {
+  "id": "0004",
+  "repo": "demo/shopmall",
+  "judgment": "이벤트 기반 아키텍처",
+  "lv": 4,
+  "claim": "메시지 브로커로 이벤트를 보내는 쪽과 받는 쪽을 모두 구현했다",
+  "person": "eun",
+  "evidence": "payment-service/src/main/java/com/shop/payment/PaymentEventListener.java:8 (받는 쪽) + order-service/src/main/java/com/shop/order/event/OrderEventPublisher.java:15 (보내는 쪽)",
+  "path": "payment-service/src/main/java/com/shop/payment/PaymentEventListener.java",
+  "snippet": "      1 package com.shop.payment;\n      2 \n      3 import org.springframework.kafka.annotation.KafkaListener;\n      4 import org.springframework.stereotype.Component;\n      5 \n      6 @Component\n      7 public class PaymentEventListener {\n>>    8     @KafkaListener(topics = \"order.created\", groupId = \"payment\")\n      9     public void onOrderCreated(String orderId) {\n     10         if (alreadyApproved(orderId)) {\n     11             return;\n     12         }\n     13         approve(orderId);\n     14     }\n     15 \n     16     void approve(String orderId) {\n     17     }\n     18 \n     19     boolean alreadyApproved(String orderId) {\n     20         return false;\n     21     }\n     22 }",
+  "commit_subject": "feat: payment-service 분리, 주문 이벤트 연동, 재고 락",
+  "path2": "order-service/src/main/java/com/shop/order/event/OrderEventPublisher.java",
+  "snippet2": "      7 public class OrderEventPublisher {\n      8     private final KafkaTemplate<String, String> kafkaTemplate;\n      9 \n     10     public OrderEventPublisher(KafkaTemplate<String, String> kafkaTemplate) {\n     11         this.kafkaTemplate = kafkaTemplate;\n     12     }\n     13 \n     14     public void created(Long orderId) {\n>>   15         kafkaTemplate.send(\"order.created\", String.valueOf(orderId));\n     16     }\n     17 }",
+  "file_lines": 22
+ },
+ {
+  "id": "0005",
+  "repo": "demo/shopmall",
+  "judgment": "메시지 큐",
+  "lv": 3,
+  "claim": "메시지 브로커나 작업 큐로 비동기 처리를 넣었다",
+  "person": "eun",
+  "evidence": "order-service/src/main/java/com/shop/order/event/OrderEventPublisher.java:8",
+  "path": "order-service/src/main/java/com/shop/order/event/OrderEventPublisher.java",
+  "snippet": "      1 package com.shop.order.event;\n      2 \n      3 import org.springframework.kafka.core.KafkaTemplate;\n      4 import org.springframework.stereotype.Component;\n      5 \n      6 @Component\n      7 public class OrderEventPublisher {\n>>    8     private final KafkaTemplate<String, String> kafkaTemplate;\n      9 \n     10     public OrderEventPublisher(KafkaTemplate<String, String> kafkaTemplate) {\n     11         this.kafkaTemplate = kafkaTemplate;\n     12     }\n     13 \n     14     public void created(Long orderId) {\n     15         kafkaTemplate.send(\"order.created\", String.valueOf(orderId));\n     16     }\n     17 }",
+  "commit_subject": "feat: payment-service 분리, 주문 이벤트 연동, 재고 락",
+  "file_lines": 17
+ },
+ {
+  "id": "0006",
+  "repo": "demo/shopmall",
+  "judgment": "모니터링 설정",
+  "lv": 3,
+  "claim": "지표·추적·오류 수집을 설정했다",
+  "person": "eun",
+  "evidence": "monitoring/prometheus.yml 5줄",
+  "path": "monitoring/prometheus.yml",
+  "snippet": "      1 scrape_configs:\n      2   - job_name: order\n      3     metrics_path: /actuator/prometheus\n      4     static_configs:\n      5       - targets: [\"order:8080\"]",
+  "file_lines": 5
+ }
+]

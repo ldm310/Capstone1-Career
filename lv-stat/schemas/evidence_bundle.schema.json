@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "근거 묶음 (레포 하나, pipeline/bundle.py 출력)",
+  "type": "object",
+  "required": ["meta", "evidence", "weak"],
+  "properties": {
+    "meta": {
+      "type": "object",
+      "required": ["repo", "head", "extractor", "practice", "people"],
+      "properties": {
+        "repo": {"type": "string", "description": "owner/repo"},
+        "head": {"type": "string", "description": "분석한 커밋"},
+        "extractor": {"type": "string"},
+        "practice": {"type": "boolean", "description": "연습 레포(LV1까지만 인정)"},
+        "people": {"type": "array", "items": {"type": "string"}, "description": "레포에 기여한 사람(같은 사람의 여러 이름은 묶은 뒤)"},
+        "merged": {"type": "object", "description": "묶인 이름들"},
+        "ai_commits": {"type": "object", "description": "사람별 AI가 쓰거나 함께 쓴 커밋 수"},
+        "generated_files": {"type": "integer", "description": "생성물로 보고 제외한 파일 수"}
+      }
+    },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["person", "key", "kind", "lv", "where", "n"],
+        "properties": {
+          "person": {"type": "string"},
+          "key": {"type": "string", "description": "역량 키: 도구 이름 또는 활동 이름(pipeline/keys.py)"},
+          "kind": {"enum": ["tool", "activity"]},
+          "lv": {"type": "integer", "minimum": 1, "maximum": 5},
+          "where": {"type": "string", "description": "근거 위치. '경로:줄' 또는 '경로 N줄' 또는 커밋. 코드 내용은 저장하지 않음"},
+          "n": {"type": "integer", "description": "같은 판정의 근거 수"},
+          "own_lv": {"type": "integer", "description": "도구만: 활동으로 올라가기 전의 LV"},
+          "lifted_by": {"type": "string", "description": "도구만: 이 도구의 LV를 올린 활동 이름"},
+          "lifted_where": {"type": "string"}
+        }
+      }
+    },
+    "weak": {
+      "type": "array",
+      "description": "정황(충족으로 세지 않음): import만 있음 등",
+      "items": {"type": "object", "required": ["person", "key", "where"], "properties": {"person": {"type": "string"}, "key": {"type": "string"}, "where": {"type": "string"}}}
+    }
+  }
+}
