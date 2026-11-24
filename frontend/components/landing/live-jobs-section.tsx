@@ -1,41 +1,89 @@
 "use client";
 import Link from "next/link";
-import {
-  workplaceKey,
-  jobExperience,
-  sortPublicJobs,
-  type ExperienceKind,
-} from "@/lib/job-filters";
+import { type ExperienceKind } from "@/lib/job-filters";
 import { CatalogFilters } from "@/components/jobs/catalog-filters";
 import { useEffect, useRef, useState } from "react";
 import { Search } from "lucide-react";
 import { JobListRow } from "@/components/jobs/job-list-row";
 import type { PublicJob, PublicJobsResponse } from "@/types/public-job";
-import { isSupportedRole } from "@/lib/roles";
 import { roleLabels } from "@/lib/korean";
 import { LoadingSpinner } from "@/components/shared/loading-spinner";
 import { PassedGap } from "@/components/jobs/passed-gap";
-import { useSavedJobs } from "@/lib/saved-jobs";
+import { useSavedJobs, type SaveResult } from "@/lib/saved-jobs";
+import { SaveFeedback } from "@/components/shared/save-feedback";
 import { ListPagination } from "@/components/shared/list-pagination";
+import {
+  catalogUrl,
+  jobDetailUrl,
+  type CatalogState,
+} from "@/lib/catalog-navigation";
 export function LiveJobsSection({
   mode = "preview",
+  catalog,
 }: {
   mode?: "preview" | "catalog";
+  catalog?: {
+    state: CatalogState;
+    update: (patch: Partial<CatalogState>) => void;
+  };
 }) {
   const preview = mode === "preview";
-  const [location, setLocation] = useState("");
-  const [workplace, setWorkplace] = useState("all");
-  const [sort, setSort] = useState("newest");
-  const [experience, setExperience] = useState<ExperienceKind[]>([]);
+  const [localPageSize, setLocalPageSize] = useState(12);
+  const [localLocation, setLocalLocation] = useState("");
+  const [localWorkplace, setLocalWorkplace] = useState("all");
+  const [localSort, setLocalSort] = useState("newest");
+  const [localExperience, setLocalExperience] = useState<ExperienceKind[]>([]);
   const [feed, setFeed] = useState<PublicJobsResponse | null>(null);
   const [offset, setOffset] = useState(0);
-  const [role, setRole] = useState("all"),
-    [query, setQuery] = useState("");
+  const [localRole, setLocalRole] = useState("all"),
+    [localQuery, setLocalQuery] = useState("");
+  const pageSize = catalog?.state.pageSize ?? localPageSize,
+    location = catalog?.state.location ?? localLocation,
+    workplace = catalog?.state.workplace ?? localWorkplace,
+    sort = catalog?.state.sort ?? localSort,
+    experience = catalog?.state.experience ?? localExperience,
+    role = catalog?.state.role ?? localRole,
+    query = catalog?.state.query ?? localQuery;
+  const setPageSize = (value: number) =>
+    catalog
+      ? catalog.update({ pageSize: value, offset: 0 })
+      : setLocalPageSize(value);
+  const setLocation = (value: string) =>
+    catalog
+      ? catalog.update({ location: value, offset: 0 })
+      : setLocalLocation(value);
+  const setWorkplace = (value: string) =>
+    catalog
+      ? catalog.update({ workplace: value, offset: 0 })
+      : setLocalWorkplace(value);
+  const setSort = (value: string) =>
+    catalog ? catalog.update({ sort: value, offset: 0 }) : setLocalSort(value);
+  const setExperience = (value: ExperienceKind[]) =>
+    catalog
+      ? catalog.update({ experience: value, offset: 0 })
+      : setLocalExperience(value);
+  const setRole = (value: string) =>
+    catalog ? catalog.update({ role: value, offset: 0 }) : setLocalRole(value);
+  const setQuery = (value: string) =>
+    catalog
+      ? catalog.update({ query: value, offset: 0 })
+      : setLocalQuery(value);
   const savedJobs = useSavedJobs();
+  const [saveResult, setSaveResult] = useState<SaveResult | null>(null);
   const [loading, setLoading] = useState(true),
     [error, setError] = useState(""),
     [message, setMessage] = useState("");
   const controller = useRef<AbortController | null>(null);
+  const restored = useRef(false);
+  const listUrl = catalog ? catalogUrl(catalog.state) : "/jobs";
+  function rememberScroll() {
+    try {
+      sessionStorage.setItem(
+        "career:catalog:scroll:" + listUrl,
+        String(window.scrollY),
+      );
+    } catch {}
+  }
   async function load(
     offset: number,
     selectedRole: string,
@@ -49,17 +97,39 @@ export function LiveJobsSection({
     setError("");
     try {
       const response = await fetch(
-        `/api/jobs?offset=${offset}&limit=${preview ? 3 : 12}&role=${selectedRole}&q=${encodeURIComponent(term)}&location=${encodeURIComponent(location)}&workplace=${workplace}&sort=${sort}&experience=${experience.join(",")}`,
+        `/api/jobs?offset=${offset}&limit=${preview ? 3 : pageSize}&role=${selectedRole}&q=${encodeURIComponent(term)}&location=${encodeURIComponent(location)}&workplace=${workplace}&sort=${sort}&experience=${experience.join(",")}`,
         { signal: current.signal },
       );
       if (!response.ok) throw new Error("공고를 불러오지 못했어요.");
       const next: PublicJobsResponse = await response.json();
       if (current.signal.aborted) return;
-      const lastOffset = Math.max(0, (Math.ceil(next.total / 12) - 1) * 12);
-      if (!preview && offset > lastOffset)
+      const lastOffset = Math.max(
+        0,
+        (Math.ceil(next.total / pageSize) - 1) * pageSize,
+      );
+      if (!preview && offset > lastOffset) {
+        if (catalog) {
+          catalog.update({ offset: lastOffset });
+          return;
+        }
         return await load(lastOffset, selectedRole, term, navigate);
+      }
       setFeed(next);
       setOffset(offset);
+      if (!preview && !restored.current) {
+        restored.current = true;
+        try {
+          const key = "career:catalog:scroll:" + listUrl;
+          const y = Number(sessionStorage.getItem(key));
+          if (y > 0)
+            requestAnimationFrame(() =>
+              requestAnimationFrame(() =>
+                window.scrollTo({ top: y, behavior: "instant" }),
+              ),
+            );
+          sessionStorage.removeItem(key);
+        } catch {}
+      }
       if (navigate)
         document
           .getElementById("public-jobs-title")
@@ -77,31 +147,25 @@ export function LiveJobsSection({
   useEffect(() => () => controller.current?.abort(), []);
   useEffect(() => {
     const timer = setTimeout(() => {
-      void load(0, role, query);
+      void load(catalog?.state.offset ?? 0, role, query);
     }, 350);
     return () => clearTimeout(timer);
     // load changes with input; request cancellation handles stale results.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, role, location, workplace, sort, experience]);
-  async function toggle(job: PublicJob) {
-    setMessage(await savedJobs.toggle(job));
-  }
-  const visible = sortPublicJobs(
-    (feed?.jobs ?? []).filter(
-      (job) =>
-        isSupportedRole(job.category) &&
-        (role === "all" || job.category === role) &&
-        (!experience.length ||
-          experience.some((value) => jobExperience(job).includes(value))) &&
-        `${job.company} ${job.title} ${(job.skills || []).join(" ")} ${roleLabels[job.category]}`
-          .toLowerCase()
-          .includes(query.toLowerCase()) &&
-        (!location ||
-          job.location.toLowerCase().includes(location.toLowerCase())) &&
-        (workplace === "all" || workplaceKey(job.workplace) === workplace),
-    ),
+  }, [
+    query,
+    role,
+    location,
+    workplace,
     sort,
-  );
+    experience,
+    pageSize,
+    catalog?.state.offset,
+  ]);
+  async function toggle(job: PublicJob) {
+    setSaveResult(await savedJobs.toggle(job));
+  }
+  const visible = feed?.jobs ?? [];
   return (
     <section
       className={`public-jobs section-width ${preview ? "jobs-preview" : "jobs-catalog"}`}
@@ -110,26 +174,29 @@ export function LiveJobsSection({
     >
       <div className="public-jobs-heading">
         <div>
-          <h2 id="public-jobs-title">{preview ? "채용공고" : "전체 공고"}</h2>
+          <h2 id="public-jobs-title">{preview ? "채용 공고" : "전체 공고"}</h2>
         </div>
         {preview ? (
           <Link className="feature-action" href="/jobs">
             전체 보기 →
           </Link>
-        ) : (
-          <span className="public-source-note">
-            채널코퍼레이션, 매치그룹 제공
-          </span>
-        )}
+        ) : null}
       </div>
       {!preview && (
         <>
-          <aside className="study-preview-invite">
-            <strong>역량 비교 예시</strong>
-            <Link href="/experience">역량 체험하기 →</Link>
-          </aside>
           <div className="public-jobs-toolbar">
             <span className="catalog-results-label">검색</span>
+            <label>
+              페이지당{" "}
+              <select
+                aria-label="페이지당 공고 수"
+                value={pageSize}
+                onChange={(event) => setPageSize(Number(event.target.value))}
+              >
+                <option value={12}>12개</option>
+                <option value={24}>24개</option>
+              </select>
+            </label>
             <div className="public-job-filters">
               <select
                 aria-label="공고 직무"
@@ -189,8 +256,9 @@ export function LiveJobsSection({
           <JobListRow
             key={job.id}
             job={job}
-            href={`/jobs?job=${encodeURIComponent(job.id)}`}
-            statsHref={`/jobs?job=${encodeURIComponent(job.id)}&view=stats`}
+            href={jobDetailUrl(listUrl, job.id)}
+            statsHref={jobDetailUrl(listUrl, job.id, true)}
+            onOpen={rememberScroll}
             comparison={<PassedGap />}
             isSaved={savedJobs.isSaved(job.id)}
             onToggle={() => void toggle(job)}
@@ -224,10 +292,17 @@ export function LiveJobsSection({
         <ListPagination
           total={feed.total}
           offset={offset}
-          pageSize={12}
+          pageSize={pageSize}
           loading={loading}
-          label="채용공고 페이지"
-          onChange={(next) => void load(next, role, query, true)}
+          label="채용 공고 페이지"
+          onChange={(next) => {
+            if (catalog) {
+              catalog.update({ offset: next });
+              document
+                .getElementById("public-jobs-title")
+                ?.scrollIntoView({ block: "start" });
+            } else void load(next, role, query, true);
+          }}
         />
       )}
       {!preview && (
@@ -241,6 +316,7 @@ export function LiveJobsSection({
       <span className="sr-only" role="status">
         {message}
       </span>
+      <SaveFeedback result={saveResult} onDismiss={() => setSaveResult(null)} />
     </section>
   );
 }

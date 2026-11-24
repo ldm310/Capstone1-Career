@@ -37,7 +37,7 @@ public class PostingController {
             @Parameter(description = "제목 또는 회사명 검색어", example = "백엔드")
             @RequestParam(required = false) String keyword,
             @Parameter(description = "공고 상태 (진행/마감)", example = "진행")
-            @RequestParam(required = false) String status,
+            @RequestParam(defaultValue = "진행") String status,
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size
     ) {

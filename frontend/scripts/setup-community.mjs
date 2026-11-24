@@ -83,6 +83,12 @@ try {
   await client.query(
     readFileSync(path.join(root, "db/migrations/08-user-accounts.sql"), "utf8"),
   );
+  await client.query(
+    readFileSync(
+      path.join(root, "db/migrations/09-kakao-password-setup.sql"),
+      "utf8",
+    ),
+  );
   const report = { migrationApplied: true, starterNotices: 2 };
   const sourceNamespace = option("--seed-demo-from");
   if (sourceNamespace) {

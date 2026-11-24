@@ -16,6 +16,9 @@ type Item = {
   updatedAt: string;
   revision: string;
   reviewReasons: Array<Record<string, unknown>>;
+  deadline?: string | null;
+  deadlinePassed?: boolean;
+  sourceClosed?: boolean;
 };
 type List = {
   total: number;
@@ -23,12 +26,13 @@ type List = {
   counts: Partial<Record<Status, number>>;
   nextOffset: number | null;
   lastPipelineAt: string | null;
+  expiredOpenCount?: number;
 };
 const labels: Record<Status, string> = {
   OPEN: "검토 대기",
   SKIPPED: "제외 (넘김)",
   RETRY_REQUESTED: "재추출 요청",
-  RESOLVED: "정상 확인",
+  RESOLVED: "정상 등록",
 };
 function sourceLink(value: string) {
   try {
@@ -38,7 +42,11 @@ function sourceLink(value: string) {
     return null;
   }
 }
-export function ExtractionReviewBoard() {
+export function ExtractionReviewBoard({
+  archive = false,
+}: {
+  archive?: boolean;
+}) {
   const [data, setData] = useState<List>({
     total: 0,
     items: [],
@@ -46,7 +54,9 @@ export function ExtractionReviewBoard() {
     nextOffset: null,
     lastPipelineAt: null,
   });
-  const [status, setStatus] = useState<Status | "ALL">("OPEN");
+  const [status, setStatus] = useState<Status | "ALL">(
+    archive ? "SKIPPED" : "OPEN",
+  );
   const [search, setSearch] = useState("");
   const [query, setQuery] = useState("");
   const [offset, setOffset] = useState(0);
@@ -106,7 +116,10 @@ export function ExtractionReviewBoard() {
   useEffect(() => {
     if (selected) editor.current?.focus();
   }, [selected]);
-  async function act(item: Item, action: "PASS" | "RETRY") {
+  async function act(
+    item: Item,
+    action: "PASS" | "RETRY" | "APPROVE" | "RESTORE",
+  ) {
     if (action === "RETRY" && feedback.trim().length < 5) {
       setError("재추출 피드백을 5자 이상 입력해 주세요.");
       return;
@@ -132,7 +145,11 @@ export function ExtractionReviewBoard() {
       setMessage(
         action === "PASS"
           ? "공고를 제외로 저장했습니다."
-          : "피드백과 재추출 요청을 저장했습니다.",
+          : action === "APPROVE"
+            ? "정상으로 등록했습니다."
+            : action === "RESTORE"
+              ? "검토 대기로 되돌렸습니다."
+              : "피드백과 재추출 요청을 저장했습니다.",
       );
       await load();
     } catch (e) {
@@ -141,8 +158,29 @@ export function ExtractionReviewBoard() {
       setBusy(null);
     }
   }
+  async function passExpired() {
+    setBusy("expired");
+    setError("");
+    setMessage("");
+    try {
+      const response = await fetch("/api/admin/extraction-reviews", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "PASS_EXPIRED" }),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error);
+      setMessage(`마감일이 지난 ${body.updated}개 공고를 넘김 처리했습니다.`);
+      await load();
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "처리 실패");
+    } finally {
+      setBusy(null);
+    }
+  }
   return (
     <section className="extraction-review" aria-label="공고 추출 검토">
+      <h2>{archive ? "넘긴 공고" : "추출 검토"}</h2>
       <div className="review-summary">
         <div>
           <span>검토 대기</span>
@@ -159,7 +197,9 @@ export function ExtractionReviewBoard() {
       </div>
       <p className="review-policy">
         추출 결과의 모집 직무나 경력 조건 등에 확인이 필요한 공고입니다. 검토
-        사유를 확인하고 넘기거나 재추출 피드백을 남겨 주세요.
+        사유를 확인하고 정상 등록, 넘김 또는 재추출 요청을 선택하세요. 처리한
+        공고는 되돌리기로 검토 대기에 다시 넣을 수 있습니다. 마감 공고는
+        되돌려도 일반 목록에 노출되지 않습니다.
       </p>
       {loaded && (
         <p className="review-worker">
@@ -179,34 +219,40 @@ export function ExtractionReviewBoard() {
           setOffset(0);
         }}
       >
-        <label>
-          처리 상태
-          <select
-            value={status}
-            onChange={(event) => {
-              setStatus(event.target.value as Status | "ALL");
-              setOffset(0);
-              setSelected(null);
-            }}
-          >
-            <option value="ALL">전체</option>
-            {Object.entries(labels).map(([key, label]) => (
-              <option key={key} value={key}>
-                {label}
-              </option>
-            ))}
-          </select>
-        </label>
+        {!archive && (
+          <label>
+            처리 상태
+            <select
+              disabled={!!busy}
+              value={status}
+              onChange={(event) => {
+                setStatus(event.target.value as Status | "ALL");
+                setOffset(0);
+                setSelected(null);
+              }}
+            >
+              <option value="ALL">전체</option>
+              {Object.entries(labels).map(([key, label]) => (
+                <option key={key} value={key}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <label className="review-search">
           공고 검색
           <input
+            disabled={!!busy}
             value={search}
             maxLength={100}
             placeholder="회사명, 공고명, 공고번호"
             onChange={(event) => setSearch(event.target.value)}
           />
         </label>
-        <button type="submit">검색</button>
+        <button type="submit" disabled={!!busy}>
+          검색
+        </button>
         <button
           type="button"
           onClick={() => void load()}
@@ -214,6 +260,15 @@ export function ExtractionReviewBoard() {
         >
           새로고침
         </button>
+        {!!data.expiredOpenCount && (
+          <button
+            type="button"
+            disabled={loading || !!busy}
+            onClick={() => void passExpired()}
+          >
+            마감일 지난 공고 넘기기 ({data.expiredOpenCount}개)
+          </button>
+        )}
       </form>
       {error && (
         <p role="alert" className="career-error">
@@ -257,6 +312,11 @@ export function ExtractionReviewBoard() {
                     <span className="review-posting-meta">
                       {item.site} / {item.postingNo}
                     </span>
+                    {item.deadline && (
+                      <span className="review-posting-meta">
+                        마감일 {item.deadline.slice(0, 10)}
+                      </span>
+                    )}
                     {link && (
                       <a href={link} target="_blank" rel="noopener noreferrer">
                         공고 원문
@@ -293,30 +353,57 @@ export function ExtractionReviewBoard() {
                     </time>
                   </div>
                   <div className="review-row-actions">
-                    <button
-                      type="button"
-                      onClick={() => void act(item, "PASS")}
-                      disabled={locked}
-                    >
-                      넘기기 (PASS)
-                    </button>
-                    <button
-                      type="button"
-                      className="review-primary"
-                      onClick={() => {
-                        setSelected(item.id);
-                        setFeedback(item.feedback);
-                        setError("");
-                      }}
-                      disabled={locked}
-                    >
-                      재추출 피드백
-                    </button>
+                    {item.status === "OPEN" ? (
+                      <>
+                        <button
+                          type="button"
+                          className="review-primary"
+                          onClick={() => void act(item, "APPROVE")}
+                          disabled={
+                            locked || item.deadlinePassed || item.sourceClosed
+                          }
+                        >
+                          정상 등록
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void act(item, "PASS")}
+                          disabled={locked}
+                        >
+                          넘기기 (PASS)
+                        </button>
+                        <button
+                          type="button"
+                          className="review-primary"
+                          onClick={() => {
+                            setSelected(item.id);
+                            setFeedback(item.feedback);
+                            setError("");
+                          }}
+                          disabled={
+                            locked || item.deadlinePassed || item.sourceClosed
+                          }
+                        >
+                          재추출 피드백
+                        </button>
+                        {(item.deadlinePassed || item.sourceClosed) && (
+                          <p>마감 공고, 넘김 처리 대상</p>
+                        )}
+                      </>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => void act(item, "RESTORE")}
+                        disabled={!!busy}
+                      >
+                        검토 대기로 되돌리기
+                      </button>
+                    )}
                   </div>
                 </div>
                 {item.feedback && selected !== item.id && (
                   <p className="review-saved-feedback">
-                    <strong>최근 피드백</strong>
+                    <strong>최근 피드백, 처리 메모</strong>
                     {item.feedback}
                   </p>
                 )}

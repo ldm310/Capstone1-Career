@@ -15,6 +15,7 @@ export function JobListRow({
   onToggle,
   showCategory = true,
   showWorkplace = true,
+  onOpen,
 }: {
   job: PublicJob;
   href: string;
@@ -24,6 +25,7 @@ export function JobListRow({
   onToggle?: () => void;
   showCategory?: boolean;
   showWorkplace?: boolean;
+  onOpen?: () => void;
 }) {
   return (
     <article className="public-job-card job-list-row card-click">
@@ -40,7 +42,12 @@ export function JobListRow({
       </div>
       <div className="job-list-main">
         <h3>
-          <Link className="card-link" href={href} title={job.title}>
+          <Link
+            className="card-link"
+            href={href}
+            title={job.title}
+            onNavigate={onOpen}
+          >
             {job.title}
           </Link>
         </h3>
@@ -65,7 +72,11 @@ export function JobListRow({
             ? `${new Date(job.closesAt).toLocaleDateString("ko-KR")} 마감`
             : "마감일 미등록"}
         </div>
-        <Link className="public-job-source" href={statsHref}>
+        <Link
+          className="public-job-source"
+          href={statsHref}
+          onNavigate={onOpen}
+        >
           역량 분석
         </Link>
         {onToggle && (

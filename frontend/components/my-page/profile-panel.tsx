@@ -249,7 +249,10 @@ export function ProfilePanel() {
               next: f.get("next"),
             });
             form.reset();
-            setPasswordStatus({ text: "비밀번호를 바꿨어요.", error: false });
+            setPasswordStatus({
+              text: "비밀번호가 변경됐습니다. 다른 기기의 로그인이 종료됐습니다.",
+              error: false,
+            });
           } catch (err) {
             setPasswordStatus({ text: readable(err), error: true });
           }

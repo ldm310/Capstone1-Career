@@ -12,8 +12,7 @@ import {
 } from "@/lib/server/store";
 import { github, jobAnalysis } from "@/lib/server/analyze";
 import { dummyJobs, postingText } from "@/lib/dummy-jobs";
-import { backendJobs } from "@/lib/server/backend-jobs";
-import type { PostingSection } from "@/types/public-job";
+import { backendJobBySourceUrl } from "@/lib/server/backend-jobs";
 export const runtime = "nodejs";
 export async function POST(req: Request) {
   try {
@@ -39,10 +38,7 @@ export async function POST(req: Request) {
       // 더미 공고는 원문이 없고, 백엔드 공고는 이미 추출한 본문이 있으므로 그 본문으로 분석한다.
       const dummy =
         dummyJobs.find((j) => j.url === input.url) ??
-        (await backendJobs()).find(
-          (j): j is typeof j & { posting: PostingSection[] } =>
-            !!input.url && j.url === input.url && !!j.posting?.length,
-        );
+        (await backendJobBySourceUrl(input.url));
       const job = dummy
         ? {
             ...(await jobAnalysis(

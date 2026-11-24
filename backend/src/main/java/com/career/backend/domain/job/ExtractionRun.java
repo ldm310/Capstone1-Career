@@ -40,6 +40,11 @@ public class ExtractionRun {
     @Column(name = "is_current", nullable = false)
     private boolean current;
 
+    @Column(name = "review_result")
+    private String reviewResult;
+
+    public String getReviewResult() { return reviewResult; }
+
     @Column(name = "run_at", nullable = false)
     private OffsetDateTime runAt;
 

@@ -19,7 +19,15 @@ export async function mockPublicJobs(page: Page) {
       role = p.get("role"),
       id = p.get("id");
     const jobs = fixtureJobs.filter((job) =>
-      id ? job.id === id : role === "all" || job.category === role,
+      id
+        ? job.id === id
+        : (role === "all" || job.category === role) &&
+          `${job.company} ${job.title} ${(job.skills || []).join(" ")}`
+            .toLowerCase()
+            .includes((p.get("q") || "").trim().toLowerCase()) &&
+          job.location
+            .toLowerCase()
+            .includes((p.get("location") || "").toLowerCase()),
     );
     await route.fulfill({
       json: {

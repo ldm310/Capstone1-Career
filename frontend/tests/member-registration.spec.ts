@@ -50,6 +50,7 @@ test("registration persists optional fields and credentials in RDS", async ({
     await page.getByLabel("이름", { exact: true }).fill("가입 검증");
     await page.getByLabel("이메일", { exact: true }).fill(email);
     await page.getByLabel("비밀번호", { exact: true }).fill(password);
+    await page.getByLabel("비밀번호 확인", { exact: true }).fill(password);
     await page.getByLabel("나이 (선택)", { exact: true }).fill("24");
     await page.getByLabel("학교 (선택)", { exact: true }).fill("검증대학교");
     await page.getByLabel("학과 (선택)", { exact: true }).fill("컴퓨터공학과");

@@ -83,14 +83,16 @@ export function Header() {
               관리자
             </Link>
           )}
-          <Link
-            className="mobile-only"
-            href="/my-page"
-            aria-current={pathname === "/my-page" ? "page" : undefined}
-            onClick={() => setOpen(false)}
-          >
-            마이페이지
-          </Link>
+          {account && (
+            <Link
+              className="mobile-only"
+              href="/my-page"
+              aria-current={pathname === "/my-page" ? "page" : undefined}
+              onClick={() => setOpen(false)}
+            >
+              마이페이지
+            </Link>
+          )}
         </nav>
         <div className="header-actions">
           {account ? (
@@ -108,13 +110,6 @@ export function Header() {
             </>
           ) : (
             <>
-              <Link
-                className="header-user"
-                href="/my-page"
-                aria-current={pathname === "/my-page" ? "page" : undefined}
-              >
-                마이페이지
-              </Link>
               <Link className="header-login" href="/sign-in">
                 로그인
               </Link>

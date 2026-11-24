@@ -15,6 +15,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
+import java.time.LocalDate;
+import java.time.ZoneId;
 
 @Service
 @Transactional(readOnly = true)
@@ -53,9 +55,17 @@ public class PostingQueryService {
 
         Specification<Posting> spec = (root, query, cb) -> cb.conjunction();
 
-        if (status != null) {
-            spec = spec.and((root, query, cb) ->
-                    cb.equal(root.get("status"), status));
+        LocalDate today = LocalDate.now(ZoneId.of("Asia/Seoul"));
+        if (Posting.CLOSED.equals(status)) {
+            spec = spec.and((root, query, cb) -> cb.or(cb.equal(root.get("status"), Posting.CLOSED), cb.lessThan(root.get("deadline"), today)));
+        } else {
+            spec = spec.and((root, query, cb) -> cb.and(cb.equal(root.get("status"), Posting.OPEN), cb.or(cb.isNull(root.get("deadline")), cb.greaterThanOrEqualTo(root.get("deadline"), today))));
+            spec = spec.and((root, query, cb) -> {
+                var excluded = query.subquery(Long.class);
+                var run = excluded.from(ExtractionRun.class);
+                excluded.select(run.get("postingId")).where(cb.equal(run.get("postingId"),root.get("id")), cb.isTrue(run.get("current")), cb.equal(run.get("reviewResult"),"제외"));
+                return cb.not(cb.exists(excluded));
+            });
         }
 
         if (keyword != null && !keyword.isBlank()) {
@@ -144,6 +154,8 @@ public class PostingQueryService {
 
     private Posting findPosting(Long postingId) {
         return postingRepository.findById(postingId)
+                .filter(posting -> Posting.OPEN.equals(posting.getStatus()))
+                .filter(posting -> !extractionTreeLoader.isExcluded(postingId))
                 .orElseThrow(() ->
                         new NotFoundException("채용공고를 찾을 수 없습니다.")
                 );

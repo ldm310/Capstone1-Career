@@ -29,6 +29,7 @@ test("admin permissions and review UI use extraction-run decisions without mutat
   let subject: string | undefined;
   await db.connect();
   try {
+    expect((await anon.get("/api/admin/closed-postings")).status()).toBe(401);
     expect((await anon.get("/api/admin/extraction-reviews")).status()).toBe(
       401,
     );
@@ -49,6 +50,9 @@ test("admin permissions and review UI use extraction-run decisions without mutat
     expect(registration.status()).toBe(200);
     subject = (await registration.json()).user.id;
     expect(
+      (await page.request.get("/api/admin/closed-postings")).status(),
+    ).toBe(403);
+    expect(
       (await page.request.get("/api/admin/extraction-reviews")).status(),
     ).toBe(403);
     expect(
@@ -64,6 +68,30 @@ test("admin permissions and review UI use extraction-run decisions without mutat
       [namespace, subject],
     );
     const live = await page.request.get("/api/admin/extraction-reviews");
+    const closed = await page.request.get("/api/admin/closed-postings");
+    expect(closed.status()).toBe(200);
+    const closedData = await closed.json();
+    expect(closedData.total).toBeGreaterThan(0);
+    await page.goto("/admin?tab=closed");
+    await expect(
+      page.getByRole("heading", { name: "마감 공고", exact: true }),
+    ).toBeVisible();
+    await expect(page.locator(".closed-postings-list article")).toHaveCount(
+      Math.min(20, closedData.total),
+    );
+    for (const width of [1440, 390, 320]) {
+      await page.setViewportSize({ width, height: 1000 });
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= innerWidth,
+        ),
+      ).toBe(true);
+      await page.screenshot({
+        path: `work/closed-postings-${width}.png`,
+        fullPage: true,
+      });
+    }
+    await page.setViewportSize({ width: 1440, height: 1000 });
     expect(live.status()).toBe(200);
     expect((await live.json()).storage).toBe("extraction_run");
     expect(
@@ -103,6 +131,7 @@ test("admin permissions and review UI use extraction-run decisions without mutat
       title: `검토 공고 ${index + 1}`,
       sourceUrl: "",
       status: "OPEN",
+      deadlinePassed: false,
       feedback: "",
       updatedAt: new Date().toISOString(),
       revision: "a".repeat(32),
@@ -112,11 +141,28 @@ test("admin permissions and review UI use extraction-run decisions without mutat
     }));
     await page.route("**/api/admin/extraction-reviews**", async (route) => {
       const request = route.request();
-      if (request.method() === "PATCH") {
+      if (request.method() === "POST") {
+        expect(request.postDataJSON().action).toBe("PASS_EXPIRED");
+        const expired = items.filter(
+          (item) => item.status === "OPEN" && item.deadlinePassed,
+        );
+        expired.forEach((item) => {
+          item.status = "SKIPPED";
+          item.feedback = "마감일 경과로 넘김";
+        });
+        await route.fulfill({ json: { ok: true, updated: expired.length } });
+      } else if (request.method() === "PATCH") {
         const body = request.postDataJSON();
         expect(body.revision).toMatch(/^[a-f0-9]{32}$/);
         const item = items.find((item) => item.id === body.id)!;
-        item.status = body.action === "PASS" ? "SKIPPED" : "RETRY_REQUESTED";
+        item.status = (
+          {
+            PASS: "SKIPPED",
+            RETRY: "RETRY_REQUESTED",
+            APPROVE: "RESOLVED",
+            RESTORE: "OPEN",
+          } as Record<string, string>
+        )[body.action];
         item.feedback = body.feedback;
         await route.fulfill({ json: { ok: true, status: item.status } });
       } else {
@@ -132,6 +178,9 @@ test("admin permissions and review UI use extraction-run decisions without mutat
             total: visible.length,
             nextOffset: null,
             lastPipelineAt: null,
+            expiredOpenCount: items.filter(
+              (item) => item.status === "OPEN" && item.deadlinePassed,
+            ).length,
             counts: Object.fromEntries(
               ["OPEN", "SKIPPED", "RETRY_REQUESTED", "RESOLVED"].map(
                 (status) => [
@@ -159,14 +208,42 @@ test("admin permissions and review UI use extraction-run decisions without mutat
       .click();
     await expect(page.locator(".review-success")).toContainText("제외로 저장");
     await expect(page.locator(".review-row")).toHaveCount(1);
-    await page
-      .getByRole("combobox", { name: "처리 상태", exact: true })
-      .selectOption("SKIPPED");
+    await page.getByRole("link", { name: "넘긴 공고", exact: true }).click();
+    await expect(page).toHaveURL(/tab=skipped/);
     await expect(
       page
         .locator(".review-row")
         .getByRole("button", { name: "재추출 피드백", exact: true }),
-    ).toBeDisabled();
+    ).toHaveCount(0);
+    await page
+      .getByRole("button", { name: "검토 대기로 되돌리기", exact: true })
+      .click();
+    await expect(page.locator(".review-row")).toHaveCount(0);
+    await page.getByRole("link", { name: "추출 검토", exact: true }).click();
+    await expect(page.locator(".review-row")).toHaveCount(2);
+    await page
+      .locator(".review-row")
+      .first()
+      .getByRole("button", { name: "정상 등록", exact: true })
+      .click();
+    await expect(page.locator(".review-success")).toContainText(
+      "정상으로 등록",
+    );
+    await page
+      .getByRole("combobox", { name: "처리 상태", exact: true })
+      .selectOption("RESOLVED");
+    await expect(page.locator(".review-row")).toHaveCount(1);
+    await page
+      .getByRole("button", { name: "검토 대기로 되돌리기", exact: true })
+      .click();
+    await page
+      .getByRole("combobox", { name: "처리 상태", exact: true })
+      .selectOption("OPEN");
+    await page
+      .locator(".review-row")
+      .first()
+      .getByRole("button", { name: "넘기기 (PASS)", exact: true })
+      .click();
     await page
       .getByRole("combobox", { name: "처리 상태", exact: true })
       .selectOption("OPEN");
@@ -197,6 +274,41 @@ test("admin permissions and review UI use extraction-run decisions without mutat
         ),
       ).toBe(true);
     }
+    items.push({
+      ...items[0],
+      id: "1003",
+      status: "OPEN",
+      deadlinePassed: true,
+      feedback: "",
+    });
+    await page.reload();
+    await expect(
+      page.getByRole("button", { name: "정상 등록", exact: true }),
+    ).toBeDisabled();
+    await expect(
+      page.getByRole("button", { name: "재추출 피드백", exact: true }),
+    ).toBeDisabled();
+    await page
+      .getByRole("button", {
+        name: "마감일 지난 공고 넘기기 (1개)",
+        exact: true,
+      })
+      .click();
+    await expect(page.locator(".review-success")).toContainText(
+      "1개 공고를 넘김 처리",
+    );
+    await page.getByRole("link", { name: "넘긴 공고", exact: true }).click();
+    await expect(page.locator(".review-row")).toHaveCount(2);
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.screenshot({
+      path: "work/admin-skipped-restore-desktop.png",
+      fullPage: true,
+    });
+    await page.setViewportSize({ width: 390, height: 1000 });
+    await page.screenshot({
+      path: "work/admin-skipped-restore-mobile.png",
+      fullPage: true,
+    });
     await page.route("**/api/admin/extraction-reviews**", (route) =>
       route.fulfill({ status: 503, json: { error: "검토 목록 연결 실패" } }),
     );

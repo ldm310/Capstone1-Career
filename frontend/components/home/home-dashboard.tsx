@@ -13,16 +13,16 @@ export function HomeDashboard() {
         <SkyBackground className="home-sky-photo" />
         <div className="home-width home-greeting-copy">
           <span className="sky-eyebrow">CAREER</span>
-          <h1>채용공고 기반 역량 분석</h1>
+          <h1>채용 공고 기반 역량 분석</h1>
           <p>
-            GitHub와 PDF 이력서의 경험을 채용공고의 역량 키워드와 비교합니다.
+            GitHub와 PDF 이력서의 경험을 채용 공고의 역량 키워드와 비교합니다.
           </p>
           <div className="home-greeting-actions">
             <Link className="cta" href="/analysis">
               자료 분석
             </Link>
-            <Link className="cta cta-secondary" href="/experience">
-              역량 체험하기
+            <Link className="cta cta-secondary" href="/comparison">
+              역량 비교 해보기
             </Link>
           </div>
         </div>
@@ -49,7 +49,7 @@ export function HomeDashboard() {
             <header>
               <div>
                 <span className="home-panel-eyebrow">02 JOBS</span>
-                <h2>채용공고</h2>
+                <h2>채용 공고</h2>
               </div>
             </header>
             <p>

@@ -5,12 +5,16 @@ import {
   kakaoIdentity,
   KakaoServiceError,
 } from "@/lib/server/kakao";
-import { session } from "@/lib/server/store";
+import { session, logout } from "@/lib/server/store";
+import { beginKakaoRegistration } from "@/lib/server/kakao-registration";
+import { loginDestination } from "@/lib/login-destination";
 export const runtime = "nodejs";
 export async function GET(request: Request) {
   const params = new URL(request.url).searchParams,
     jar = await cookies();
   const saved = jar.get("career_kakao_state")?.value;
+  const destination = loginDestination(jar.get("career_login_next")?.value);
+  jar.delete("career_login_next");
   jar.set("career_kakao_state", "", {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
@@ -26,7 +30,13 @@ export async function GET(request: Request) {
     ? new URL(config.redirect).origin
     : new URL(request.url).origin;
   const fail = (error: string) =>
-    Response.redirect(new URL(`/sign-in?error=${error}`, base), 303);
+    Response.redirect(
+      new URL(
+        "/sign-in?" + new URLSearchParams({ error, next: destination }),
+        base,
+      ),
+      303,
+    );
   const state = params.get("state");
   if (
     !saved ||
@@ -40,9 +50,21 @@ export async function GET(request: Request) {
   const code = params.get("code");
   if (!code || code.length > 2000) return fail("kakao_failed");
   try {
-    const id = await kakaoIdentity(code);
-    await session(id);
-    return Response.redirect(new URL("/analysis", base), 303);
+    const identity = await kakaoIdentity(code);
+    if (identity.type === "registration") {
+      await logout();
+      await beginKakaoRegistration(identity.identity);
+      return Response.redirect(
+        new URL(
+          "/sign-in?" +
+            new URLSearchParams({ provider: "kakao", next: destination }),
+          base,
+        ),
+        303,
+      );
+    }
+    await session(identity.id, identity.password);
+    return Response.redirect(new URL(destination, base), 303);
   } catch (error) {
     if (error instanceof KakaoServiceError) {
       console.error("Kakao login failed", {

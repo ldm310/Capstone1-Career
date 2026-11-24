@@ -11,6 +11,7 @@ import { reviewDatabase } from "@/lib/server/extraction-review";
 import {
   listExtractionReviews,
   decideExtractionReview,
+  passExpiredExtractionReviews,
 } from "@/lib/server/extraction-review-queries";
 
 export const runtime = "nodejs";
@@ -71,7 +72,7 @@ export async function PATCH(request: Request) {
       .object({
         id: z.string().regex(/^\d{1,19}$/),
         revision: z.string().regex(/^[a-f0-9]{32}$/),
-        action: z.enum(["PASS", "RETRY"]),
+        action: z.enum(["PASS", "RETRY", "APPROVE", "RESTORE"]),
         feedback: z.string().trim().max(2000).default(""),
       })
       .safeParse(await jsonBody(request));
@@ -83,17 +84,54 @@ export async function PATCH(request: Request) {
       return fail("해당 추출 결과를 찾을 수 없습니다.", 404);
     if (result === "conflict")
       return fail(
-        "이미 검토됐거나 새로운 추출 결과가 있습니다. 목록을 새로고침해 주세요.",
+        "공고가 마감됐거나 이미 검토 또는 재추출됐습니다. 목록을 새로고침해 주세요.",
         409,
       );
     return Response.json(
       {
         ok: true,
-        status: input.data.action === "PASS" ? "SKIPPED" : "RETRY_REQUESTED",
+        status: {
+          PASS: "SKIPPED",
+          RETRY: "RETRY_REQUESTED",
+          APPROVE: "RESOLVED",
+          RESTORE: "OPEN",
+        }[input.data.action],
       },
       { headers },
     );
   } catch {
     return fail("처리 내용을 저장하지 못했습니다.", 503);
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    const current = await administrator();
+    if (!current)
+      return fail(
+        current === null
+          ? "로그인이 필요합니다."
+          : "관리자만 처리할 수 있습니다.",
+        current === null ? 401 : 403,
+      );
+    try {
+      originCheck(request);
+    } catch {
+      return fail("요청 출처를 확인해 주세요.", 403);
+    }
+    const input = z
+      .object({ action: z.literal("PASS_EXPIRED") })
+      .safeParse(await jsonBody(request));
+    if (!input.success) return fail("처리 내용을 확인해 주세요.", 400);
+    rateLimit("extraction-review:" + current.id, 60);
+    return Response.json(
+      {
+        ok: true,
+        updated: await passExpiredExtractionReviews(reviewDatabase()),
+      },
+      { headers },
+    );
+  } catch {
+    return fail("마감 공고를 넘김 처리하지 못했습니다.", 503);
   }
 }

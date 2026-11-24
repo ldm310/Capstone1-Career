@@ -6,6 +6,7 @@ import path from "node:path";
 import {
   listExtractionReviews,
   decideExtractionReview,
+  passExpiredExtractionReviews,
 } from "../lib/server/extraction-review-queries";
 
 test("review queries use only extraction_run and the three granted update columns", async () => {
@@ -212,6 +213,83 @@ test("review queries use only extraction_run and the three granted update column
     expect((await listExtractionReviews(reader, "RESOLVED", "", 0)).total).toBe(
       1,
     );
+    const normal = (await listExtractionReviews(reader, "OPEN", "55000006", 0))
+      .items[0];
+    expect(
+      await decideExtractionReview(reader, {
+        id: normal.id,
+        revision: normal.revision,
+        action: "APPROVE",
+        feedback: "",
+      }),
+    ).toBe("saved");
+    const approved = (
+      await listExtractionReviews(reader, "RESOLVED", "55000006", 0)
+    ).items[0];
+    expect(approved.reviewResult).toBe("정상");
+    expect(
+      await decideExtractionReview(reader, {
+        id: normal.id,
+        revision: approved.revision,
+        action: "RESTORE",
+        feedback: "",
+      }),
+    ).toBe("saved");
+    const restored = (
+      await listExtractionReviews(reader, "OPEN", "55000006", 0)
+    ).items[0];
+    expect(restored.revision).not.toBe(normal.revision);
+    expect(
+      await decideExtractionReview(reader, {
+        id: normal.id,
+        revision: normal.revision,
+        action: "APPROVE",
+        feedback: "",
+      }),
+    ).toBe("conflict");
+    const skipped = (
+      await listExtractionReviews(reader, "SKIPPED", "55000000", 0)
+    ).items[0];
+    expect(
+      await decideExtractionReview(reader, {
+        id: skipped.id,
+        revision: skipped.revision,
+        action: "RESTORE",
+        feedback: "",
+      }),
+    ).toBe("saved");
+    expect(
+      (await listExtractionReviews(reader, "OPEN", "55000000", 0)).total,
+    ).toBe(1);
+    await db.query(
+      "UPDATE posting SET deadline=(now() AT TIME ZONE 'Asia/Seoul')::date-1 WHERE id=(SELECT posting_id FROM extraction_run WHERE id=$1)",
+      [ids[7]],
+    );
+    const expired = (await listExtractionReviews(reader, "OPEN", "55000007", 0))
+      .items[0];
+    expect(expired.deadlinePassed).toBe(true);
+    expect(
+      await decideExtractionReview(reader, {
+        id: expired.id,
+        revision: expired.revision,
+        action: "APPROVE",
+        feedback: "",
+      }),
+    ).toBe("conflict");
+    expect(
+      await decideExtractionReview(reader, {
+        id: expired.id,
+        revision: expired.revision,
+        action: "RETRY",
+        feedback: "다시 추출해 주세요",
+      }),
+    ).toBe("conflict");
+    expect(await passExpiredExtractionReviews(reader)).toBe(1);
+    expect(await passExpiredExtractionReviews(reader)).toBe(0);
+    expect(
+      (await listExtractionReviews(reader, "SKIPPED", "55000007", 0)).items[0]
+        .feedback,
+    ).toBe("마감일 경과로 넘김");
     const cleanup = readFileSync(
       path.resolve("../deploy/web/retire-extraction-review.sql"),
       "utf8",

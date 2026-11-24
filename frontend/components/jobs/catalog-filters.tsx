@@ -70,9 +70,21 @@ export function CatalogFilters({
             <input
               aria-label="지역 검색"
               placeholder="예: 서울, Seoul"
-              value={location}
+              value={location === "unknown" ? "" : location}
+              disabled={location === "unknown"}
               onChange={(e) => setLocation(e.target.value)}
             />
+          </label>
+          <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <input
+              style={{ width: 16, height: 16 }}
+              type="checkbox"
+              checked={location === "unknown"}
+              onChange={(event) =>
+                setLocation(event.target.checked ? "unknown" : "")
+              }
+            />
+            지역 정보 없음
           </label>
           <label>
             근무 방식
@@ -85,9 +97,14 @@ export function CatalogFilters({
               <option value="remote">원격</option>
               <option value="hybrid">혼합</option>
               <option value="on-site">사무실</option>
+              <option value="unknown">정보 없음</option>
             </select>
           </label>
         </div>
+        <p>
+          공고 원문에 명시된 정보로 검색합니다. 정보가 없는 공고는 조건 검색에서
+          제외됩니다.
+        </p>
       </details>
       <button
         type="button"

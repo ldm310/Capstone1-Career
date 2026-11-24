@@ -1,12 +1,14 @@
 import { classifyJobRole, type SupportedRole } from "@/lib/roles";
+import { openPostingSql } from "./posting-metadata-sql";
+import { parsePostingMetadata } from "./posting-metadata";
 import {
   unknownLocation,
   type PostingSection,
   type PublicJob,
 } from "@/types/public-job";
 
-// 백엔드(Spring) 채용공고 API를 프론트 공고 형식으로 바꾼다.
-// BACKEND_URL이 없거나 백엔드가 응답하지 않으면 빈 목록을 돌려 기존 공고만 보여준다.
+// 백엔드(Spring) 채용 공고 API를 프론트 공고 형식으로 바꾼다.
+// 목록 검색은 job-catalog.ts의 DB 페이지 조회, 상세는 이 어댑터를 사용한다.
 
 // 백엔드 응답 형식: backend/src/main/java/com/career/backend/domain/posting/*Response.java
 export interface BackendPage<T> {
@@ -55,30 +57,67 @@ export function backendUrl() {
   return process.env.BACKEND_URL?.replace(/\/+$/, "") || null;
 }
 
-// 상세 링크는 목록의 최근 200개 제한과 관계없이 원래 ID로 조회한다.
+// 상세 링크는 공고 ID로 직접 조회한다.
 export async function backendJob(postingId: number): Promise<PublicJob | null> {
   if (!Number.isSafeInteger(postingId) || postingId < 1)
     throw new Error("잘못된 공고 ID입니다.");
   const base = backendUrl();
   if (!base) throw new Error("BACKEND_URL이 없어요.");
+  let metadata: ReturnType<typeof parsePostingMetadata> | undefined;
+  if (process.env.CAREER_PROFILE_DATABASE_URL) {
+    const pool = (await import("./posting-levels")).profilePool();
+    const result = await pool!.query(
+      `SELECT body_html FROM public.posting p WHERE p.id=$1 AND ${openPostingSql("p")}`,
+      [postingId],
+    );
+    if (!result.rowCount) return null;
+    metadata = parsePostingMetadata(result.rows[0].body_html || "");
+  }
   const response = await fetch(`${base}/api/postings/${postingId}`, {
     signal: AbortSignal.timeout(5000),
     cache: "no-store",
   });
   if (response.status === 404) return null;
   if (!response.ok) throw new Error(`백엔드 응답 ${response.status}`);
-  return toPublicJob((await response.json()) as BackendPostingDetail);
+  const job = toPublicJob((await response.json()) as BackendPostingDetail);
+  return job && metadata
+    ? {
+        ...job,
+        location: metadata.location || unknownLocation,
+        workplace: metadata.workplace,
+      }
+    : job;
 }
 
-async function get<T>(path: string): Promise<T> {
-  const base = backendUrl();
-  if (!base) throw new Error("BACKEND_URL이 없어요.");
-  const response = await fetch(base + path, {
-    signal: AbortSignal.timeout(5000),
-    cache: "no-store",
-  });
-  if (!response.ok) throw new Error(`백엔드 응답 ${response.status}`);
-  return response.json() as Promise<T>;
+// The legacy job-analysis form resolves a single source URL without loading a list.
+export async function backendJobBySourceUrl(
+  value: string,
+): Promise<(PublicJob & { posting: PostingSection[] }) | null> {
+  let source: URL;
+  try {
+    source = new URL(value);
+  } catch {
+    return null;
+  }
+  const postingNo = source.searchParams.get("rec_idx");
+  if (
+    source.protocol !== "https:" ||
+    source.hostname !== "www.saramin.co.kr" ||
+    !postingNo ||
+    !/^[0-9]+$/.test(postingNo)
+  )
+    return null;
+  const { profilePool } = await import("./posting-levels");
+  const database = profilePool();
+  if (!database) return null;
+  const { rows } = await database.query(
+    "SELECT id FROM public.posting WHERE site IN ('사람인','saramin') AND site_posting_no=$1 LIMIT 1",
+    [postingNo],
+  );
+  const job = rows[0]
+    ? await backendJob(Number(rows[0].id)).catch(() => null)
+    : null;
+  return job?.posting?.length ? { ...job, posting: job.posting } : null;
 }
 
 // 프론트가 다루는 직무(데이터, 백엔드)만 남긴다. 제목을 먼저 보고, 없으면 사람인 직무 분류를 본다.
@@ -168,48 +207,4 @@ export function toPublicJob(p: BackendPostingDetail): PublicJob | null {
     skills: postingSkills(p),
     posting: postingSections(p),
   };
-}
-
-// 진행 중 공고를 최대 200개까지 읽고, 상세(추출 결과)를 8개씩 나눠 받는다.
-async function load(): Promise<PublicJob[]> {
-  const summaries: BackendPostingSummary[] = [];
-  for (let page = 0; page < 2; page++) {
-    const data = await get<BackendPage<BackendPostingSummary>>(
-      `/api/postings?status=${encodeURIComponent("진행")}&page=${page}&size=100`,
-    );
-    summaries.push(...data.content);
-    if (page + 1 >= data.totalPages) break;
-  }
-  const wanted = summaries.filter((s) => role(s));
-  const jobs: PublicJob[] = [];
-  for (let i = 0; i < wanted.length; i += 8) {
-    const details = await Promise.all(
-      wanted
-        .slice(i, i + 8)
-        .map((s) =>
-          get<BackendPostingDetail>(`/api/postings/${s.postingId}`).catch(
-            () => null,
-          ),
-        ),
-    );
-    for (const d of details) {
-      const job = d && toPublicJob(d);
-      if (job) jobs.push(job);
-    }
-  }
-  return jobs;
-}
-
-// at: 이 시각까지 캐시를 쓴다.
-let cache: { at: number; jobs: PublicJob[] } | null = null;
-// 5분 동안 같은 결과를 쓴다. 실패하면 마지막 결과(없으면 빈 목록)를 쓰고 30초 뒤에 다시 시도한다.
-export async function backendJobs(): Promise<PublicJob[]> {
-  if (!backendUrl()) return [];
-  if (cache && Date.now() < cache.at) return cache.jobs;
-  try {
-    cache = { at: Date.now() + 300_000, jobs: await load() };
-  } catch {
-    cache = { at: Date.now() + 30_000, jobs: cache?.jobs ?? [] };
-  }
-  return cache.jobs;
 }

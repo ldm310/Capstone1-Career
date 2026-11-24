@@ -27,6 +27,9 @@ class PostingControllerTest {
     @Autowired
     private JdbcTemplate jdbc;
 
+    @Autowired
+    private jakarta.persistence.EntityManager entityManager;
+
     private MockMvc mockMvc;
 
     @BeforeEach
@@ -39,8 +42,8 @@ class PostingControllerTest {
     void 공고_목록을_검색어와_상태로_거른다() throws Exception {
         mockMvc.perform(get("/api/postings"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.totalElements").value(2))
-                .andExpect(jsonPath("$.content[0].postingId").value(2));
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.content[0].postingId").value(1));
 
         mockMvc.perform(get("/api/postings")
                         .param("keyword", "백엔드")
@@ -50,7 +53,31 @@ class PostingControllerTest {
                 .andExpect(jsonPath("$.content[0].companyName").value("커리어컴퍼니"));
 
         mockMvc.perform(get("/api/postings").param("keyword", "커리어"))
-                .andExpect(jsonPath("$.totalElements").value(2));
+                .andExpect(jsonPath("$.totalElements").value(1));
+    }
+
+    @Test
+    void 마감일_경과와_원문_마감을_같은_기준으로_분리하고_당일은_유지한다() throws Exception {
+        var today = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Seoul"));
+        jdbc.update("update public.posting set deadline=? where id=1", today.minusDays(1));
+        mockMvc.perform(get("/api/postings")).andExpect(jsonPath("$.totalElements").value(0));
+        mockMvc.perform(get("/api/postings").param("status","마감")).andExpect(jsonPath("$.totalElements").value(2));
+        mockMvc.perform(get("/api/postings/1")).andExpect(status().isNotFound());
+        jdbc.update("update public.posting set deadline=? where id=1",today);
+        entityManager.clear();
+        mockMvc.perform(get("/api/postings")).andExpect(jsonPath("$.totalElements").value(1));
+        mockMvc.perform(get("/api/postings/1")).andExpect(status().isOk());
+    }
+
+    @Test
+    void 넘긴_공고는_목록과_상세에서_빠지고_정상_등록하면_복원된다() throws Exception {
+        jdbc.update("update public.extraction_run set review_result='제외' where id=1");
+        mockMvc.perform(get("/api/postings")).andExpect(jsonPath("$.totalElements").value(0));
+        mockMvc.perform(get("/api/postings/1")).andExpect(status().isNotFound());
+        jdbc.update("update public.extraction_run set review_result='정상' where id=1");
+        entityManager.clear();
+        mockMvc.perform(get("/api/postings")).andExpect(jsonPath("$.totalElements").value(1));
+        mockMvc.perform(get("/api/postings/1")).andExpect(status().isOk());
     }
 
     @Test
@@ -77,6 +104,7 @@ class PostingControllerTest {
 
     @Test
     void 추출되지_않은_공고는_analysis가_null이다() throws Exception {
+        jdbc.update("update public.posting set status='진행' where id=2");
         mockMvc.perform(get("/api/postings/2"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.images", hasSize(0)))

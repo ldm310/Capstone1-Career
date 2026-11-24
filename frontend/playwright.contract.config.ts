@@ -8,6 +8,8 @@ export default defineConfig({
     "backend-api-contract.spec.ts",
     "hiring-cohort.spec.ts",
     "extraction-review-storage.spec.ts",
+    "job-catalog-storage.spec.ts",
+    "posting-metadata.spec.ts",
   ],
   workers: 1,
   reporter: "list",

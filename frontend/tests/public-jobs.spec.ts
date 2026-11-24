@@ -26,7 +26,9 @@ test("job rows paginate, bookmark, persist, filter and link to stats", async ({
     page.getByRole("button", { name: "Backend Engineer 1 저장 취소" }),
   ).toHaveAttribute("aria-pressed", "true");
   await expect(page.locator(".public-job-card")).toHaveCount(7);
-  await expect(page.getByText("모든 공고를 확인했어요.")).toBeVisible();
+  await expect(
+    page.getByRole("navigation", { name: "채용 공고 페이지" }),
+  ).toContainText("1 / 1 페이지");
   // 저장한 공고는 마이페이지에서 본다. 예전 주소도 마이페이지로 보낸다.
   await page.goto("/jobs?tab=saved");
   await expect(page).toHaveURL(/\/my-page$/);
