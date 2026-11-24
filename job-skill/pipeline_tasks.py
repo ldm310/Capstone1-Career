@@ -21,6 +21,7 @@ import collect
 import db_queries
 import notify
 import recheck
+from extraction_review import ReviewQueue
 from db_load import connect
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -80,7 +81,8 @@ def step_collect(run_dir: str, include_pending: bool, max_new: int | None = None
         json.dump(excluded, f, ensure_ascii=False)
     first = {r["rec_idx"] for r in pending}
     new = [r for r in targets if r["rec_idx"] not in first]
-    collect.write_targets(d, pending + new)
+    review = ReviewQueue.configured()
+    collect.write_targets(d, review.targets(pending + new) if review else pending + new)
     out = {"new": len(new), "pending": len(pending), "excluded": len(excluded)}
     if include_pending:
         check, counts = recheck.select_recheck(listed, rows, today)

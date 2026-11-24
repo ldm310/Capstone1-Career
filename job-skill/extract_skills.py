@@ -35,6 +35,7 @@ from capdict import CapDict, check_dictionary, load_dictionary
 from common import IMG_DIR, OUT_DIR, PAGE_DIR, images_by_posting, load_targets
 from html_text import BODY, html_text
 from table_layout import table_text
+from extraction_review import ReviewQueue
 
 PF = os.path.join(OUT_DIR, "page_filter")
 EX = os.path.join(OUT_DIR, "extract")
@@ -358,7 +359,7 @@ def posting_inputs() -> dict[str, dict]:
                     parts.append(tx)
         if parts:
             out[rid] = {"text": "\n\n".join(parts), "kept": kept, "dropped": dropped, "role": t.get("role", ""), "company": t.get("company", ""),
-                        "career": t.get("career", "")}
+                        "career": t.get("career", ""), "title": t.get("title", "")}
     return out
 
 
@@ -531,6 +532,7 @@ def llm_input(inp: dict, extra: str = "") -> str:
     """LLM 에 보내는 입력 글(머리 3줄 + 공고 글). extra 는 다시 부를 때 끝에 붙이는 힌트."""
     return (f"사람인 직무 분류: {inp['role'] or '(모름)'} (참고용, 다른 직무 부문도 모두 정리)\n회사: {inp.get('company') or '(모름)'}\n"
             + (f"사람인 목록 경력 조건: {inp['career']}\n" if inp.get("career") else "") + f"\n{inp['text']}"
+            + (f"\n\n[관리자 검토 피드백]\n{inp['review_feedback']}" if inp.get("review_feedback") else "")
             + (f"\n\n[다시 확인] 앞선 정리에서 아래 문제가 보였다. 고쳐서 다시 정리하라.\n{extra}" if extra else ""))
 
 
@@ -612,10 +614,12 @@ def run_model(client, model: str, effort: str, inputs: dict[str, dict], examples
         stats["sec"] += r["seconds"]
         print(f"  [{model}] {rid}  {count_line(r)}  {r['seconds']:.1f}s  in {r['input_tokens']} out {r['output_tokens']}", flush=True)
 
+    review = ReviewQueue.configured()
+    tickets = {}
     new = []
     for rid, inp in inputs.items():
         path = os.path.join(d, f"{rid}.json")
-        if os.path.exists(path):
+        if os.path.exists(path) and not (review and review.requested(rid)):
             add(rid, json.load(open(path, encoding="utf-8")))
         else:
             new.append((rid, inp))
@@ -631,7 +635,14 @@ def run_model(client, model: str, effort: str, inputs: dict[str, dict], examples
                 nxt = next(queue, None)
                 if nxt is None:
                     break
-                running[pool.submit(extract_one, client, model, effort, nxt[0], nxt[1], examples, pin, pout)] = nxt[0]
+                rid, inp = nxt
+                if review:
+                    ticket = review.begin(rid, inp)
+                    if ticket is None:
+                        continue
+                    tickets[rid] = ticket
+                    inp = {**inp, "review_feedback":ticket["feedback"]}
+                running[pool.submit(extract_one, client, model, effort, rid, inp, examples, pin, pout)] = rid
                 sent += 1
 
         send_more()
@@ -646,9 +657,13 @@ def run_model(client, model: str, effort: str, inputs: dict[str, dict], examples
                     why = fail_reason(e)
                     stats["fail_reasons"][why] = stats["fail_reasons"].get(why, 0) + 1
                     stats["fail_detail"][rid] = why
+                    if review:
+                        review.finish(tickets[rid], why)
                     print(f"  [{model}] {rid}  추출 실패: {type(e).__name__}: {str(e)[:200]}", flush=True)
                     continue
                 json.dump(r, open(os.path.join(d, f"{rid}.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+                if review:
+                    review.finish(tickets[rid], "추출 결과 검토 필요" if review_reasons(r) else None)
                 stats["spent_new"] += r["cost_usd"]
                 stats["done_new"] += 1
                 add(rid, r)

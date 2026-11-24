@@ -15,6 +15,8 @@ import {
 } from "@/lib/server/store";
 import { demoAccount, ensureDemoAccount } from "@/lib/server/demo-account";
 import { profile, profileSchema, saveProfile } from "@/lib/server/user-data";
+import { memberRole } from "@/lib/server/notices";
+import { localAdminEmail } from "@/lib/server/local-admin-login";
 import {
   accountByEmail,
   accountById,
@@ -31,6 +33,7 @@ export async function GET() {
     {
       user: current,
       guest,
+      role: current && !guest ? await memberRole(current.id) : null,
       profile: currentProfile
         ? {
             ...currentProfile,
@@ -65,18 +68,25 @@ export async function POST(req: Request) {
     const input = z
       .object({
         action: z.enum(["login", "register"]),
-        email: z.email().max(200),
-        password: z.string().min(10).max(128),
+        email: z.string().trim().min(1).max(200),
+        password: z.string().min(1).max(128),
         name: z.string().trim().min(1).max(60).optional(),
         age: z.number().int().min(0).max(120).nullable().optional(),
         school: z.string().trim().max(60).optional(),
         major: z.string().trim().max(60).optional(),
       })
       .parse(body);
-    const email = input.email.toLowerCase();
+    const identifier = input.email.toLowerCase();
+    const alias =
+      input.action === "login" ? localAdminEmail(req, identifier) : null;
+    const email = alias || identifier;
+    if (!alias) z.email().max(200).parse(email);
+    if (input.action === "register") z.string().min(10).parse(input.password);
     rateLimit("auth:" + email);
     if (email === demoAccount.email) ensureDemoAccount();
     let found = await accountByEmail(email);
+    if (alias && (!found || (await memberRole(found.id)) !== "ADMIN"))
+      throw new Error("아이디 또는 비밀번호를 확인하세요.");
     if (!found && email === demoAccount.email) {
       const localDemo = db()
         .prepare("SELECT * FROM users WHERE email=?")

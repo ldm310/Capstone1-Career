@@ -1,4 +1,13 @@
 export const featureSections = {
+  admin: {
+    path: "/admin",
+    title: "관리자",
+    description: "공고 추출 검토 및 공지사항 관리",
+    tabs: [
+      ["failures", "추출 검토"],
+      ["notices", "공지사항 관리"],
+    ],
+  },
   experience: {
     path: "/experience",
     title: "역량 체험",
