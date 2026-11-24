@@ -311,6 +311,18 @@ def test_daily_collect_writes_feedback(daily, monkeypatch, tmp_path):
     assert res["다시"] == 1
 
 
+def test_daily_collect_gives_pending_the_list_deadline(daily, monkeypatch, tmp_path):
+    """밀린 공고(검토 '다시' 포함)도 오늘 목록에서 읽은 마감일로 싣는다 — DB 의 옛 마감일을 실어 보내면
+    저장(load) 때 같은 날 목록에서 고친 마감일이 옛 날짜로 되돌아간다. 목록에 없으면 DB 마감일 그대로."""
+    monkeypatch.setattr(daily.db_queries, "pending_postings", lambda conn: [
+        {"rec_idx": "P1", **ROW, "deadline": "2026-11-30", "feedback": "자리를 하나로"},
+        {"rec_idx": "P2", **ROW, "deadline": "2026-11-30", "feedback": ""}])
+    monkeypatch.setattr(daily.collect, "scan_lists", lambda **k: {"P1": item("P1", deadline_text="~12.10(목)")})
+    daily.step_collect(str(tmp_path), include_pending=True)
+    rows = {r["rec_idx"]: r["deadline"] for r in daily.collect.read_targets(str(tmp_path))}
+    assert rows == {"P1": "2026-12-10", "P2": "2026-11-30"}
+
+
 def test_daily_report_counts_sent_back(tmp_path):
     """결과 알림 수집 줄: 밀린 공고 가운데 검토 '다시'가 있으면 그 수를 함께, 없으면 예전 그대로."""
     import pipeline_tasks

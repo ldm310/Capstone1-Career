@@ -83,6 +83,9 @@ def step_collect(run_dir: str, include_pending: bool, max_new: int | None = None
         json.dump(excluded, f, ensure_ascii=False)
     first = {r["rec_idx"] for r in pending}
     new = [r for r in targets if r["rec_idx"] not in first]
+    deadlines = {no: dl for no, it in listed.items() if (dl := collect.parse_deadline(it.get("deadline_text", ""), today))}
+    # 밀린 공고는 DB 에서 읽은 줄이라 마감일이 어제 것 — 목록에 보이면 오늘 마감일로 싣는다(저장 때 옛 날짜로 되돌리지 않게)
+    pending = [{**r, "deadline": deadlines[r["rec_idx"]].isoformat()} if r["rec_idx"] in deadlines else r for r in pending]
     collect.write_targets(d, pending + new)
     out = {"new": len(new), "pending": len(pending), "excluded": len(excluded)}
     if include_pending:
@@ -93,7 +96,6 @@ def step_collect(run_dir: str, include_pending: bool, max_new: int | None = None
         check, counts = recheck.select_recheck(listed, rows, today)
         with open(os.path.join(d, "check.json"), "w", encoding="utf-8") as f:
             json.dump(check, f, ensure_ascii=False, default=str)
-        deadlines = {no: dl for no, it in listed.items() if (dl := collect.parse_deadline(it.get("deadline_text", ""), today))}
         with connect() as conn:
             counts["마감일 바뀜"] = db_queries.update_deadlines(conn, deadlines)
             # 확인·다시 저장에 실패해도 다음 날 다시 고르게(사람인 '수정' 표시는 하루 뒤 사라짐)
