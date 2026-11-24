@@ -90,6 +90,7 @@ test("admin review enforces permissions and persists pass, feedback, audit and c
       await page.request.get(api + "?q=" + marker)
     ).json();
     expect(filtered.items).toHaveLength(2);
+    expect(filtered.total).toBe(2);
     expect(
       filtered.items.every(
         (item: { stage: string }) => item.stage === "REVIEW",

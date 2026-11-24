@@ -40,7 +40,7 @@ Next 서버가 Spring 공고 API 또는 사용자용 RDS/SQLite에 연결한다.
 | GET | `/api/skill-categories` | 10개 기술 카테고리와 기타/제외 정책 | 공개, Spring 전달 |
 | GET | `/api/saved-jobs` | 본인 저장 공고 | 세션 필요 |
 | POST | `/api/saved-jobs` | 공고 저장/저장 해제 | 세션 필요, action=save/remove |
-| GET | `/api/notices` | 공지 목록과 관리자 UI 가능 여부 | 공개, offset 페이지 처리 |
+| GET | `/api/notices` | 공지 목록, 전체 건수(total), 관리자 UI 가능 여부 | 공개, offset 페이지 처리, 삭제되지 않은 공지만 20개 단위 |
 | POST | `/api/notices` | 공지 작성 | RDS ADMIN, title/content/pinned |
 | PATCH | `/api/notices` | 공지 수정 | RDS ADMIN, id/title/content/pinned |
 | DELETE | `/api/notices` | 공지 논리 삭제 | RDS ADMIN, id |
@@ -48,7 +48,7 @@ Next 서버가 Spring 공고 API 또는 사용자용 RDS/SQLite에 연결한다.
 | GET | `/api/auth/kakao/status` | 카카오 연결 설정 여부 | 공개, 키/시크릿은 반환하지 않음 |
 | GET | `/api/auth/kakao` | 카카오 인가 시작 | 앱 설정 필요, 미설정 시 503 |
 | GET | `/api/auth/kakao/callback` | state 확인, 코드 교환, 기존 로컬 로그인 세션 생성 | code/state, 실제 앱 설정 필요 |
-| GET | `/api/admin/extraction-reviews` | 현재 추출 결과에 검토 사유가 있는 미검토 공고, 실제 사유, 상태별 건수 | ADMIN 전용, status/q/offset, 조회 시 원본 검토 대상과 동기화 |
+| GET | `/api/admin/extraction-reviews` | 현재 추출 결과에 검토 사유가 있는 공고, 실제 사유, 상태별 건수 | ADMIN 전용, status/q/offset, 조회 시 원본 검토 대상과 동기화. total은 검색·상태 조건에 맞는 총 건수, 20개 단위 |
 | PATCH | `/api/admin/extraction-reviews` | 넘기기 또는 피드백을 남겨 재추출 요청 | ADMIN, 같은 출처 Origin, id/revision/action(PASS 또는 RETRY)/feedback |
 | GET | `/api/growth` | 기존 기술 검토/성장 과제 상태 | 세션 필요, 현재 주 화면에서 사용하지 않는 레거시 |
 | POST | `/api/growth` | 기존 검토, 과제 시작/제출/일정 | 세션 필요, 문장 LV 확정 모델은 아님 |

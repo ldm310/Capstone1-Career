@@ -8,7 +8,7 @@ import {
 } from "@/lib/job-filters";
 import { CatalogFilters } from "@/components/jobs/catalog-filters";
 import { useEffect, useRef, useState } from "react";
-import { RefreshCw, Search } from "lucide-react";
+import { Search } from "lucide-react";
 import { JobListRow } from "@/components/jobs/job-list-row";
 import type { PublicJob, PublicJobsResponse } from "@/types/public-job";
 import { isSupportedRole } from "@/lib/roles";
@@ -16,6 +16,7 @@ import { roleLabels } from "@/lib/korean";
 import { LoadingSpinner } from "@/components/shared/loading-spinner";
 import { PassedGap } from "@/components/jobs/passed-gap";
 import { useSavedJobs } from "@/lib/saved-jobs";
+import { ListPagination } from "@/components/shared/list-pagination";
 export function LiveJobsSection({
   mode = "preview",
 }: {
@@ -27,6 +28,7 @@ export function LiveJobsSection({
   const [sort, setSort] = useState("newest");
   const [experience, setExperience] = useState<ExperienceKind[]>([]);
   const [feed, setFeed] = useState<PublicJobsResponse | null>(null);
+  const [offset, setOffset] = useState(0);
   const [role, setRole] = useState("all"),
     [query, setQuery] = useState("");
   const savedJobs = useSavedJobs();
@@ -34,7 +36,12 @@ export function LiveJobsSection({
     [error, setError] = useState(""),
     [message, setMessage] = useState("");
   const controller = useRef<AbortController | null>(null);
-  async function load(offset: number, selectedRole: string, term = query) {
+  async function load(
+    offset: number,
+    selectedRole: string,
+    term = query,
+    navigate = false,
+  ) {
     controller.current?.abort();
     const current = new AbortController();
     controller.current = current;
@@ -48,17 +55,15 @@ export function LiveJobsSection({
       if (!response.ok) throw new Error("공고를 불러오지 못했어요.");
       const next: PublicJobsResponse = await response.json();
       if (current.signal.aborted) return;
-      setFeed((previous) => ({
-        ...next,
-        jobs:
-          offset && previous
-            ? [
-                ...new Map(
-                  [...previous.jobs, ...next.jobs].map((job) => [job.id, job]),
-                ).values(),
-              ]
-            : next.jobs,
-      }));
+      const lastOffset = Math.max(0, (Math.ceil(next.total / 12) - 1) * 12);
+      if (!preview && offset > lastOffset)
+        return await load(lastOffset, selectedRole, term, navigate);
+      setFeed(next);
+      setOffset(offset);
+      if (navigate)
+        document
+          .getElementById("public-jobs-title")
+          ?.scrollIntoView({ block: "start" });
       setMessage(`${next.jobs.length}개 공고를 불러왔어요.`);
     } catch (reason) {
       if (!current.signal.aborted)
@@ -175,7 +180,7 @@ export function LiveJobsSection({
       {!preview && (
         <p className="public-feed-count">
           {feed
-            ? `전체 ${feed.total}개 중 ${feed.jobs.length}개, ${sort === "closing" ? "마감일순" : "최신순"}`
+            ? `총 ${feed.total.toLocaleString("ko-KR")}개, ${{ closing: "마감일순", newest: "최신순", company: "회사명순" }[sort]}`
             : "불러오는 중…"}
         </p>
       )}
@@ -212,31 +217,18 @@ export function LiveJobsSection({
       {error && (
         <div className="public-job-empty" role="alert">
           <p>{error}</p>
-          <button onClick={() => void load(feed?.nextOffset ?? 0, role)}>
-            다시 시도
-          </button>
+          <button onClick={() => void load(offset, role)}>다시 시도</button>
         </div>
       )}
-      {!preview && (
-        <div className="public-job-more">
-          {feed?.nextOffset != null ? (
-            <button
-              disabled={loading}
-              onClick={() => void load(feed.nextOffset!, role)}
-            >
-              <RefreshCw size={19} className={loading ? "spin" : ""} />
-              {loading ? "불러오는 중…" : "더보기"}
-            </button>
-          ) : feed && !loading && !error ? (
-            <>
-              <p>모든 공고를 확인했어요.</p>
-              <button onClick={() => void load(0, role)}>
-                <RefreshCw size={18} />
-                새로고침
-              </button>
-            </>
-          ) : null}
-        </div>
+      {!preview && feed && !error && (
+        <ListPagination
+          total={feed.total}
+          offset={offset}
+          pageSize={12}
+          loading={loading}
+          label="채용공고 페이지"
+          onChange={(next) => void load(next, role, query, true)}
+        />
       )}
       {!preview && (
         <div className="public-jobs-disclosure">

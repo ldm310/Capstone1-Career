@@ -40,9 +40,14 @@ export async function GET(request: Request) {
       `SELECT ${noticeColumns} FROM public.career_notice WHERE namespace=$1 AND deleted_at IS NULL ORDER BY pinned DESC,created_at DESC,id LIMIT 21 OFFSET $2`,
       [profileNamespace(), offset],
     );
+    const total = await db.query(
+      "SELECT count(*)::int AS count FROM public.career_notice WHERE namespace=$1 AND deleted_at IS NULL",
+      [profileNamespace()],
+    );
     return Response.json(
       {
         notices: rows.rows.slice(0, 20),
+        total: total.rows[0].count,
         nextOffset: rows.rows.length > 20 ? offset + 20 : null,
         canManage,
       },

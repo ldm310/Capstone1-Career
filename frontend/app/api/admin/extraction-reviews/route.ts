@@ -65,6 +65,12 @@ export async function GET(request: Request) {
       "SELECT status,count(*)::int AS count FROM public.career_extraction_review WHERE namespace=$1 AND stage='REVIEW' GROUP BY status",
       [namespace],
     );
+    const total = await db.query(
+      `SELECT count(*)::int AS count FROM public.career_extraction_review
+       WHERE namespace=$1 AND stage='REVIEW' AND ($2='ALL' OR status=$2)
+       AND ($3='' OR company ILIKE $4 OR title ILIKE $4 OR posting_no ILIKE $4)`,
+      [namespace, status, q, `%${q}%`],
+    );
     const worker = await db.query(
       "SELECT max(e.created_at) AS seen FROM public.career_extraction_review_event e JOIN public.career_extraction_review r ON r.id=e.review_id WHERE r.namespace=$1 AND e.action='START'",
       [namespace],
@@ -72,6 +78,7 @@ export async function GET(request: Request) {
     return Response.json(
       {
         items: rows.rows.slice(0, 20),
+        total: total.rows[0].count,
         nextOffset: rows.rows.length > 20 ? offset + 20 : null,
         counts: Object.fromEntries(
           counts.rows.map((row) => [row.status, row.count]),

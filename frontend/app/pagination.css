@@ -1,0 +1,70 @@
+.list-pagination {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid #dce5ed;
+  color: #456078;
+  font-size: 14px;
+}
+.list-pagination-summary {
+  margin: 0;
+}
+.list-pagination-controls,
+.list-pagination-numbers,
+.list-pagination-numbers > span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.list-pagination-controls {
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.list-pagination button {
+  min-width: 42px;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid #c5d4df;
+  border-radius: 8px;
+  background: #fff;
+  color: #233f52;
+  font: inherit;
+  cursor: pointer;
+}
+.list-pagination button[aria-current="page"]:disabled {
+  border-color: #315a7b;
+  background: #315a7b;
+  color: white;
+  opacity: 1;
+}
+.list-pagination button:disabled:not([aria-current]) {
+  opacity: 0.45;
+  cursor: default;
+}
+.list-pagination button:focus-visible {
+  outline: 3px solid #315a7b;
+  outline-offset: 3px;
+}
+.list-pagination-position {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.list-pagination-gap {
+  padding: 0 3px;
+}
+@media (max-width: 640px) {
+  .list-pagination {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .list-pagination-controls {
+    justify-content: space-between;
+  }
+  .list-pagination-numbers {
+    display: none;
+  }
+}
