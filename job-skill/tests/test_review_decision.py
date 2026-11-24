@@ -1,0 +1,106 @@
+"""사람 검토(정상·제외·다시) — 2026-11-24 사용자 결정.
+관리자 페이지에서 추출 결과를 보고 정상(결과 맞음)·제외(앞으로 자동 처리·웹에서 뺌)·다시(피드백을 붙여 다음 ① 때 다시 추출)를 고른다.
+값은 extraction_run 의 review_result·review_feedback·reviewed_at 에 쓰고, 팀원(웹) 계정은 이 세 칸만 쓸 수 있다."""
+from __future__ import annotations
+
+import json
+import os
+
+import psycopg
+import pytest
+
+from conftest import HERE
+from test_db_queries import _load, _write_run, add_posting, add_run
+
+MIGRATION_010 = os.path.join(HERE, "db", "migrations", "010_review_decision.sql")
+
+
+def review(conn, run_id, result, feedback=None):
+    conn.execute("UPDATE extraction_run SET review_result = %s, review_feedback = %s, reviewed_at = now() WHERE id = %s",
+                 (result, feedback, run_id))
+
+
+def test_review_values_and_feedback_rule(db):
+    """값은 정상·제외·다시만. '다시'는 피드백이 꼭 있어야 하고(빈칸만이면 안 됨), 결과와 시각은 함께."""
+    run = add_run(db, add_posting(db, "1"))
+    for result, fb in (("다시", None), ("다시", "  "), ("다시", "\n"), ("다시", "\t \r\n"), ("다시", "　 "),
+                       ("문제없음", None)):                       # 줄바꿈·탭·전각/줄바꿈 없는 공백만 있어도 빈 피드백
+        with pytest.raises(psycopg.errors.CheckViolation):
+            review(db, run, result, fb)
+    with pytest.raises(psycopg.errors.CheckViolation):          # 결과만 있고 시각 없음
+        db.execute("UPDATE extraction_run SET review_result = '정상' WHERE id = %s", (run,))
+    for result, fb in (("정상", None), ("제외", None), ("다시", "자리를 하나로")):
+        review(db, run, result, fb)
+
+
+def test_migration_010_converts_old_db_and_is_repeatable(db):
+    """이미 있는 DB(RDS): 옛 값(문제없음·고침)은 정상으로, 피드백 칸을 더한다. 두 번 돌려도 같다."""
+    db.execute("ALTER TABLE extraction_run DROP COLUMN review_feedback, DROP CONSTRAINT extraction_run_review_result_check")
+    db.execute("""ALTER TABLE extraction_run ADD CONSTRAINT extraction_run_review_result_check
+                  CHECK (review_result IN ('문제없음', '고침'))""")
+    run = add_run(db, add_posting(db, "1"))
+    db.execute("UPDATE extraction_run SET review_result = '고침', reviewed_at = now() WHERE id = %s", (run,))
+    sql = open(MIGRATION_010, encoding="utf-8").read()
+    db.execute(sql)
+    db.execute(sql)
+    assert db.execute("SELECT review_result FROM extraction_run WHERE id = %s", (run,)).fetchone()[0] == "정상"
+    review(db, run, "다시", "피드백")                               # 새 칸·새 값이 된다
+
+
+def test_team_can_write_only_review_columns(db):
+    """팀원 역할 team: 읽기 권한은 그대로, 검토 칸 세 개만 쓸 수 있다."""
+    db.execute("""DO $$ BEGIN
+                    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'team') THEN CREATE ROLE team NOLOGIN; END IF;
+                  END $$""")
+    db.execute("GRANT SELECT ON extraction_run TO team")             # RDS 와 같은 읽기 권한
+    db.execute(open(MIGRATION_010, encoding="utf-8").read())
+    run = add_run(db, add_posting(db, "1"))
+    db.execute("SET ROLE team")
+    try:
+        review(db, run, "다시", "자리를 하나로")
+        with pytest.raises(psycopg.errors.InsufficientPrivilege):
+            db.execute("UPDATE extraction_run SET is_current = false WHERE id = %s", (run,))
+    finally:
+        db.execute("RESET ROLE")
+
+
+def test_pending_includes_sent_back_with_feedback(db):
+    """현재 결과가 '다시'인 진행 공고는 피드백과 함께 밀린 공고로 — 다음 ① 이 다시 추출한다.
+    공고 정보(직무·경력)는 DB 에서 읽어 지워지지 않는다. 마감된 공고는 다시 추출하지 않는다."""
+    import db_queries as q
+    add_posting(db, "1")                                                        # 실행 없음 → 밀린 공고, 피드백 ''
+    review(db, add_run(db, add_posting(db, "2")), "다시", "공통지원요건은 자리가 아님")
+    review(db, add_run(db, add_posting(db, "3")), "정상")
+    review(db, add_run(db, add_posting(db, "4")), "제외")
+    p5 = add_posting(db, "5")
+    review(db, add_run(db, p5, current=False), "다시", "옛 피드백")               # 다시 뽑은 결과가 현재 → 아님
+    add_run(db, p5)
+    review(db, add_run(db, add_posting(db, "6", status="마감")), "다시", "마감됨")  # 마감 → 아님
+    rows = q.pending_postings(db)
+    assert [(r["rec_idx"], r["feedback"]) for r in rows] == [("1", ""), ("2", "공통지원요건은 자리가 아님")]
+    assert rows[1]["role"] == "백엔드" and rows[1]["career"] == "신입 · 경력"      # 공고 정보는 DB 에서(지워지지 않음)
+
+
+def test_open_postings_skips_excluded(db):
+    """'제외'한 공고는 변경·마감 확인 대상이 아니다. 아는 번호에는 남아 새 공고로 다시 잡히지 않는다."""
+    import db_queries as q
+    review(db, add_run(db, add_posting(db, "A")), "제외")
+    review(db, add_run(db, add_posting(db, "B")), "정상")
+    add_posting(db, "C")
+    assert [r["rec_idx"] for r in q.open_postings(db)] == ["B", "C"]
+    assert "A" in q.known_posting_nos(db)
+
+
+def test_load_saves_rerun_after_sent_back(db, db_url, tmp_path):
+    """'다시'로 돌려보낸 결과와 입력이 같아도(같은 피드백으로 또 돌려보냄) 새 결과로 넣는다 — 안 그러면
+    '이미 넣은 결과'로 건너뛰어 매일 추출만 하고 저장은 안 된다. 같은 결과를 또 넣으면(DB 저장 재시도) 하나만."""
+    _write_run(tmp_path, "지어낸 공고 본문 내용입니다")
+    res = tmp_path / "out" / "extract" / "gpt-5.6-luna-ex"
+    res.mkdir(parents=True)
+    (res / "D.json").write_text(json.dumps({"rec_idx": "D", "model": "gpt-5.6-luna", "input_hash": "c" * 64,
+                                            "input_tokens": 10, "output_tokens": 5, "positions": []}), encoding="utf-8")
+    _load(tmp_path, db_url)
+    db.execute("UPDATE extraction_run SET review_result = '다시', review_feedback = '자리를 하나로', reviewed_at = now()")
+    _load(tmp_path, db_url)                       # 다시 뽑은 결과(입력 지문 같음)
+    _load(tmp_path, db_url)                       # DB 저장 재시도
+    assert db.execute("SELECT review_result, is_current FROM extraction_run ORDER BY id").fetchall() == [("다시", False), (None, True)]

@@ -3,7 +3,8 @@
 웹에 보여 주기 위한 조회·뷰는 BE 몫이라 여기 두지 않는다.
 
   - 진행 공고: status = '진행' AND (마감일 없음 OR 마감일 >= 오늘 KST)
-  - 밀린 공고: 진행 공고 가운데 추출 실행이 하나도 없는 공고
+  - 밀린 공고: 진행 공고 가운데 추출 실행이 하나도 없거나, 현재 결과를 사람이 '다시'로 돌려보낸 공고
+  - 사람 검토(extraction_run.review_result): 정상 / 제외(변경·마감 확인도 하지 않음) / 다시(피드백을 붙여 다시 추출)
 연결은 db_load.connect() 를 쓴다(search_path=public). 쓰는 함수는 스스로 트랜잭션을 연다.
 """
 
@@ -36,21 +37,29 @@ def known_posting_nos(conn) -> set[str]:
 
 
 def pending_postings(conn) -> list[dict]:
-    """밀린 공고: 진행 공고 가운데 추출 실행이 하나도 없는 공고. 공고번호 오름차순(오래된 것 먼저)."""
-    cur = conn.execute(f"""SELECT {TARGET_COLS}, '' AS kind, '' AS text_chars, '' AS images
+    """밀린 공고: 진행 공고 가운데 추출 실행이 하나도 없거나, 현재 결과를 사람이 '다시'로 돌려보낸 공고.
+    feedback 칸 = 돌려보낸 공고의 사람 피드백(다시 추출할 때 LLM 입력 끝에 붙음), 나머지는 ''.
+    공고 정보(직무·경력·마감일)는 DB 에서 읽는다. 공고번호 오름차순(오래된 것 먼저)."""
+    cur = conn.execute(f"""SELECT {TARGET_COLS}, '' AS kind, '' AS text_chars, '' AS images,
+                                  CASE WHEN e.review_result = '다시' THEN e.review_feedback ELSE '' END AS feedback
                            FROM posting p JOIN company c ON c.id = p.company_id
+                                LEFT JOIN extraction_run e ON e.posting_id = p.id AND e.is_current
                            WHERE p.site = %(s)s AND {OPEN}
-                             AND NOT EXISTS (SELECT 1 FROM extraction_run e WHERE e.posting_id = p.id)
+                             AND (NOT EXISTS (SELECT 1 FROM extraction_run x WHERE x.posting_id = p.id)
+                                  OR e.review_result = '다시')
                            ORDER BY length(p.site_posting_no), p.site_posting_no""",
                        {"s": SITE, "today": today_kst()})
     return _rows(cur)
 
 
 def open_postings(conn) -> list[dict]:
-    """진행 공고 (② 수정 확인 대상). targets 칸 + raw_hash + last_checked_at + recheck_due(다시 확인할 공고)."""
+    """진행 공고 (② 수정 확인 대상). targets 칸 + raw_hash + last_checked_at + recheck_due(다시 확인할 공고).
+    사람이 '제외'한 공고(현재 결과의 검토 결과)는 빼서 변경·마감 확인을 하지 않는다."""
     cur = conn.execute(f"""SELECT {TARGET_COLS}, p.raw_hash, p.last_checked_at, p.recheck_due
                            FROM posting p JOIN company c ON c.id = p.company_id
                            WHERE p.site = %(s)s AND {OPEN}
+                             AND NOT EXISTS (SELECT 1 FROM extraction_run e
+                                             WHERE e.posting_id = p.id AND e.is_current AND e.review_result = '제외')
                            ORDER BY p.site_posting_no""",
                        {"s": SITE, "today": today_kst()})
     return _rows(cur)

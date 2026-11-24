@@ -72,3 +72,36 @@ def test_old_check_flag_is_converted():
     import extract_skills as ex
     old = {"check_flag": ["사람인 목록상 이 공고의 경력 조건은 '신입'이다. …"], "positions": [], "rejected": []}
     assert ex.review_reasons(old) == [{"검사": 1, "내용": "사람인 목록상 이 공고의 경력 조건은 '신입'이다. …"}]
+
+
+def test_feedback_goes_into_input_and_hash(tmp_path, monkeypatch):
+    """사람이 '다시'로 돌려보낸 공고: 피드백을 LLM 입력에 붙이고(모집 단위 검사로 다시 부를 때도), 입력 지문에도 들어간다.
+    피드백이 없으면 입력은 예전과 글자 하나 다르지 않다(지문이 바뀌면 같은 공고가 새 결과로 또 들어감)."""
+    import extract_skills as ex
+    monkeypatch.setattr(ex, "EX", str(tmp_path))
+    client = SimpleNamespace(responses=FakeResponses())
+    ex.run_model(client, "gpt-5.6-luna", "low", {"T1": {**INPUT, "feedback": "공통지원요건은 자리가 아님"}}, examples=True, tag="-test")
+    r = json.load(open(tmp_path / "gpt-5.6-luna-test" / "T1.json", encoding="utf-8"))
+    assert len(client.responses.calls) == 2 and all("공통지원요건은 자리가 아님" in c for c in client.responses.calls)
+    assert "[검토 피드백] 사람이 앞선 정리를 보고 남긴 말이다. 반영해서 정리하라.\n공통지원요건은 자리가 아님" in client.responses.calls[0]
+    assert r["input_hash"] != ex.sha256(ex.llm_input(INPUT))
+    assert ex.llm_input({**INPUT, "feedback": ""}) == ex.llm_input(INPUT)
+
+
+def test_posting_inputs_reads_feedback(tmp_path, monkeypatch):
+    """① 목록 수집이 실행 폴더에 쓴 feedback.json(공고번호 → 피드백)을 그 공고의 입력에 싣는다.
+    파일이 없으면(③ 일회성 수집) 모든 공고의 피드백은 빈칸."""
+    import extract_skills as ex
+    (tmp_path / "pages").mkdir()
+    for no in ("A", "B"):
+        (tmp_path / "pages" / f"{no}.html").write_text(
+            '<div class="user_content"><p>' + "지어낸 공고 본문입니다. " * 20 + "</p></div><script></script>", encoding="utf-8")
+    monkeypatch.setattr(ex, "PAGE_DIR", str(tmp_path / "pages"))
+    monkeypatch.setattr(ex, "PF", str(tmp_path / "pf"))
+    monkeypatch.setattr(ex, "FEEDBACK", str(tmp_path / "feedback.json"))
+    monkeypatch.setattr(ex, "load_targets", lambda: [{"rec_idx": no, "role": "백엔드", "company": "(주)지어낸회사", "career": "신입"}
+                                                     for no in ("A", "B")])
+    assert {no: inp["feedback"] for no, inp in ex.posting_inputs().items()} == {"A": "", "B": ""}
+    (tmp_path / "feedback.json").write_text(json.dumps({"A": "자리를 하나로"}, ensure_ascii=False), encoding="utf-8")
+    inputs = ex.posting_inputs()
+    assert inputs["A"]["feedback"] == "자리를 하나로" and inputs["B"]["feedback"] == ""
