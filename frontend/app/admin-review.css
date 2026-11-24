@@ -140,11 +140,24 @@
   overflow-wrap: anywhere;
 }
 .review-reasons {
+  display: grid;
+  gap: 10px;
   margin: 0;
-  padding-left: 18px;
-  list-style: disc;
+  padding: 0;
+  list-style: none;
   line-height: 1.7;
   overflow-wrap: anywhere;
+}
+.review-reasons > li {
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+  background: #f5f8fb;
+  border: 1px solid #e0e8ef;
+  border-radius: 8px;
+}
+.review-reasons p {
+  margin: 0;
 }
 .review-failure small {
   color: #9b4533;
