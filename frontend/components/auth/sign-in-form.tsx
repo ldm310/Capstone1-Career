@@ -96,10 +96,10 @@ export function SignInForm({
           </label>
         )}
         <label>
-          이메일
+          {mode === "register" ? "이메일" : "이메일 또는 아이디"}
           <input
-            type="email"
-            autoComplete="email"
+            type={mode === "register" ? "email" : "text"}
+            autoComplete={mode === "register" ? "email" : "username"}
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
@@ -113,7 +113,7 @@ export function SignInForm({
               mode === "register" ? "new-password" : "current-password"
             }
             required
-            minLength={10}
+            minLength={mode === "register" ? 10 : 1}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
           />

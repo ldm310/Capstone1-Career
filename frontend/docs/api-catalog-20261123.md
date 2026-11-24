@@ -48,6 +48,8 @@ Next 서버가 Spring 공고 API 또는 사용자용 RDS/SQLite에 연결한다.
 | GET | `/api/auth/kakao/status` | 카카오 연결 설정 여부 | 공개, 키/시크릿은 반환하지 않음 |
 | GET | `/api/auth/kakao` | 카카오 인가 시작 | 앱 설정 필요, 미설정 시 503 |
 | GET | `/api/auth/kakao/callback` | state 확인, 코드 교환, 기존 로컬 로그인 세션 생성 | code/state, 실제 앱 설정 필요 |
+| GET | `/api/admin/extraction-reviews` | 실패/미추출 공고 검토 목록, 상태별 건수, 최근 실행 시각 | ADMIN 전용, status/q/offset |
+| PATCH | `/api/admin/extraction-reviews` | 넘기기 또는 피드백을 남겨 재추출 요청 | ADMIN, 같은 출처 Origin, id/revision/action(PASS 또는 RETRY)/feedback |
 | GET | `/api/growth` | 기존 기술 검토/성장 과제 상태 | 세션 필요, 현재 주 화면에서 사용하지 않는 레거시 |
 | POST | `/api/growth` | 기존 검토, 과제 시작/제출/일정 | 세션 필요, 문장 LV 확정 모델은 아님 |
 | GET | `/api/share` | 본인 공개 공유 링크 | 세션 필요, 레거시 |

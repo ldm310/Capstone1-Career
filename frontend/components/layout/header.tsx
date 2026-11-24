@@ -10,13 +10,17 @@ export function Header() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [account, setAccount] = useState<string | null>(null);
+  const [administrator, setAdministrator] = useState(false);
   useEffect(() => {
     let active = true;
     const refresh = () =>
       fetch("/api/account")
         .then((r) => r.json())
         .then((d) => {
-          if (active) setAccount(d.user && !d.guest ? d.user.name : null);
+          if (active) {
+            setAccount(d.user && !d.guest ? d.user.name : null);
+            setAdministrator(!!d.user && !d.guest && d.role === "ADMIN");
+          }
         })
         .catch(() => {});
     void refresh();
@@ -34,6 +38,7 @@ export function Header() {
       body: JSON.stringify({ action: "logout" }),
     });
     setAccount(null);
+    setAdministrator(false);
     router.push("/");
     router.refresh();
   }
@@ -69,6 +74,15 @@ export function Header() {
           >
             공지사항
           </Link>
+          {administrator && (
+            <Link
+              href="/admin"
+              aria-current={pathname === "/admin" ? "page" : undefined}
+              onClick={() => setOpen(false)}
+            >
+              관리자
+            </Link>
+          )}
           <Link
             className="mobile-only"
             href="/my-page"

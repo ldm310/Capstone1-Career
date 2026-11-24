@@ -83,6 +83,26 @@ try {
   await client.query(
     readFileSync(path.join(root, "db/migrations/08-user-accounts.sql"), "utf8"),
   );
+  await client.query(
+    readFileSync(
+      path.join(root, "job-skill/db/migrations/008_extraction_review.sql"),
+      "utf8",
+    ),
+  );
+  const hasPostings = await client.query(
+    "SELECT to_regclass('public.posting') IS NOT NULL AND to_regclass('public.extraction_run') IS NOT NULL AS available",
+  );
+  if (hasPostings.rows[0].available) {
+    await client.query(
+      `INSERT INTO public.career_extraction_review(namespace,site,posting_no,company,title,source_url,stage)
+      SELECT $1,p.site,p.site_posting_no,c.name,p.title,
+        CASE WHEN p.site='사람인' AND p.site_posting_no ~ '^[0-9]+$' THEN 'https://www.saramin.co.kr/zf_user/jobs/relay/view?rec_idx=' || p.site_posting_no ELSE '' END,'UNKNOWN'
+      FROM public.posting p JOIN public.company c ON c.id=p.company_id
+      WHERE NOT EXISTS(SELECT 1 FROM public.extraction_run e WHERE e.posting_id=p.id)
+      ON CONFLICT(namespace,site,posting_no) DO NOTHING`,
+      [namespace],
+    );
+  }
   const report = { migrationApplied: true, starterNotices: 2 };
   const sourceNamespace = option("--seed-demo-from");
   if (sourceNamespace) {
