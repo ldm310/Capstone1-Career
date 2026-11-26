@@ -210,6 +210,7 @@ CREATE TABLE posting (
     collected_at      timestamptz NOT NULL DEFAULT now(),
     last_checked_at   timestamptz NOT NULL DEFAULT now(),
     recheck_due       boolean     NOT NULL DEFAULT false,
+    skill_categories  text[]      CHECK (skill_categories <@ ARRAY['L', 'B', 'D', 'E', 'O', 'F', 'A']::text[]),
     UNIQUE (site, site_posting_no)
 );
 COMMENT ON TABLE  posting                   IS '공고';
@@ -230,6 +231,7 @@ COMMENT ON COLUMN posting.raw_hash          IS '원본 해시 (보이는 글에�
 COMMENT ON COLUMN posting.collected_at      IS '수집 시각';
 COMMENT ON COLUMN posting.last_checked_at   IS '마지막 확인 시각 (3일마다 수정 확인)';
 COMMENT ON COLUMN posting.recheck_due       IS '다시 확인할 공고 (''수정''으로 골랐는데 아직 확인·다시 저장을 못 함 — 사람인 수정 표시가 하루 뒤 사라져도 다음 날 다시 고른다)';
+COMMENT ON COLUMN posting.skill_categories  IS '기술 카테고리 (팀원 7개판 코드 목록: L 프로그래밍·CS 기초/B 백엔드 개발/D 데이터베이스/E 데이터 엔지니어링·분석/O 인프라·배포·운영/F 프론트엔드·앱 개발/A AI 기술 — 현재 추출 결과의 필수·우대 줄에서 모음, 비면(NULL) 안 붙임(그 외 자리만 있는 공고·아직 처리 전), {}면 백엔드·데이터 공고인데 붙일 기술 없음)';
 
 CREATE TABLE posting_image (
     id          bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,

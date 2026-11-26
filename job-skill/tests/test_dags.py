@@ -46,7 +46,8 @@ def test_daily_task_graph(bag):
     assert d.get_task("detect_changes").downstream_task_ids == {"close_postings", "fetch_raw"}
     assert d.get_task("fetch_raw").upstream_task_ids == {"collect_list", "detect_changes"}
     assert d.get_task("extract_llm").upstream_task_ids == {"fetch_raw", "image_processing.filter_sections"}
-    assert d.get_task("notify_result").upstream_task_ids == {"load_db", "close_postings"}
+    assert d.get_task("categorize").upstream_task_ids == {"load_db"}      # 카테고리는 DB 저장 뒤(2026-11-27)
+    assert d.get_task("notify_result").upstream_task_ids == {"categorize", "close_postings"}
 
 
 def test_backfill_task_graph(bag):
@@ -54,7 +55,8 @@ def test_backfill_task_graph(bag):
     assert d.get_task("collect_list").upstream_task_ids == set()
     assert d.get_task("image_processing.ocr_images").upstream_task_ids == {"fetch_raw"}
     assert d.get_task("image_processing.ocr_images").downstream_task_ids == {"image_processing.filter_sections"}
-    assert d.get_task("notify_result").upstream_task_ids == {"load_db"}
+    assert d.get_task("categorize").upstream_task_ids == {"load_db"} and d.get_task("categorize").pool == "llm"
+    assert d.get_task("notify_result").upstream_task_ids == {"categorize"}
     assert "notify_cost" not in d.task_ids
 
 

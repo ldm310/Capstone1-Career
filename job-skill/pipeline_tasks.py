@@ -256,6 +256,23 @@ def step_load(run_dir: str) -> dict:
     return total
 
 
+def step_categories() -> dict:
+    """공고 카테고리 붙이기(팀원 7개판, 2026-11-27 사용자 결정) — DB 저장 뒤 현재 결과의 필수·우대 줄로 posting.skill_categories 를 맞춘다.
+    이번 실행 공고만이 아니라 전부 다시 맞춘다(지난번에 못 붙인 공고도 이어서). 새 글만 LLM, 값이 바뀐 공고만 쓴다."""
+    import team_categories
+    return team_categories.update(apply=True)
+
+
+def _category_row(cat: dict | None) -> list[tuple[str, str]]:
+    """결과 알림의 카테고리 줄. 태스크가 없던 옛 실행·값이 없으면 줄을 넣지 않는다."""
+    if not cat:
+        return []
+    text = f"공고 {cat.get('고침', 0)}개 고침 · 새 글 {cat.get('새 글', 0)}개 LLM ${cat.get('비용', 0):.2f}"
+    if cat.get("못 붙인 공고"):
+        text += f" · 못 붙인 공고 {cat['못 붙인 공고']}(다음에 다시)"
+    return [("카테고리", text)]
+
+
 def summary(run_dir: str) -> dict:
     """결과 알림용 숫자: 처리한 공고 수, 추출 결과 수, 확인 필요 수, 이번 실행 LLM 비용."""
     results = []
@@ -289,8 +306,8 @@ def run_alerts(run_dir: str) -> tuple[dict[str, list], dict | None, list[str]]:
     return {k: v for k, v in found.items() if v}, budget, data.get("사전 확인 필요") or []
 
 
-def daily_report(run_dir: str, got: dict, seen: dict, today_cost: float) -> str:
-    """① 결과 알림 한 통. got = 목록 수집 결과, seen = 변경 감지 결과(다시 확인한 이유마다 바뀜·그대로·마감·오류).
+def daily_report(run_dir: str, got: dict, seen: dict, today_cost: float, cat: dict | None = None) -> str:
+    """① 결과 알림 한 통. got = 목록 수집 결과, seen = 변경 감지 결과(다시 확인한 이유마다 바뀜·그대로·마감·오류), cat = 카테고리 붙이기 결과.
     무리마다 더하면 그 무리 수(사용자 요청 2026-11-03). 마감일은 목록 전체에서 따로 센다(본문 밖 값)."""
     s = summary(run_dir)
     def out(why: str, order: tuple[str, ...]) -> str:
@@ -302,14 +319,16 @@ def daily_report(run_dir: str, got: dict, seen: dict, today_cost: float) -> str:
             ("마감 확인", f"목록에 없음 {got.get('목록에 없음', 0)} → {out('목록에 없음', ('마감', '바뀜', '그대로', '오류'))}"),
             ("마감일", f"목록에서 바뀐 공고 {got.get('마감일 바뀜', 0)}"),
             ("추출", f"{s['추출']}/{s['대상']}건 · 확인 필요 {s['확인 필요']}"),
+            *_category_row(cat),
             ("비용", f"이번 ${s['비용']:.2f} · 오늘 ${today_cost:.2f} (하루 상한 ${DAILY_LIMIT:g})")]
     return notify.msg_report("매일 수집", rows, *run_alerts(run_dir))
 
 
-def backfill_report(run_dir: str, got: dict) -> str:
-    """③ 결과 알림 한 통. got = 목록 수집 결과."""
+def backfill_report(run_dir: str, got: dict, cat: dict | None = None) -> str:
+    """③ 결과 알림 한 통. got = 목록 수집 결과, cat = 카테고리 붙이기 결과."""
     s = summary(run_dir)
     rows = [("수집", f"대상 공고 {got.get('new', s['대상'])} · 제외 {got.get('excluded', 0)}"),
             ("추출", f"{s['추출']}/{s['대상']}건 · 확인 필요 {s['확인 필요']}"),
+            *_category_row(cat),
             ("비용", f"${s['비용']:.2f} (상한 ${BACKFILL_LIMIT:g})")]
     return notify.msg_report("전체 수집", rows, *run_alerts(run_dir))

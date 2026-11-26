@@ -60,6 +60,9 @@
 | 원본 해시 | `raw_hash` | char(64) | NOT NULL |
 | 수집 시각 | `collected_at` | timestamptz | NOT NULL, 기본값 지금 |
 | 마지막 확인 시각 | `last_checked_at` | timestamptz | NOT NULL, 본문을 받은 시각(저장 시각이 아님) |
+| 기술 카테고리 | `skill_categories` | text[] | 팀원 7개판 코드 목록(L B D E O F A 안에서), 현재 추출 결과의 필수·우대 줄에서 모음. 비면(NULL) 안 붙임(그 외 자리만 있는 공고·아직 처리 전), `{}`면 백엔드·데이터 공고인데 붙일 기술 없음 |
+
+- 2026-11-27 더함(사용자 결정): 공고마다 기술 카테고리를 적는다. 카테고리는 회의에서 정한 팀원 7개판(L 프로그래밍·CS 기초, B 백엔드 개발, D 데이터베이스, E 데이터 엔지니어링·분석, O 인프라·배포·운영, F 프론트엔드·앱 개발, A AI 기술)이다. 줄마다 팀원 결과(글이 같으면)를 쓰고, 없는 줄은 LLM 이 팀원 예시를 보고 붙인 뒤 공고 단위로 모은다(`team_categories.py`). 기타·도구·업종·지원 조건·제외는 공고에 붙이지 않는다. 직무 거르기에서 그 외 자리만 남은 공고는 대상이 아니라 NULL 로 둔다. `db/migrations/011_posting_skill_categories.sql`.
 
 **공고 이미지 `posting_image`**
 | 한글 | 영어 | 자료형 | 제약 |
