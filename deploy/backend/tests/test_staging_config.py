@@ -103,9 +103,9 @@ class StagingConfigTest(unittest.TestCase):
         config.web_env(self.path)
         self.assertEqual(self.path.read_text(encoding='utf-8'), text)
 
-    def test_health_requires_actual_postings_not_only_up(self):
+    def test_system_status_requires_actual_postings_not_only_up(self):
         def response(url):
-            if url.endswith('/api/health'):
+            if url.endswith('/api/system/status'):
                 return {'status': 'UP'}
             if 'postings?' in url:
                 return {'totalElements': 0, 'content': []}

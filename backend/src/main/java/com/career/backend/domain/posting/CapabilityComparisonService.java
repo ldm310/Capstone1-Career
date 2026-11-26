@@ -37,7 +37,7 @@ public class CapabilityComparisonService {
         Map<Long, ComparisonTarget> byUnit = new HashMap<>();
         metadata.forEach(t -> byUnit.put(t.getUnitId(), t));
         List<UnitComparison> positions = tree.units().stream().map(unit -> {
-            var dto = new RecruitUnitResponse(unit.getId(), unit.getSeq(), unit.getName(), unit.isIt(),
+            var dto = new RecruitUnitResponse(unit.getId(), unit.getSeq(), unit.getName(), unit.isIt(), unit.getJob(),
                     unit.getCareer(), unit.getYearsText(), unit.getMinYears(), unit.getMaxYears(),
                     tree.itemsOf(unit).stream().map(item -> new UnitItemResponse(item.getId(), item.getCategory(),
                             item.getSeq(), item.getText(), item.getQuote(), tree.requirementsOf(item).stream()

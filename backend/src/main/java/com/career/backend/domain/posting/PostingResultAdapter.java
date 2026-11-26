@@ -21,7 +21,7 @@ public class PostingResultAdapter {
             append(items, "우대", p.preferred(), capabilityIds);
             append(items, "업무", p.duties(), capabilityIds);
             append(items, "기타", p.other(), capabilityIds);
-            return adapt(new RecruitUnitResponse(null, null, p.name(), p.it_job(), p.career(), p.years(),
+            return adapt(new RecruitUnitResponse(null, null, p.name(), p.it_job(), null, p.career(), p.years(),
                     null, null, items), extraction.skipped());
         }).toList();
     }

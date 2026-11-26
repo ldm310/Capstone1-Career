@@ -7,6 +7,7 @@ import {
   listExtractionReviews,
   decideExtractionReview,
   passExpiredExtractionReviews,
+  getExtractionReview,
 } from "../lib/server/extraction-review-queries";
 
 test("review queries use only extraction_run and the three granted update columns", async () => {
@@ -58,7 +59,7 @@ test("review queries use only extraction_run and the three granted update column
     }
     await db.query(`GRANT USAGE ON SCHEMA public TO "${role}"`);
     await db.query(
-      `GRANT SELECT ON company,posting,extraction_run TO "${role}"`,
+      `GRANT SELECT ON company,posting,posting_image,extraction_run,recruit_unit,unit_item TO "${role}"`,
     );
     await db.query(
       `GRANT UPDATE(review_result,review_feedback,reviewed_at) ON extraction_run TO "${role}"`,
@@ -79,6 +80,69 @@ test("review queries use only extraction_run and the three granted update column
     expect(selected.total).toBe(1);
     expect(selected.items[0].id).toBe(ids[0]);
     expect(selected.items[0].sourceUrl).toContain("rec_idx=55000000");
+    const raw = {
+      positions: [
+        {
+          name: "원본 직무명",
+          it_job: true,
+          job: "그 외",
+          career: "경력",
+          years: "3년",
+          required: [
+            { text: "LLM 추출 문장", quote: "원문 근거 문장", reqs: [] },
+          ],
+          preferred: [],
+          duties: [],
+          other: [],
+        },
+      ],
+      skipped: ["제외된 문장"],
+      notes: "원본 메모",
+    };
+    await db.query("UPDATE extraction_run SET llm_output_raw=$2 WHERE id=$1", [
+      ids[0],
+      JSON.stringify(raw),
+    ]);
+    await db.query(
+      "UPDATE posting SET body_html='<h2>실제 모집 직무</h2><p>원문 근거 문장</p>' WHERE id=(SELECT posting_id FROM extraction_run WHERE id=$1)",
+      [ids[0]],
+    );
+    await db.query(
+      "INSERT INTO posting_image(posting_id,seq,url,kept) SELECT posting_id,1,'https://example.test/source.png',false FROM extraction_run WHERE id=$1",
+      [ids[0]],
+    );
+    const stored = (
+      await db.query(
+        "INSERT INTO recruit_unit(run_id,seq,name,is_it,job,career) VALUES($1,1,'DB 직무명',true,'그 외','경력') RETURNING id",
+        [ids[0]],
+      )
+    ).rows[0].id;
+    await db.query(
+      "INSERT INTO unit_item(unit_id,category,seq,text,quote) VALUES($1,'필수',1,'DB 정규화 문장','원문 근거 문장')",
+      [stored],
+    );
+    const detail = await getExtractionReview(reader, ids[0]);
+    expect(detail!.extraction.rawOutput).toEqual(raw);
+    expect(detail!.extraction.units[0]).toMatchObject({
+      name: "DB 직무명",
+      job: "그 외",
+      items: [
+        { category: "필수", text: "DB 정규화 문장", quote: "원문 근거 문장" },
+      ],
+    });
+    expect(detail!.posting.bodyHtml).toContain("실제 모집 직무");
+    expect(detail!.posting.images[0].kept).toBe(false); // Admin sees images excluded by the pipeline, too.
+    expect(detail!.review.revision).toBe(selected.items[0].revision);
+    expect(await getExtractionReview(reader, "999999")).toBeNull();
+    await db.query("UPDATE extraction_run SET is_current=false WHERE id=$1", [
+      ids[0],
+    ]);
+    expect(
+      (await getExtractionReview(reader, ids[0]))!.extraction.isCurrent,
+    ).toBe(false);
+    await db.query("UPDATE extraction_run SET is_current=true WHERE id=$1", [
+      ids[0],
+    ]);
     const token = selected.items[0].revision;
     const unchanged = (
       await db.query(

@@ -1,4 +1,5 @@
 "use client";
+import { useEffect, useId, useRef } from "react";
 import { ChevronDown, RotateCcw, SlidersHorizontal } from "lucide-react";
 import { experienceLabels, type ExperienceKind } from "@/lib/job-filters";
 
@@ -23,8 +24,32 @@ export function CatalogFilters({
   setWorkplace: (v: string) => void;
   reset: () => void;
 }) {
+  const root = useRef<HTMLDivElement>(null);
+  const group = useId();
+  function closeFilters() {
+    root.current
+      ?.querySelectorAll<HTMLDetailsElement>("details[open]")
+      .forEach((panel) => {
+        panel.open = false;
+      });
+  }
+  useEffect(() => {
+    const outside = (event: PointerEvent) => {
+      if (event.target instanceof Node && !root.current?.contains(event.target))
+        closeFilters();
+    };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") closeFilters();
+    };
+    document.addEventListener("pointerdown", outside);
+    document.addEventListener("keydown", escape);
+    return () => {
+      document.removeEventListener("pointerdown", outside);
+      document.removeEventListener("keydown", escape);
+    };
+  }, []);
   return (
-    <div className="recruit-filter-bar">
+    <div className="recruit-filter-bar" ref={root}>
       <label className="recruit-sort">
         <span className="sr-only">공고 정렬</span>
         <select value={sort} onChange={(e) => setSort(e.target.value)}>
@@ -32,7 +57,7 @@ export function CatalogFilters({
           <option value="closing">마감일순</option>
         </select>
       </label>
-      <details className="recruit-filter-popover">
+      <details className="recruit-filter-popover" name={group}>
         <summary>
           채용구분 {experience.length > 0 && <span>{experience.length}</span>}
           <ChevronDown size={16} />
@@ -58,7 +83,10 @@ export function CatalogFilters({
           <p>여러 개 선택할 수 있어요.</p>
         </fieldset>
       </details>
-      <details className="recruit-filter-popover recruit-detail-filter">
+      <details
+        className="recruit-filter-popover recruit-detail-filter"
+        name={group}
+      >
         <summary>
           <SlidersHorizontal size={16} />
           상세조건
@@ -75,9 +103,8 @@ export function CatalogFilters({
               onChange={(e) => setLocation(e.target.value)}
             />
           </label>
-          <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <label className="recruit-filter-unknown">
             <input
-              style={{ width: 16, height: 16 }}
               type="checkbox"
               checked={location === "unknown"}
               onChange={(event) =>
@@ -101,16 +128,15 @@ export function CatalogFilters({
             </select>
           </label>
         </div>
-        <p>
-          공고 원문에 명시된 정보로 검색합니다. 정보가 없는 공고는 조건 검색에서
-          제외됩니다.
-        </p>
       </details>
       <button
         type="button"
         className="recruit-reset"
         aria-label="필터 초기화"
-        onClick={reset}
+        onClick={() => {
+          reset();
+          closeFilters();
+        }}
       >
         <RotateCcw size={14} />
         초기화

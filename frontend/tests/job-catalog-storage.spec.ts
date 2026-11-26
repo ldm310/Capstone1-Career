@@ -5,6 +5,10 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { searchJobCatalog, type CatalogQuery } from "../lib/server/job-catalog";
 import type { PublicJob } from "../types/public-job";
+import {
+  listPostingPublication,
+  changePostingPublication,
+} from "../lib/server/posting-publication";
 
 test("catalog searches beyond 200, filters before paging, merges providers and reads only the current extraction", async () => {
   const url = process.env.TEST_DATABASE_URL;
@@ -24,6 +28,12 @@ test("catalog searches beyond 200, filters before paging, merges providers and r
     await db.query(
       readFileSync(path.resolve("../job-skill/db/schema.sql"), "utf8"),
     );
+    await db.query(
+      readFileSync(
+        path.resolve("../db/migrations/11-posting-visibility.sql"),
+        "utf8",
+      ),
+    );
     await db.query("INSERT INTO company(name) VALUES('검색검증회사')");
     await db.query(`INSERT INTO posting(company_id,site_posting_no,title,site_job_category,career_condition,kind,status,raw_hash,collected_at,deadline)
       SELECT 1,i::text,CASE i WHEN 1 THEN '200개 밖 API 개발자' WHEN 2 THEN '데이터 엔지니어' WHEN 3 THEN 'iOS 앱 개발자' ELSE 'Backend Engineer ' || i END,
@@ -33,7 +43,7 @@ test("catalog searches beyond 200, filters before paging, merges providers and r
     await db.query(`INSERT INTO extraction_run(posting_id,model,prompt_version,dict_version,input_hash,input_tokens,output_tokens,cost_usd,is_current)
       VALUES(1,'test','test','test',repeat('b',64),0,0,0,true),(1,'old','old','old',repeat('c',64),0,0,0,false)`);
     await db.query(
-      "INSERT INTO recruit_unit(run_id,seq,name,is_it,career) VALUES(1,1,'개발',true,'경력'),(2,1,'옛 개발',true,'경력')",
+      "INSERT INTO recruit_unit(run_id,seq,name,is_it,job,career) VALUES(1,1,'개발',true,'백엔드','경력'),(2,1,'옛 개발',true,'백엔드','경력')",
     );
     await db.query(
       "INSERT INTO unit_item(unit_id,category,seq,text,quote) VALUES(1,'필수',1,'DuckDB 사용','원문'),(2,'필수',1,'OldSkill 사용','옛 원문')",
@@ -47,6 +57,12 @@ test("catalog searches beyond 200, filters before paging, merges providers and r
     await db.query(
       "INSERT INTO requirement_tech(requirement_id,tech_id,written_name) VALUES(1,1,'duckdb'),(2,2,'oldskill')",
     );
+    await db.query(`INSERT INTO extraction_run(posting_id,model,prompt_version,dict_version,input_hash,input_tokens,output_tokens,cost_usd,is_current)
+      SELECT id,'test','test','test',repeat('d',64),0,0,0,true FROM posting WHERE id<>1;
+      INSERT INTO recruit_unit(run_id,seq,name,is_it,job,career)
+      SELECT id,1,'개발',true,CASE posting_id WHEN 2 THEN '데이터 엔지니어' WHEN 3 THEN '그 외' ELSE '백엔드' END,'언급없음' FROM extraction_run WHERE posting_id<>1;
+      INSERT INTO unit_item(unit_id,category,seq,text,quote)
+      SELECT u.id,'업무',1,'서비스 개발','원문' FROM recruit_unit u JOIN extraction_run e ON e.id=u.run_id WHERE e.posting_id<>1;`);
     const input: CatalogQuery = {
       query: "",
       role: "all",
@@ -190,11 +206,66 @@ test("catalog searches beyond 200, filters before paging, merges providers and r
       [],
     );
     expect(remote.jobs.map((job) => job.id)).toEqual(["be:1"]);
-    expect((await searchJobCatalog(fresh,{...input,query:"200개 밖",experience:["experienced"]},[])).total).toBe(1); // Current extraction explicitly requires experience.
-    expect((await searchJobCatalog(fresh,{...input,query:"Backend Engineer 7",experience:["experienced"],limit:24},[])).jobs.some(job=>job.id==="be:7")).toBe(false);
+    expect(
+      (
+        await searchJobCatalog(
+          fresh,
+          { ...input, query: "200개 밖", experience: ["experienced"] },
+          [],
+        )
+      ).total,
+    ).toBe(1); // Current extraction explicitly requires experience.
+    expect(
+      (
+        await searchJobCatalog(
+          fresh,
+          {
+            ...input,
+            query: "Backend Engineer 7",
+            experience: ["experienced"],
+            limit: 24,
+          },
+          [],
+        )
+      ).jobs.some((job) => job.id === "be:7"),
+    ).toBe(false);
     expect(
       (await searchJobCatalog(fresh, { ...input, role: "data" }, [])).total,
     ).toBe(0);
+    await db.query(
+      "UPDATE posting SET skill_categories=ARRAY['L','B'] WHERE id=1; UPDATE posting SET skill_categories=ARRAY[]::text[] WHERE id=5",
+    );
+    expect(
+      (await searchJobCatalog(db, { ...input, query: "200개 밖" }, [])).jobs[0]
+        .skillCategories,
+    ).toEqual(["L", "B"]);
+    expect(
+      (
+        await searchJobCatalog(
+          db,
+          { ...input, query: "backend engineer 5", limit: 24 },
+          [],
+        )
+      ).jobs.find((job) => job.id === "be:5")?.skillCategories,
+    ).toEqual([]);
+    expect(
+      (
+        await searchJobCatalog(
+          db,
+          { ...input, query: "backend engineer 7", limit: 24 },
+          [],
+        )
+      ).jobs.find((job) => job.id === "be:7")?.skillCategories,
+    ).toBeNull();
+    // IT=true can still be excluded by the pipeline's finer job filter.
+    await db.query("UPDATE recruit_unit SET job='그 외' WHERE run_id=1");
+    expect(
+      (await searchJobCatalog(db, { ...input, query: "200개 밖" }, [])).total,
+    ).toBe(0);
+    expect(
+      (await listPostingPublication(db, "FILTERED", "200개 밖", 0)).total,
+    ).toBe(1);
+    await db.query("UPDATE recruit_unit SET job='백엔드' WHERE run_id=1");
     const remaining = await searchJobCatalog(
       fresh,
       { ...input, limit: 24, sort: "closing" },
@@ -206,6 +277,107 @@ test("catalog searches beyond 200, filters before paging, merges providers and r
         (job) => !job.closesAt || Date.parse(job.closesAt) >= Date.now(),
       ),
     ).toBe(true);
+
+    const beforeReview = (
+      await db.query(
+        "SELECT review_result,review_feedback,reviewed_at FROM extraction_run WHERE id=1",
+      )
+    ).rows[0];
+    const visible = await listPostingPublication(
+      db,
+      "PUBLISHED",
+      "200개 밖",
+      0,
+    );
+    expect(visible.items).toHaveLength(1);
+    expect(
+      await changePostingPublication(
+        db,
+        { id: "1", revision: 0, hidden: true },
+        "admin-test",
+      ),
+    ).toBe(true);
+    expect(
+      (await searchJobCatalog(db, { ...input, query: "200개 밖" }, [])).total,
+    ).toBe(0);
+    expect(
+      await changePostingPublication(
+        db,
+        { id: "1", revision: 0, hidden: true },
+        "another-admin",
+      ),
+    ).toBe(false);
+    const hidden = await listPostingPublication(db, "HIDDEN", "200개 밖", 0);
+    expect(hidden.items[0].revision).toBe(1);
+    expect(
+      (
+        await db.query(
+          "SELECT review_result,review_feedback,reviewed_at FROM extraction_run WHERE id=1",
+        )
+      ).rows[0],
+    ).toEqual(beforeReview);
+    expect(
+      await changePostingPublication(
+        db,
+        { id: "1", revision: 1, hidden: false },
+        "admin-test",
+      ),
+    ).toBe(true);
+    expect(
+      (await searchJobCatalog(db, { ...input, query: "200개 밖" }, [])).total,
+    ).toBe(1);
+    await db.query("UPDATE recruit_unit SET is_it=false WHERE run_id=1");
+    expect(
+      (await searchJobCatalog(db, { ...input, query: "200개 밖" }, [])).total,
+    ).toBe(0);
+    expect(
+      (await searchJobCatalog(db, { ...input, query: "duckdb" }, [])).total,
+    ).toBe(0);
+    expect(
+      (await listPostingPublication(db, "FILTERED", "200개 밖", 0)).total,
+    ).toBe(1);
+    // An old IT extraction cannot bypass the current run's role filter.
+    expect(
+      await changePostingPublication(
+        db,
+        { id: "1", revision: 2, hidden: false },
+        "admin-test",
+      ),
+    ).toBe(false);
+    await db.query("UPDATE recruit_unit SET is_it=true WHERE run_id=1");
+    await db.query("UPDATE unit_item SET text=' ' WHERE unit_id=1");
+    expect(
+      (await searchJobCatalog(db, { ...input, query: "200개 밖" }, [])).total,
+    ).toBe(0);
+    await db.query("UPDATE unit_item SET text='서비스 개발' WHERE unit_id=1");
+    // Hide survives replacement of the current extraction run.
+    expect(
+      await changePostingPublication(
+        db,
+        { id: "1", revision: 2, hidden: true },
+        "admin-test",
+      ),
+    ).toBe(true);
+    await db.query(
+      "UPDATE extraction_run SET is_current=false WHERE id=1; UPDATE extraction_run SET is_current=true WHERE id=2",
+    );
+    expect(
+      (await searchJobCatalog(db, { ...input, query: "200개 밖" }, [])).total,
+    ).toBe(0);
+    await db.query(
+      "UPDATE posting SET deadline=(now() AT TIME ZONE 'Asia/Seoul')::date-1 WHERE id=1",
+    );
+    expect(
+      await changePostingPublication(
+        db,
+        { id: "1", revision: 3, hidden: false },
+        "admin-test",
+      ),
+    ).toBe(false);
+    expect(
+      (await listPostingPublication(db, "HIDDEN", "200개 밖", 0)).items[0]
+        .eligible,
+    ).toBe(false);
   } finally {
     await db?.end();
     await admin.query(`DROP DATABASE IF EXISTS "${name}" WITH (FORCE)`);

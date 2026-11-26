@@ -11,6 +11,7 @@ import {
 import { unknownLocation, type PublicJob } from "@/types/public-job";
 import { JobPosting } from "./job-posting";
 import { LoadingSpinner } from "@/components/shared/loading-spinner";
+import { LinkLoadingIndicator } from "@/components/shared/link-loading-indicator";
 import { JobExtras, JobSummary } from "./job-summary";
 import { PersonalJobComparison } from "./personal-job-comparison";
 import { SavedLevelRadar } from "./saved-level-radar";
@@ -146,6 +147,7 @@ export function JobDetail({
           aria-current={view === "stats" ? "page" : undefined}
         >
           역량 분석
+          <LinkLoadingIndicator />
         </Link>
       </nav>
       <section

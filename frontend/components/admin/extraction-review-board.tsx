@@ -2,24 +2,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ListPagination } from "@/components/shared/list-pagination";
 import { ReviewReason } from "./review-reason";
+import { ExtractionReviewDetailView } from "./extraction-review-detail";
+import type { ReviewItem, ReviewStatus } from "@/types/extraction-review";
 
-type Status = "OPEN" | "SKIPPED" | "RETRY_REQUESTED" | "RESOLVED";
-type Item = {
-  id: string;
-  postingNo: string;
-  site: string;
-  company: string;
-  title: string;
-  sourceUrl: string;
-  status: Status;
-  feedback: string;
-  updatedAt: string;
-  revision: string;
-  reviewReasons: Array<Record<string, unknown>>;
-  deadline?: string | null;
-  deadlinePassed?: boolean;
-  sourceClosed?: boolean;
-};
+type Status = ReviewStatus;
+type Item = ReviewItem;
 type List = {
   total: number;
   items: Item[];
@@ -67,6 +54,18 @@ export function ExtractionReviewBoard({
   const [message, setMessage] = useState("");
   const [selected, setSelected] = useState<string | null>(null);
   const [feedback, setFeedback] = useState("");
+  const [comparisonId, setComparisonId] = useState<string | null>(null);
+  const listScroll = useRef(0);
+  function openComparison(id: string) {
+    listScroll.current = window.scrollY;
+    setError("");
+    setComparisonId(id);
+    window.scrollTo({ top: 0 });
+  }
+  function closeComparison() {
+    setComparisonId(null);
+    requestAnimationFrame(() => window.scrollTo({ top: listScroll.current }));
+  }
   const editor = useRef<HTMLTextAreaElement>(null);
   const version = useRef(0);
   const load = useCallback(async () => {
@@ -119,8 +118,9 @@ export function ExtractionReviewBoard({
   async function act(
     item: Item,
     action: "PASS" | "RETRY" | "APPROVE" | "RESTORE",
+    reviewFeedback = feedback,
   ) {
-    if (action === "RETRY" && feedback.trim().length < 5) {
+    if (action === "RETRY" && reviewFeedback.trim().length < 5) {
       setError("재추출 피드백을 5자 이상 입력해 주세요.");
       return;
     }
@@ -135,12 +135,13 @@ export function ExtractionReviewBoard({
           id: item.id,
           revision: item.revision,
           action,
-          feedback: action === "RETRY" ? feedback : "",
+          feedback: action === "RETRY" ? reviewFeedback : "",
         }),
       });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error || "저장하지 못했습니다.");
       setSelected(null);
+      setComparisonId(null);
       setFeedback("");
       setMessage(
         action === "PASS"
@@ -178,6 +179,17 @@ export function ExtractionReviewBoard({
       setBusy(null);
     }
   }
+  if (comparisonId)
+    return (
+      <ExtractionReviewDetailView
+        key={comparisonId}
+        id={comparisonId}
+        busy={!!busy}
+        actionError={error}
+        onClose={closeComparison}
+        onDecision={act}
+      />
+    );
   return (
     <section className="extraction-review" aria-label="공고 추출 검토">
       <h2>{archive ? "넘긴 공고" : "추출 검토"}</h2>
@@ -195,12 +207,6 @@ export function ExtractionReviewBoard({
           <strong>{loaded ? (data.counts.SKIPPED ?? 0) : "—"}</strong>
         </div>
       </div>
-      <p className="review-policy">
-        추출 결과의 모집 직무나 경력 조건 등에 확인이 필요한 공고입니다. 검토
-        사유를 확인하고 정상 등록, 넘김 또는 재추출 요청을 선택하세요. 처리한
-        공고는 되돌리기로 검토 대기에 다시 넣을 수 있습니다. 마감 공고는
-        되돌려도 일반 목록에 노출되지 않습니다.
-      </p>
       {loaded && (
         <p className="review-worker">
           최근 추출 결과 저장:{" "}
@@ -308,7 +314,28 @@ export function ExtractionReviewBoard({
                     <span className="review-company">
                       {item.company || "회사 정보 없음"}
                     </span>
-                    <h2>{item.title || "공고명 없음"}</h2>
+                    <h2>
+                      <a
+                        className="review-detail-trigger"
+                        href="#review-detail"
+                        onClick={(event) => {
+                          event.preventDefault();
+                          if (!busy) openComparison(item.id);
+                        }}
+                      >
+                        {item.title || "공고명 없음"}
+                      </a>
+                    </h2>
+                    <button
+                      className="review-compare-button"
+                      type="button"
+                      disabled={!!busy}
+                      onClick={() => {
+                        openComparison(item.id);
+                      }}
+                    >
+                      원문과 LLM 결과 비교
+                    </button>
                     <span className="review-posting-meta">
                       {item.site} / {item.postingNo}
                     </span>
@@ -374,7 +401,6 @@ export function ExtractionReviewBoard({
                         </button>
                         <button
                           type="button"
-                          className="review-primary"
                           onClick={() => {
                             setSelected(item.id);
                             setFeedback(item.feedback);

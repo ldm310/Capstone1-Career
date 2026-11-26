@@ -50,6 +50,12 @@ try {
   await client.connect();
   await client.query(
     readFileSync(
+      path.join(root, "db/migrations/11-posting-visibility.sql"),
+      "utf8",
+    ),
+  );
+  await client.query(
+    readFileSync(
       path.join(root, "db/migrations/06-user-posting-levels.sql"),
       "utf8",
     ),

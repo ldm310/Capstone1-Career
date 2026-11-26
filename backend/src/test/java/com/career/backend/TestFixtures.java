@@ -36,12 +36,12 @@ public final class TestFixtures {
                 values (1, 1, 'test-model', '0.1.1', true, current_timestamp)
                 """);
         jdbc.update("""
-                insert into public.recruit_unit (id, run_id, seq, name, is_it, career, years_text)
-                values (1, 1, 1, '서버 개발자', true, '경력', '3년 이상')
+                insert into public.recruit_unit (id, run_id, seq, name, is_it, job, career, years_text)
+                values (1, 1, 1, '서버 개발자', true, '백엔드', '경력', '3년 이상')
                 """);
         jdbc.update("""
-                insert into public.recruit_unit (id, run_id, seq, name, is_it, career, years_text)
-                values (2, 1, 2, '경영지원', false, '신입', '')
+                insert into public.recruit_unit (id, run_id, seq, name, is_it, job, career, years_text)
+                values (2, 1, 2, '경영지원', false, '그 외', '신입', '')
                 """);
         jdbc.update("insert into public.unit_item (id, unit_id, category, seq, text, quote) values (1, 1, '필수', 1, 'MySQL 사용 경험', 'MySQL 등 RDBMS 경험')");
         jdbc.update("insert into public.unit_item (id, unit_id, category, seq, text, quote) values (2, 1, '필수', 2, 'RDB 설계 경험', 'DB 설계 경험자')");

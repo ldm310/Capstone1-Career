@@ -68,10 +68,9 @@ class SkillCategoryControllerTest {
                 .andExpect(status().isNotFound());
         jdbc.update("update public.posting set status='진행' where id=2");
         context.getBean(jakarta.persistence.EntityManager.class).clear();
+        // Reopening a posting without target-role extraction does not make it public.
         mvc.perform(get("/api/postings/2/skill-categories"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.analysisStatus").value("NOT_ANALYZED"))
-                .andExpect(jsonPath("$.recruitUnits", hasSize(0)));
+                .andExpect(status().isNotFound());
         mvc.perform(get("/api/postings/999/skill-categories")).andExpect(status().isNotFound());
     }
 

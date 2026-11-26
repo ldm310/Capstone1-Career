@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Bookmark, BriefcaseBusiness, MapPin } from "lucide-react";
 import { roleLabels } from "@/lib/korean";
 import type { PublicJob } from "@/types/public-job";
+import { LinkLoadingIndicator } from "@/components/shared/link-loading-indicator";
 
 export function JobListRow({
   job,
@@ -78,6 +79,7 @@ export function JobListRow({
           onNavigate={onOpen}
         >
           역량 분석
+          <LinkLoadingIndicator />
         </Link>
         {onToggle && (
           <button
