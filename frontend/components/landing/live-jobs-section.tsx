@@ -186,17 +186,6 @@ export function LiveJobsSection({
         <>
           <div className="public-jobs-toolbar">
             <span className="catalog-results-label">검색</span>
-            <label>
-              페이지당{" "}
-              <select
-                aria-label="페이지당 공고 수"
-                value={pageSize}
-                onChange={(event) => setPageSize(Number(event.target.value))}
-              >
-                <option value={12}>12개</option>
-                <option value={24}>24개</option>
-              </select>
-            </label>
             <div className="public-job-filters">
               <select
                 aria-label="공고 직무"
@@ -289,21 +278,35 @@ export function LiveJobsSection({
         </div>
       )}
       {!preview && feed && !error && (
-        <ListPagination
-          total={feed.total}
-          offset={offset}
-          pageSize={pageSize}
-          loading={loading}
-          label="채용 공고 페이지"
-          onChange={(next) => {
-            if (catalog) {
-              catalog.update({ offset: next });
-              document
-                .getElementById("public-jobs-title")
-                ?.scrollIntoView({ block: "start" });
-            } else void load(next, role, query, true);
-          }}
-        />
+        <div className="catalog-pagination">
+          <label className="catalog-page-size">
+            페이지당{" "}
+            <select
+              aria-label="페이지당 공고 수"
+              value={pageSize}
+              onChange={(event) => setPageSize(Number(event.target.value))}
+              disabled={loading}
+            >
+              <option value={12}>12개</option>
+              <option value={24}>24개</option>
+            </select>
+          </label>
+          <ListPagination
+            total={feed.total}
+            offset={offset}
+            pageSize={pageSize}
+            loading={loading}
+            label="채용 공고 페이지"
+            onChange={(next) => {
+              if (catalog) {
+                catalog.update({ offset: next });
+                document
+                  .getElementById("public-jobs-title")
+                  ?.scrollIntoView({ block: "start" });
+              } else void load(next, role, query, true);
+            }}
+          />
+        </div>
       )}
       {!preview && (
         <div className="public-jobs-disclosure">

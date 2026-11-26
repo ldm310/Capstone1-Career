@@ -39,6 +39,7 @@ Next 서버가 Spring 공고 API 또는 사용자용 RDS/SQLite에 연결한다.
 | GET | `/api/documents/{id}` | 본인 문서 다운로드 | 본인 세션, view=text로 추출 텍스트 조회 |
 | GET | `/api/jobs` | 공고 목록/검색/필터/상세 | 공개. 현재 백엔드·데이터 엔지니어 직무와 본문이 추출된 진행 공고만 조회. 마감, 검토 제외, 관리자 숨김 제외. skillCategories는 담당자 파이프라인의 공고 카테고리 원값(NULL/빈 목록 구분), 사용자 LV와 별개. 전체 검색 후 페이지 처리, 상세는 Spring API 사용 |
 | GET | `/api/admin/postings` | 공고 노출 관리 목록 | 관리자 전용. status=PUBLISHED/HIDDEN/FILTERED/CLOSED, q, offset. 상태별 개수와 전체 페이지 수 제공 |
+| GET | `/api/admin/extraction-reviews/{id}` | 검토 공고의 원문·LLM 비교 | 관리자 전용, 추출 실행 ID. 현재 저장 원문·전체 이미지, 해당 실행의 LLM 원본 JSON, 정규화된 DB 결과, 검토 사유와 최신 revision 제공. 과거 실행은 읽기만 가능 |
 | PATCH | `/api/admin/postings` | 공고 숨김 또는 다시 올리기 | 관리자 세션, 동일 출처 Origin 필요. id, revision, hidden. 상태 경합 또는 노출 조건 미충족 시 409. `career_posting_visibility`에 환경별 저장, 추출 검토 결과는 변경하지 않음 |
 | GET | `/api/jobs/posting` | Lever 공고 본문 읽기 | 공개, url 파라미터, 지원 URL만 |
 | GET | `/api/jobs/keywords` | 공고의 검수된 역량 문장/카테고리 | 공개, jobId 필요 |

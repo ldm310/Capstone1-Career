@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { ListPagination } from "@/components/shared/list-pagination";
 import type {
   PublicationItem,
@@ -148,30 +149,49 @@ export function PostingPublicationBoard() {
                       {item.site}, {item.postingNo} / 마감일{" "}
                       {item.deadline?.slice(0, 10) || "미지정"}
                     </p>
-                    {item.sourceUrl && (
-                      <a href={item.sourceUrl} target="_blank" rel="noreferrer">
-                        공고 원문
-                      </a>
-                    )}
+                    <div className="publication-links">
+                      {item.state === "PUBLISHED" && (
+                        <Link
+                          href={`/jobs?job=${encodeURIComponent(`be:${item.id}`)}&view=posting`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          사이트에서 보기
+                        </Link>
+                      )}
+                      {item.sourceUrl && (
+                        <a
+                          href={item.sourceUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          공고 원문
+                        </a>
+                      )}
+                    </div>
                   </div>
                   <div className="publication-actions">
-                    <span>{labels[item.state]}</span>
-                    {item.state === "PUBLISHED" || item.hidden ? (
-                      <button
-                        disabled={
-                          busy ||
-                          saving !== null ||
-                          (item.hidden && !item.eligible)
-                        }
-                        onClick={() => void change(item)}
-                      >
-                        {saving === item.id
-                          ? "저장 중…"
-                          : item.hidden
-                            ? "다시 올리기"
-                            : "숨기기"}
-                      </button>
-                    ) : null}
+                    <div className="publication-action-line">
+                      <span className="publication-state">
+                        {labels[item.state]}
+                      </span>
+                      {item.state === "PUBLISHED" || item.hidden ? (
+                        <button
+                          disabled={
+                            busy ||
+                            saving !== null ||
+                            (item.hidden && !item.eligible)
+                          }
+                          onClick={() => void change(item)}
+                        >
+                          {saving === item.id
+                            ? "저장 중…"
+                            : item.hidden
+                              ? "다시 올리기"
+                              : "숨기기"}
+                        </button>
+                      ) : null}
+                    </div>
                     {item.hidden && !item.eligible && (
                       <p>
                         마감, 검토 제외 또는 추출 조건 미충족으로 다시 올릴 수

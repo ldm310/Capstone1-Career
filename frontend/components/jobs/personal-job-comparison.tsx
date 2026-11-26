@@ -19,6 +19,7 @@ import type { SkillReview } from "@/types/growth";
 import type { PostingLevels } from "@/types/posting-level";
 import { SavedLevelRadar } from "./saved-level-radar";
 import { RadarPoint } from "./radar-point";
+import { LoadingSpinner } from "@/components/shared/loading-spinner";
 
 interface Result {
   jobId: string;
@@ -175,12 +176,17 @@ function EvidenceRadar({ rows }: { rows: PersonalKeyword[] }) {
           );
         })}
       </svg>
-      <p className="personal-comparison-note">
-        {hasLevels
-          ? "평가가 완료된 역량 문장, 키워드만 평균에 포함합니다."
-          : "근거 후보 연결률은 LV, 합격 점수가 아닙니다. 연결된 내용은 항목별로 확인할 수 있습니다."}{" "}
-        공고에 해당 요건이 없는 카테고리는 평가하지 않습니다.
-      </p>
+      <ul className="personal-comparison-notes">
+        {hasLevels ? (
+          <li>평가가 완료된 역량 문장, 키워드만 평균에 포함합니다.</li>
+        ) : (
+          <>
+            <li>근거 후보 연결률은 LV, 합격 점수가 아닙니다.</li>
+            <li>연결된 내용은 항목별로 확인할 수 있습니다.</li>
+          </>
+        )}
+        <li>공고에 해당 요건이 없는 카테고리는 평가하지 않습니다.</li>
+      </ul>
     </section>
   );
 }
@@ -328,7 +334,7 @@ export function PersonalJobComparison({ jobId }: { jobId: string }) {
       aria-label="역량 분석"
     >
       {!current ? (
-        <p role="status">역량 분석을 불러오는 중입니다.</p>
+        <LoadingSpinner inline />
       ) : (
         <>
           {current.error ? (

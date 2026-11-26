@@ -1,5 +1,9 @@
 import type { Pool, PoolClient } from "pg";
 import { koreaTodaySql } from "./posting-metadata-sql";
+import type {
+  ExtractionReviewDetail,
+  ReviewItem,
+} from "@/types/extraction-review";
 
 type Database = Pick<Pool | PoolClient, "query">;
 export type ReviewStatus = "OPEN" | "SKIPPED" | "RETRY_REQUESTED" | "RESOLVED";
@@ -11,13 +15,70 @@ const fromSql = `FROM public.extraction_run e
   JOIN public.company c ON c.id=p.company_id`;
 const candidatesSql = `e.is_current AND jsonb_array_length(e.review_reasons)>0`;
 const columnsSql = `e.id::text, p.site, p.site_posting_no AS "postingNo", c.name AS company, p.title,
-  CASE WHEN p.site='사람인' AND p.site_posting_no ~ '^[0-9]+$'
+  CASE WHEN p.site IN ('사람인','saramin') AND p.site_posting_no ~ '^[0-9]+$'
     THEN 'https://www.saramin.co.kr/zf_user/jobs/relay/view?rec_idx=' || p.site_posting_no
     ELSE '' END AS "sourceUrl",
   p.deadline,coalesce(p.deadline<${koreaTodaySql},false) AS "deadlinePassed",p.status='마감' AS "sourceClosed",
   ${statusSql} AS status, e.review_result AS "reviewResult",
   coalesce(e.review_feedback,'') AS feedback, e.review_reasons AS "reviewReasons",
   coalesce(e.reviewed_at,e.run_at) AS "updatedAt", ${revisionSql} AS revision`;
+
+export async function getExtractionReview(
+  db: Database,
+  id: string,
+): Promise<ExtractionReviewDetail | null> {
+  // Read the requested run, including non-target units: reviewers must see
+  // exactly what the LLM returned and what the pipeline stored before deciding.
+  const { rows } = await db.query(
+    `SELECT ${columnsSql},p.id::text AS "postingId",p.body_html AS "bodyHtml",p.last_checked_at AS "lastCheckedAt",
+    e.is_current AS "isCurrent",e.model,e.prompt_version AS "promptVersion",e.dict_version AS "dictVersion",e.run_at AS "runAt",e.llm_output_raw AS "rawOutput",
+    coalesce((SELECT jsonb_agg(jsonb_build_object('seq',im.seq,'url',im.url,'kept',im.kept) ORDER BY im.seq,im.id)
+      FROM public.posting_image im WHERE im.posting_id=p.id),'[]'::jsonb) AS images,
+    coalesce((SELECT jsonb_agg(jsonb_build_object('id',u.id::text,'name',u.name,'isIt',u.is_it,'job',u.job,'career',u.career,'years',u.years_text,
+      'items',coalesce((SELECT jsonb_agg(jsonb_build_object('category',i.category,'text',i.text,'quote',i.quote) ORDER BY i.seq,i.id)
+        FROM public.unit_item i WHERE i.unit_id=u.id),'[]'::jsonb)) ORDER BY u.seq,u.id)
+      FROM public.recruit_unit u WHERE u.run_id=e.id),'[]'::jsonb) AS units
+    ${fromSql} WHERE e.id=$1 AND jsonb_array_length(e.review_reasons)>0`,
+    [id],
+  );
+  if (!rows[0]) return null;
+  const row = rows[0];
+  const review: ReviewItem = {
+    id: row.id,
+    postingNo: row.postingNo,
+    site: row.site,
+    company: row.company,
+    title: row.title,
+    sourceUrl: row.sourceUrl,
+    status: row.status,
+    feedback: row.feedback,
+    updatedAt: row.updatedAt,
+    revision: row.revision,
+    reviewReasons: row.reviewReasons,
+    deadline: row.deadline,
+    deadlinePassed: row.deadlinePassed,
+    sourceClosed: row.sourceClosed,
+  };
+  return {
+    review,
+    posting: {
+      id: row.postingId,
+      bodyHtml: row.bodyHtml,
+      lastCheckedAt: row.lastCheckedAt,
+      images: row.images,
+    },
+    extraction: {
+      id: row.id,
+      isCurrent: row.isCurrent,
+      model: row.model,
+      promptVersion: row.promptVersion,
+      dictVersion: row.dictVersion,
+      runAt: row.runAt,
+      rawOutput: row.rawOutput,
+      units: row.units,
+    },
+  };
+}
 
 export async function listExtractionReviews(
   db: Database,

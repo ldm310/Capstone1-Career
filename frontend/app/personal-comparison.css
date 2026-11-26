@@ -70,6 +70,20 @@
   font-size: 13px;
   line-height: 1.8;
 }
+.personal-comparison-notes {
+  margin: 12px 0;
+  padding-left: 18px;
+  list-style: disc;
+  color: #64788b;
+  font-size: 12px;
+  line-height: 1.7;
+}
+.personal-comparison-notes li + li {
+  margin-top: 4px;
+}
+.personal-job-comparison > .loading-spinner.is-inline {
+  min-height: 320px;
+}
 .personal-comparison-summary {
   display: flex;
   flex-wrap: wrap;

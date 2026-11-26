@@ -90,7 +90,7 @@ export function JobSummary({
           </div>
         </div>
       </div>
-      <details className="job-summary-facts">
+      <details key={job.id} className="job-summary-facts" open>
         <summary>채용 조건</summary>
         <div className="job-summary-grid">
           <Rows
@@ -151,6 +151,7 @@ export function JobExtras({ job }: { job: PublicJob }) {
   const c = d.company;
   const mapQuery = encodeURIComponent(d.address ?? job.location);
   const knownPlace = !!d.address || job.location !== unknownLocation;
+  const hasMethod = !!(d.applyMethod || d.documents?.length);
   return (
     <div className="job-extras">
       {knownPlace && (
@@ -181,9 +182,11 @@ export function JobExtras({ job }: { job: PublicJob }) {
       {(job.closesAt || d.applyMethod || d.documents?.length) && (
         <section aria-labelledby="job-period-title">
           <h3 id="job-period-title">접수 기간, 방법</h3>
-          <div className="job-box job-period">
-            <div className="job-period-time">
-              {job.closesAt ? (
+          <div
+            className={`job-box job-period${!job.closesAt || !hasMethod ? " is-single" : ""}`}
+          >
+            {job.closesAt && (
+              <div className="job-period-time">
                 <>
                   <span>남은 기간</span>
                   <Countdown until={job.closesAt} />
@@ -200,16 +203,18 @@ export function JobExtras({ job }: { job: PublicJob }) {
                     </div>
                   </dl>
                 </>
-              ) : null}
-            </div>
-            <div className="job-period-method">
-              <Rows
-                rows={[
-                  ["지원 방법", d.applyMethod],
-                  ["제출 서류", d.documents?.join(", ")],
-                ]}
-              />
-            </div>
+              </div>
+            )}
+            {hasMethod && (
+              <div className="job-period-method">
+                <Rows
+                  rows={[
+                    ["지원 방법", d.applyMethod],
+                    ["제출 서류", d.documents?.join(", ")],
+                  ]}
+                />
+              </div>
+            )}
           </div>
           <p className="job-note">
             <Info size={15} aria-hidden="true" />
