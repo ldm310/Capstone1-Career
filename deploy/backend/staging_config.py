@@ -116,7 +116,7 @@ def read_json(url):
 
 
 def verify_backend():
-    assert read_json(BACKEND_URL + '/api/health')['status'] == 'UP', 'Backend is not healthy'
+    assert read_json(BACKEND_URL + '/api/system/status')['status'] == 'UP', 'Backend is not healthy'
     postings = read_json(BACKEND_URL + '/api/postings?size=1')
     assert postings['totalElements'] > 0 and postings['content'], 'RDS postings are not available'
     assert len(read_json(BACKEND_URL + '/api/skill-categories')['categories']) == 10, 'Unexpected category contract'

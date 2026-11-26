@@ -4,6 +4,7 @@ import { memberRole } from "@/lib/server/notices";
 import { ExtractionReviewBoard } from "@/components/admin/extraction-review-board";
 import { NoticeBoard } from "@/components/notices/notice-board";
 import { ClosedPostingsBoard } from "@/components/admin/closed-postings-board";
+import { PostingPublicationBoard } from "@/components/admin/posting-publication-board";
 import "../../admin-review.css";
 import "../../notices.css";
 
@@ -16,7 +17,9 @@ export default async function Admin({
   if (!current || isGuest(current.id)) redirect("/sign-in");
   if ((await memberRole(current.id)) !== "ADMIN") notFound();
   const { tab } = await searchParams;
-  return tab === "skipped" ? (
+  return tab === "postings" ? (
+    <PostingPublicationBoard />
+  ) : tab === "skipped" ? (
     <ExtractionReviewBoard archive />
   ) : tab === "closed" ? (
     <ClosedPostingsBoard />

@@ -69,6 +69,7 @@ EnvironmentFile=$data/backend.env
 Environment=SPRING_PROFILES_ACTIVE=docker,rds,staging-readonly
 Environment=SERVER_ADDRESS=127.0.0.1
 Environment=SERVER_PORT=18081
+Environment=CAREER_PROFILE_NAMESPACE=staging
 Environment=SPRING_SQL_INIT_MODE=never
 # Keep dashed Hikari properties in canonical command-line form below. Splitting
 # CONNECTION_INIT_SQL with underscores creates a nested connection.init.sql path.
@@ -87,7 +88,7 @@ sudo systemctl enable --quiet "$svc"
 sudo systemctl restart "$svc"
 ready=false
 for _ in $(seq 1 90); do
-  if curl -fsS -o /dev/null http://127.0.0.1:18081/api/health 2>/dev/null; then ready=true; break; fi
+  if curl -fsS -o /dev/null http://127.0.0.1:18081/api/system/status 2>/dev/null; then ready=true; break; fi
   if sudo systemctl is-failed --quiet "$svc"; then break; fi
   sleep 2
 done

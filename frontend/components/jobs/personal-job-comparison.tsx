@@ -5,7 +5,10 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { signInUrl } from "@/lib/login-destination";
 import { currentFindings } from "@/lib/workspace-selectors";
-import { skillCategories } from "@/lib/skill-categories";
+import {
+  visibleSkillCategories as skillCategories,
+  hasVisibleSkillCategory,
+} from "@/lib/skill-categories";
 import {
   connectJobEvidence,
   type PostingKeyword,
@@ -31,7 +34,9 @@ interface Result {
 }
 
 function EvidenceRadar({ rows }: { rows: PersonalKeyword[] }) {
-  const hasLevels = rows.some((row) => row.assessed);
+  const hasLevels = rows.some(
+    (row) => hasVisibleSkillCategory(row.categoryCodes) && row.assessed,
+  );
   const axes = skillCategories.map((category) => {
     const items = rows.filter((row) =>
       row.categoryCodes.includes(category.code),

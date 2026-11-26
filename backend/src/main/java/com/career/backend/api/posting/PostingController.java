@@ -30,7 +30,7 @@ public class PostingController {
 
     @Operation(
             summary = "채용공고 목록",
-            description = "제목·회사명 검색과 상태(진행/마감) 필터로 공고를 최신순으로 조회합니다."
+            description = "현재 백엔드·데이터 엔지니어 직무와 본문이 추출되고 관리자에게 숨겨지지 않은 공고를 제목·회사명과 상태로 검색합니다. skillCategories는 공고 단위 기술 분류이며 사용자 LV가 아닙니다."
     )
     @GetMapping
     public PageResponse<PostingSummaryResponse> search(
@@ -47,7 +47,7 @@ public class PostingController {
     @Operation(
             summary = "채용공고 상세 분석",
             description = "공고 기본 정보, 공고 이미지, 현재 추출 결과(모집 단위 → 항목 → 요건 → 기술)를 함께 반환합니다. "
-                    + "아직 추출되지 않은 공고는 analysis가 null입니다."
+                    + "직무 필터 제외, 본문 미추출, 관리자 숨김 및 마감 공고는 404를 반환합니다."
     )
     @GetMapping("/{postingId}")
     public PostingDetailResponse getDetail(

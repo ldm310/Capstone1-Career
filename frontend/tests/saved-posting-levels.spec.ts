@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import examples from "@/mock/reviewed-keyword-examples.json";
 import { demoAccount } from "@/lib/server/demo-account";
 import AxeBuilder from "@axe-core/playwright";
+import { visibleSkillCategories } from "@/lib/skill-categories";
 
 test("RDS demo LVs are session-scoped, persistent and drawn to scale", async ({
   page,
@@ -109,9 +110,13 @@ test("RDS demo LVs are session-scoped, persistent and drawn to scale", async ({
         .map((pair) => pair.split(",").map(Number));
     return { mine: points("mine"), reference: points("reference") };
   });
-  // This posting fixture has exactly six categorized requirements, not all ten axes.
-  expect(geometry.mine).toHaveLength(6);
-  expect(geometry.reference).toHaveLength(6);
+  const visibleAxisCount = visibleSkillCategories.filter((category) =>
+    first.levels.some((row: { categoryCodes: string[] }) =>
+      row.categoryCodes.includes(category.code),
+    ),
+  ).length;
+  expect(geometry.mine).toHaveLength(visibleAxisCount);
+  expect(geometry.reference).toHaveLength(visibleAxisCount);
   const programming = first.levels.filter((row: { categoryCodes: string[] }) =>
     row.categoryCodes.includes("L"),
   );

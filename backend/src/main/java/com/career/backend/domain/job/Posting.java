@@ -54,6 +54,14 @@ public class Posting {
 
     private LocalDate deadline;
 
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.ARRAY)
+    @Column(name = "skill_categories")
+    private String[] skillCategories;
+
+    public java.util.List<String> getSkillCategories() {
+        return skillCategories == null ? null : java.util.List.of(skillCategories);
+    }
+
     @Column(name = "collected_at", nullable = false)
     private OffsetDateTime collectedAt;
 

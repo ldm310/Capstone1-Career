@@ -24,6 +24,14 @@ public class RecruitUnit {
     @Column(name = "is_it", nullable = false)
     private boolean it;
 
+    private String job;
+
+    public String getJob() { return job; }
+
+    public boolean isWebTarget() {
+        return it && ("백엔드".equals(job) || "데이터 엔지니어".equals(job));
+    }
+
     // 신입/경력/신입·경력/언급없음
     @Column(nullable = false)
     private String career;

@@ -44,7 +44,23 @@ test.beforeAll(async () => {
           deadline: null,
           collectedAt: "2026-11-19T00:00:00Z",
           lastCheckedAt: "2026-11-19T00:00:00Z",
-          analysis: null,
+          analysis: {
+            recruitUnits: [
+              {
+                name: "서버 개발",
+                isIt: true,
+                career: "무관",
+                items: [
+                  {
+                    category: "업무",
+                    seq: 1,
+                    text: "웹 서비스 API 개발",
+                    requirements: [],
+                  },
+                ],
+              },
+            ],
+          },
         }),
       );
       return;

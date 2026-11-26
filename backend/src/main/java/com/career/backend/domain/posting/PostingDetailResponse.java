@@ -21,7 +21,8 @@ public record PostingDetailResponse(
         OffsetDateTime lastCheckedAt,
         List<PostingImageResponse> images,
         // 아직 추출(분석)되지 않은 공고면 null
-        PostingAnalysisResponse analysis
+        PostingAnalysisResponse analysis,
+        List<String> skillCategories
 ) {
 
     public record PostingImageResponse(
@@ -46,6 +47,7 @@ public record PostingDetailResponse(
             Short seq,
             String name,
             boolean it,
+            String job,
             String career,
             String yearsText,
             Short minYears,

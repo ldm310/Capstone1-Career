@@ -49,12 +49,13 @@ export async function searchJobCatalog(
     WITH base AS (
       SELECT p.*,c.name AS company,e.id AS run_id,
         CASE
-          WHEN p.title ~* '\\mdata[[:space:]]+(engineer|analyst|scientist|platform)|데이터[[:space:]]*(엔지니어|분석|사이언|플랫폼|개발)' THEN 'data'
-          WHEN p.title ~* 'back[ -]?end|백엔드|서버[[:space:]]*(개발|엔지니어)|server[ -]?side' THEN 'backend'
-          WHEN coalesce(p.site_job_category,'') ~ '데이터' THEN 'data'
-          WHEN coalesce(p.site_job_category,'') ~ '백엔드|서버' THEN 'backend'
+          WHEN EXISTS (SELECT 1 FROM public.recruit_unit u WHERE u.run_id=e.id AND u.is_it AND u.job='데이터 엔지니어')
+            AND (NOT EXISTS (SELECT 1 FROM public.recruit_unit u WHERE u.run_id=e.id AND u.is_it AND u.job='백엔드')
+              OR p.title ~* '\\mdata[[:space:]]+(engineer|analyst|scientist|platform)|데이터[[:space:]]*(엔지니어|분석|사이언|플랫폼|개발)'
+              OR (p.title !~* 'back[ -]?end|백엔드|서버[[:space:]]*(개발|엔지니어)|server[ -]?side' AND coalesce(p.site_job_category,'') ~ '데이터')) THEN 'data'
+          ELSE 'backend'
         END AS role,
-        concat_ws(' ',p.career_condition,(SELECT string_agg(u.career,' ') FROM public.recruit_unit u WHERE u.run_id=e.id)) AS careers
+        concat_ws(' ',p.career_condition,(SELECT string_agg(u.career,' ') FROM public.recruit_unit u WHERE u.run_id=e.id AND u.is_it AND u.job IN ('백엔드','데이터 엔지니어'))) AS careers
       FROM public.posting p JOIN public.company c ON c.id=p.company_id
       LEFT JOIN public.extraction_run e ON e.posting_id=p.id AND e.is_current
       WHERE ${openPostingSql("p")}
@@ -78,7 +79,7 @@ export async function searchJobCatalog(
       ],NULL) END AS experience FROM career_flags
     ), backend AS (
       SELECT jsonb_build_object(
-        'id','be:' || p.id,'company',p.company,'title',p.title,'category',p.role,
+        'id','be:' || p.id,'company',p.company,'title',p.title,'category',p.role,'skillCategories',p.skill_categories,
         'location',coalesce(p.actual_location,'근무지 원문 확인'),'employment',coalesce(nullif(p.employment_type,''),'고용 형태 원문 확인'),
         'workplace',p.actual_workplace,'postedAt',p.collected_at,
         'closesAt',CASE WHEN p.deadline IS NOT NULL THEN to_char(p.deadline,'YYYY-MM-DD') || 'T23:59:59+09:00' END,
@@ -95,7 +96,7 @@ export async function searchJobCatalog(
           JOIN public.requirement r ON r.item_id=i.id
           JOIN public.requirement_tech rt ON rt.requirement_id=r.id
           LEFT JOIN public.tech t ON t.id=rt.tech_id
-          WHERE u.run_id=p.run_id AND strpos(lower(coalesce(t.name,rt.written_name)),$1)>0
+          WHERE u.run_id=p.run_id AND u.is_it AND u.job IN ('백엔드','데이터 엔지니어') AND strpos(lower(coalesce(t.name,rt.written_name)),$1)>0
         ))
     ), real AS (
       SELECT * FROM backend
@@ -117,7 +118,7 @@ export async function searchJobCatalog(
           FROM public.recruit_unit u JOIN public.unit_item i ON i.unit_id=u.id
           JOIN public.requirement r ON r.item_id=i.id
           JOIN public.requirement_tech rt ON rt.requirement_id=r.id
-          LEFT JOIN public.tech t ON t.id=rt.tech_id WHERE u.run_id=page.run_id
+          LEFT JOIN public.tech t ON t.id=rt.tech_id WHERE u.run_id=page.run_id AND u.is_it AND u.job IN ('백엔드','데이터 엔지니어')
         ) skills
       ),'[]'::jsonb)) ELSE job END AS job FROM page
     )

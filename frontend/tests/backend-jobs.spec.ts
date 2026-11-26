@@ -89,11 +89,18 @@ test("backend postings become public jobs with sections and skills", () => {
 });
 
 test("unanalyzed or unsupported backend postings are handled", () => {
-  // 추출 전 공고는 본문과 기술이 비어 있다.
-  expect(toPublicJob({ ...detail, analysis: null })).toMatchObject({
-    skills: [],
-    posting: [],
-  });
+  expect(toPublicJob({ ...detail, analysis: null })).toBeNull();
+  expect(
+    toPublicJob({
+      ...detail,
+      analysis: {
+        recruitUnits: detail.analysis!.recruitUnits.map((unit) => ({
+          ...unit,
+          isIt: false,
+        })),
+      },
+    }),
+  ).toBeNull();
   // 프론트가 다루지 않는 직무(데이터, 백엔드 외)는 뺀다.
   expect(
     toPublicJob({
@@ -101,5 +108,27 @@ test("unanalyzed or unsupported backend postings are handled", () => {
       title: "iOS 앱 개발자",
       siteJobCategory: "모바일",
     }),
+  ).toBeNull();
+});
+
+test("pipeline role and posting categories keep their meaning", () => {
+  const unit = detail.analysis!.recruitUnits[0];
+  const make = (job: string | null, it = true) => ({
+    ...detail,
+    analysis: { recruitUnits: [{ ...unit, job, it }] },
+  });
+  expect(toPublicJob(make("그 외"))).toBeNull();
+  expect(toPublicJob(make(null))).toBeNull();
+  expect(toPublicJob(make("백엔드", false))).toBeNull();
+  expect(toPublicJob(make("데이터 엔지니어"))?.category).toBe("data");
+  expect(
+    toPublicJob({ ...make("백엔드"), skillCategories: [] })?.skillCategories,
+  ).toEqual([]);
+  expect(
+    toPublicJob({ ...make("백엔드"), skillCategories: ["L", "B"] })
+      ?.skillCategories,
+  ).toEqual(["L", "B"]);
+  expect(
+    toPublicJob({ ...make("백엔드"), skillCategories: null })?.skillCategories,
   ).toBeNull();
 });

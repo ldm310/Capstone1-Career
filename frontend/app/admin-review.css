@@ -279,6 +279,74 @@
   color: #233f52;
   margin-bottom: 8px;
 }
+.publication-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 20px 0;
+}
+.publication-tabs button {
+  padding: 10px 16px;
+  border: 1px solid #d1dce8;
+  border-radius: 8px;
+  background: white;
+}
+.publication-tabs button[aria-pressed="true"] {
+  background: #315778;
+  color: white;
+}
+.publication-list {
+  display: grid;
+  gap: 14px;
+}
+.publication-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: 24px;
+  padding: 22px;
+}
+.publication-row h3 {
+  font-size: 17px;
+  margin: 8px 0;
+  overflow-wrap: anywhere;
+}
+.publication-row p {
+  font-size: 13px;
+  color: #607487;
+  line-height: 1.6;
+}
+.publication-row a {
+  display: inline-block;
+  margin-top: 10px;
+  font-size: 13px;
+}
+.publication-actions {
+  display: grid;
+  gap: 10px;
+  min-width: 140px;
+  max-width: 250px;
+}
+.publication-actions button {
+  padding: 9px 16px;
+  border: 1px solid #b6c7d8;
+  border-radius: 7px;
+  background: white;
+}
+.publication-actions button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+@media (max-width: 600px) {
+  .publication-row {
+    flex-direction: column;
+    gap: 16px;
+  }
+  .publication-actions {
+    max-width: 100%;
+    width: 100%;
+  }
+}
 .review-success {
   padding: 14px 18px;
   border-radius: 8px;

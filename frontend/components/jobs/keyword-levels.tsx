@@ -1,7 +1,10 @@
 "use client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { skillCategories } from "@/lib/skill-categories";
+import {
+  visibleSkillCategories as skillCategories,
+  hasVisibleSkillCategory,
+} from "@/lib/skill-categories";
 
 interface Result {
   jobId: string;
@@ -35,6 +38,9 @@ export function KeywordLevels({ jobId }: { jobId: string }) {
     return () => controller.abort();
   }, [jobId, attempt]);
   const current = result?.jobId === jobId ? result : null;
+  const visibleKeywords = current?.keywords?.filter((keyword) =>
+    hasVisibleSkillCategory(keyword.categoryCodes),
+  );
   return (
     <section className="job-keyword-levels" aria-labelledby="job-keyword-title">
       <header>
@@ -50,7 +56,7 @@ export function KeywordLevels({ jobId }: { jobId: string }) {
             키워드 다시 불러오기
           </button>
         </div>
-      ) : current.keywords?.length ? (
+      ) : visibleKeywords?.length ? (
         <>
           {current.source === "EXAMPLE" && (
             <p className="job-keyword-note">
@@ -59,7 +65,7 @@ export function KeywordLevels({ jobId }: { jobId: string }) {
             </p>
           )}
           <ul>
-            {current.keywords.map((keyword) => (
+            {visibleKeywords.map((keyword) => (
               <li key={keyword.id}>
                 <div>
                   <strong>{keyword.text}</strong>

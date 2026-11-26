@@ -28,6 +28,7 @@ export interface BackendPostingSummary {
   kind: string;
   status: string;
   deadline: string | null;
+  skillCategories?: string[] | null;
 }
 export interface BackendPostingDetail extends BackendPostingSummary {
   site: string;
@@ -37,6 +38,9 @@ export interface BackendPostingDetail extends BackendPostingSummary {
   lastCheckedAt: string;
   analysis: {
     recruitUnits: {
+      isIt?: boolean;
+      it?: boolean;
+      job?: string | null;
       name: string;
       career: string;
       items: {
@@ -130,9 +134,22 @@ function role(p: BackendPostingSummary): SupportedRole | null {
   return null;
 }
 
+type BackendUnit = NonNullable<
+  BackendPostingDetail["analysis"]
+>["recruitUnits"][number];
+function targetUnit(unit: BackendUnit) {
+  return (
+    unit.it !== false &&
+    unit.isIt !== false &&
+    (unit.job === undefined ||
+      unit.job === "백엔드" ||
+      unit.job === "데이터 엔지니어")
+  );
+}
+
 function experience(p: BackendPostingDetail): PublicJob["experience"] {
   const careers = new Set(
-    (p.analysis?.recruitUnits ?? []).map((u) => u.career),
+    (p.analysis?.recruitUnits ?? []).filter(targetUnit).map((u) => u.career),
   );
   const text = `${p.careerCondition ?? ""} ${[...careers].join(" ")}`;
   const result: NonNullable<PublicJob["experience"]> = [];
@@ -153,7 +170,7 @@ const sectionTitles = {
 
 // 추출 결과(모집 단위 → 항목)를 공고 본문 섹션으로 묶는다. 모집 단위가 여럿이면 항목 앞에 단위 이름을 붙인다.
 export function postingSections(p: BackendPostingDetail): PostingSection[] {
-  const units = p.analysis?.recruitUnits ?? [];
+  const units = (p.analysis?.recruitUnits ?? []).filter(targetUnit);
   return (Object.keys(sectionTitles) as (keyof typeof sectionTitles)[])
     .map((category) => ({
       title: sectionTitles[category],
@@ -171,31 +188,48 @@ export function postingSections(p: BackendPostingDetail): PostingSection[] {
 export function postingSkills(p: BackendPostingDetail) {
   return [
     ...new Set(
-      (p.analysis?.recruitUnits ?? []).flatMap((u) =>
-        u.items.flatMap((i) =>
-          i.requirements.flatMap((r) =>
-            r.techs.map((t) => t.techName ?? t.writtenName),
+      (p.analysis?.recruitUnits ?? [])
+        .filter(targetUnit)
+        .flatMap((u) =>
+          u.items.flatMap((i) =>
+            i.requirements.flatMap((r) =>
+              r.techs.map((t) => t.techName ?? t.writtenName),
+            ),
           ),
         ),
-      ),
     ),
   ];
 }
 
 function originalUrl(p: BackendPostingDetail) {
-  return p.site === "saramin"
+  return ["saramin", "사람인"].includes(p.site)
     ? `https://www.saramin.co.kr/zf_user/jobs/relay/view?rec_idx=${encodeURIComponent(p.sitePostingNo)}`
     : "";
 }
 
 export function toPublicJob(p: BackendPostingDetail): PublicJob | null {
-  const category = role(p);
-  if (!category) return null;
+  const jobs = new Set(
+    (p.analysis?.recruitUnits ?? []).filter(targetUnit).map((unit) => unit.job),
+  );
+  const category =
+    jobs.has("데이터 엔지니어") && !jobs.has("백엔드")
+      ? "data"
+      : jobs.has("백엔드") && !jobs.has("데이터 엔지니어")
+        ? "backend"
+        : role(p) ?? (jobs.has("백엔드") ? "backend" : null);
+  const sections = postingSections(p)
+    .map((section) => ({
+      ...section,
+      items: section.items.filter((text) => text.trim().length > 0),
+    }))
+    .filter((section) => section.items.length > 0);
+  if (!category || !sections.length) return null;
   return {
     id: `be:${p.postingId}`,
     company: p.companyName,
     title: p.title,
     category,
+    skillCategories: p.skillCategories ?? null,
     // 백엔드에는 근무지가 없다. 지어내지 않고 원문 확인으로 둔다.
     location: unknownLocation,
     employment: p.employmentType || "고용 형태 원문 확인",
@@ -205,6 +239,6 @@ export function toPublicJob(p: BackendPostingDetail): PublicJob | null {
     experience: experience(p),
     url: originalUrl(p),
     skills: postingSkills(p),
-    posting: postingSections(p),
+    posting: sections,
   };
 }

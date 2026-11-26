@@ -13,6 +13,7 @@ export const featureSections = {
       ["failures", "추출 검토"],
       ["skipped", "넘긴 공고"],
       ["closed", "마감 공고"],
+      ["postings", "공고 노출 관리"],
       ["notices", "공지사항 관리"],
     ],
   },

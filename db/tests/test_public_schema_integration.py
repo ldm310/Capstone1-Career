@@ -36,6 +36,7 @@ def execute_file(conn, name):
 
 def core(conn):
     execute_file(conn, "db/init/01-job-schema.sql")
+    execute_file(conn, "db/migrations/11-posting-visibility.sql")
     conn.execute("""
         INSERT INTO public.company(id,name) OVERRIDING SYSTEM VALUE VALUES (1,'fixture-company'),(2,'other-company');
         INSERT INTO public.capability(id,name,group_name) OVERRIDING SYSTEM VALUE VALUES(1,'fixture-capability','fixture');
@@ -46,8 +47,8 @@ def core(conn):
         INSERT INTO public.extraction_run(id,posting_id,model,prompt_version,dict_version,input_hash,
             input_tokens,output_tokens,cost_usd,is_current,run_at,llm_output_raw)
             OVERRIDING SYSTEM VALUE VALUES(1,1,'fixture','fixture','fixture',repeat('0',64),0,0,0,true,'2026-11-01Z','{}');
-        INSERT INTO public.recruit_unit(id,run_id,seq,name,is_it,career)
-            OVERRIDING SYSTEM VALUE VALUES(1,1,1,'backend',true,'신입');
+        INSERT INTO public.recruit_unit(id,run_id,seq,name,is_it,job,career)
+            OVERRIDING SYSTEM VALUE VALUES(1,1,1,'backend',true,'백엔드','신입');
         INSERT INTO public.unit_item(id,unit_id,category,seq,text,quote)
             OVERRIDING SYSTEM VALUE VALUES(1,1,'필수',1,'Java','Java');
         INSERT INTO public.requirement(id,item_id,capability_id,relation)

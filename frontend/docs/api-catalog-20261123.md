@@ -37,7 +37,9 @@ Next 서버가 Spring 공고 API 또는 사용자용 RDS/SQLite에 연결한다.
 | POST | `/api/analysis-preview` | 임의 GitHub 형식 링크로 흐름 미리보기 및 사용자별 예시 LV 저장 | 일반 회원, 외부 GitHub/LLM 호출 없음 |
 | POST | `/api/documents` | PDF 업로드, 텍스트와 기술 근거 추출 | 일반 회원, multipart, PDF 10MB 이하 |
 | GET | `/api/documents/{id}` | 본인 문서 다운로드 | 본인 세션, view=text로 추출 텍스트 조회 |
-| GET | `/api/jobs` | 공고 목록/검색/필터/상세 | 공개. 목록은 RDS 전체 진행 공고를 DB에서 검색·정렬·페이지 처리하며 상세는 Spring API 사용 |
+| GET | `/api/jobs` | 공고 목록/검색/필터/상세 | 공개. 현재 백엔드·데이터 엔지니어 직무와 본문이 추출된 진행 공고만 조회. 마감, 검토 제외, 관리자 숨김 제외. skillCategories는 담당자 파이프라인의 공고 카테고리 원값(NULL/빈 목록 구분), 사용자 LV와 별개. 전체 검색 후 페이지 처리, 상세는 Spring API 사용 |
+| GET | `/api/admin/postings` | 공고 노출 관리 목록 | 관리자 전용. status=PUBLISHED/HIDDEN/FILTERED/CLOSED, q, offset. 상태별 개수와 전체 페이지 수 제공 |
+| PATCH | `/api/admin/postings` | 공고 숨김 또는 다시 올리기 | 관리자 세션, 동일 출처 Origin 필요. id, revision, hidden. 상태 경합 또는 노출 조건 미충족 시 409. `career_posting_visibility`에 환경별 저장, 추출 검토 결과는 변경하지 않음 |
 | GET | `/api/jobs/posting` | Lever 공고 본문 읽기 | 공개, url 파라미터, 지원 URL만 |
 | GET | `/api/jobs/keywords` | 공고의 검수된 역량 문장/카테고리 | 공개, jobId 필요 |
 | GET | `/api/jobs/my-levels` | 본인 공고/역량 문장별 RDS LV | 일반 회원, jobId와 version 필요, userId 입력으로 사용자 변경 불가 |
@@ -114,7 +116,7 @@ Spring API에 웹 세션 기반 사용자 인증/소유권 연결이 완성된 �
 
 | 메서드 | 경로 | 파라미터/본문 | 역할/연동 |
 |---|---|---|---|
-| GET | `/api/health` | 없음 | 서버 상태 |
+| GET | `/api/system/status` | 없음 | 배포용 백엔드 실행 상태 확인 (DB 조회는 별도 점검) |
 | GET | `/api/postings` | keyword, status, page, size(1~100) | 수집 공고 목록, 웹 연결 |
 | GET | `/api/postings/{postingId}` | 공고 숫자 ID | 공고/이미지/모집 단위/현재 추출 결과, 웹 연결 |
 | GET | `/api/skill-categories` | 없음 | 검수된 카테고리 정책, 웹 연결 |
@@ -148,6 +150,10 @@ Spring 문서: `/swagger-ui/index.html`, OpenAPI JSON: `/v3/api-docs` (Spring에
 | 사용자 자료 메타데이터 | RDS career_lv_analysis_source | 실제 PDF 바이트의 저장 위치와 구분 |
 | 관리자 권한 | RDS career_lv_member.app_role | MEMBER/ADMIN, 클라이언트 role 입력을 신뢰하지 않음 |
 | 공지사항 | RDS career_notice | namespace별 분리, 관리자만 변경 |
+| 공고 숨김 상태 | RDS career_posting_visibility | namespace + 공고 ID별 저장, 재추출과 분리, 관리자 변경 기록 및 revision 보관 |
+
+공고 노출 관리 배포에는 `db/migrations/11-posting-visibility.sql`이 필요하다.
+`frontend/scripts/setup-community.mjs`가 이를 적용한다. FE와 BE의 `CAREER_PROFILE_NAMESPACE`는 같은 값이어야 한다.
 
 웹 사용자 ID(UUID/문자열)와 Spring 기존 사용자 ID(BIGINT)는 별개이며 임의로 바꿔 넣으면 안 된다.
 최신 화면의 문장별 LV에는 `/api/jobs/my-levels`를 사용한다. Spring 기존 `/fit`을 최신 문장 평가로 대체해서 설명하지 않는다.

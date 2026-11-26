@@ -224,22 +224,44 @@ test("saved LV points show instant hover, keyboard and tap values without text l
         sources: [
           { id: "demo-pdf", kind: "PDF", title: "이력서.pdf", simulated: true },
         ],
-        levels: examples.examples.map((keyword, index) => ({
-          keywordId: keyword.id,
-          text: keyword.text,
-          categoryCodes: keyword.categoryCodes,
-          score: 30 + index * 7,
-          referenceScore: 65 + index * 3,
-          referenceKind: "SYNTHETIC_APPLICANTS",
-          evaluationKind: "DEMO",
-          evaluatedAt: "2026-11-23",
-        })),
+        levels: [
+          ...examples.examples.map((keyword, index) => ({
+            keywordId: keyword.id,
+            text: keyword.text,
+            categoryCodes: keyword.categoryCodes,
+            score: 30 + index * 7,
+            referenceScore: 65 + index * 3,
+            referenceKind: "SYNTHETIC_APPLICANTS",
+            evaluationKind: "DEMO",
+            evaluatedAt: "2026-11-23",
+          })),
+          ...["Q", "S", "H"].map((code) => ({
+            keywordId: `hidden-${code}`,
+            text: `hidden-${code}`,
+            categoryCodes: [code],
+            score: 100,
+            referenceScore: null,
+            referenceKind: null,
+            evaluationKind: "CONFIRMED",
+            evaluatedAt: "2026-11-25",
+          })),
+        ],
       },
     }),
   );
   await page.goto(analysis);
   const radar = page.getByTestId("saved-level-radar");
   await expect(radar).toBeVisible();
+  await expect(radar).not.toContainText(
+    /보안|개인정보보호|임베디드|장비 제어|코드 품질|테스트/,
+  );
+  await expect(radar).not.toHaveAttribute(
+    "aria-label",
+    /보안|개인정보보호|임베디드|코드 품질/,
+  );
+  await expect(radar.locator('polygon[data-series="reference"]')).toHaveCount(
+    1,
+  );
   const point = radar
     .locator(".radar-point")
     .filter({ has: page.locator('[data-series-point="mine"]') })

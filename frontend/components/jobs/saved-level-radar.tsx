@@ -1,4 +1,7 @@
-import { skillCategories } from "@/lib/skill-categories";
+import {
+  visibleSkillCategories as skillCategories,
+  hasVisibleSkillCategory,
+} from "@/lib/skill-categories";
 import type { SavedPostingLevel } from "@/types/posting-level";
 import { RadarPoint } from "./radar-point";
 
@@ -22,8 +25,19 @@ export function SavedLevelRadar({ levels }: { levels: SavedPostingLevel[] }) {
       },
     ];
   });
-  const demo = levels.some((row) => row.evaluationKind === "DEMO");
-  const kinds = new Set(levels.map((row) => row.referenceKind));
+  const visibleLevels = levels.filter((row) =>
+    hasVisibleSkillCategory(row.categoryCodes),
+  );
+  const demo = visibleLevels.some((row) => row.evaluationKind === "DEMO");
+  const kinds = new Set(visibleLevels.map((row) => row.referenceKind));
+  if (!axes.length) {
+    return (
+      <section className="personal-radar-card saved-level-radar">
+        <h4>공고별 LV 비교</h4>
+        <p>현재 표시할 카테고리의 평가 결과가 없습니다.</p>
+      </section>
+    );
+  }
   const hasReference =
     axes.every((axis) => axis.reference !== null) && kinds.size === 1;
   const referenceLabel = kinds.has("SYNTHETIC_APPLICANTS")
