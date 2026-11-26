@@ -29,6 +29,8 @@
    2. 모집 직무를 빠짐없이 담았는가
    3. IT 직무인데 내용이 비어 있지 않은가
 6. **DB 저장 (Load):** PostgreSQL에 넣는다(`db_load.py`). → [ERD](docs/erd.png), [물리 설계](docs/physical-design.md) ([그림](docs/erd-physical.png))
+7. **공고 카테고리:** 백엔드·데이터 자리의 필수·우대 줄에 팀원 7개판 기술 카테고리를 붙이고(팀원 결과에 없는 글만 LLM), 공고마다 모아 `posting.skill_categories`에 쓴다(`team_categories.py`).
+   - 값: 코드 목록(예: `{L,B,D}`) · `{}` 백엔드·데이터 공고인데 기술 없음 · `NULL` 그 외 자리만 있는 공고(대상 아님)·아직 처리 전
 
 ## 파일
 
@@ -46,6 +48,7 @@
 | `capdict.py` | 표준화 사전 조회(DB의 능력·기술·제외할 말을 읽음). 사용자 역량도 같은 사전을 쓴다. |
 | `db/seed_dictionary.sql` | 빈 DB(테스트·새 DB)를 채우는 사전. DB에서 `export-dict`로 내려받은 것이라 직접 고치지 않는다. |
 | `db/schema.sql` | DB 표 만들기(PostgreSQL DDL). 설명은 [docs/physical-design.md](docs/physical-design.md) |
+| `team_categories.py` | 공고 카테고리(팀원 7개판): 줄마다 팀원 결과나 LLM 결과로 카테고리를 찾아 공고 단위로 모은다. 팀원 파일·LLM 결과는 `out/team_categories/`(로컬 전용) |
 | `db_load.py` | DB 저장: 표 만들기와 사전 채우기(`init`), 사전 내려받기(`export-dict`), 공고·추출 결과 넣기(`load`). 여러 번 돌려도 겹치지 않는다. |
 | `docker-compose.yml`, `.env.example` | 로컬 개발용 PostgreSQL(Docker). 비밀번호는 `.env`(올리지 않음) |
 | `collect.py` | Airflow 수집: 두 직무 목록을 경력 필터를 켜고 끝까지 보기, 새 공고 고르기(목록 − 아는 번호, 마감일, 버린 공고) |
@@ -91,12 +94,12 @@ py -3.12 db_load.py load --run gpt-5.6-luna-ex            #    공고·추출 �
 
 ## Airflow로 돌리기
 
-노트북의 Docker에서 DAG 3개가 수집 → OCR → LLM 추출 → DB 저장을 자동으로 하고, Slack으로 알린다.
+노트북의 Docker에서 DAG 3개가 수집 → OCR → LLM 추출 → DB 저장 → 카테고리 붙이기를 자동으로 하고, Slack으로 알린다.
 설계는 [docs/superpowers/specs/2026-10-27-airflow-dags-design.md](docs/superpowers/specs/2026-10-27-airflow-dags-design.md), 태스크 그림은 [③](docs/dag-backfill.png) · [①](docs/dag-daily.png), 수정·마감을 잡는 방법은 [그림](docs/recheck-cases.png).
 
 | DAG | 언제 | 하는 일 |
 |---|---|---|
-| ③ 일회성 전체 수집 `backfill_once` | 관리 화면에서 **직접 한 번** | 진행 중인 대상 공고 전부를 DB 저장까지. LLM 상한은 실행 한 번에 $10 |
+| ③ 일회성 전체 수집 `backfill_once` | 관리 화면에서 **직접 한 번** | 진행 중인 대상 공고 전부를 DB 저장·카테고리 붙이기까지. LLM 상한은 실행 한 번에 $10 |
 | ① 매일 수집 `daily_collect` | 매일 00:00 | 목록 전체를 보고 새 공고 + 밀린 공고 수집, '수정'된 공고는 본문이 바뀐 것만 다시 추출, 목록에서 사라진 공고는 '접수마감'이면 마감, 마감일 반영. 시작할 때 어제 LLM 비용을 Slack으로 |
 
 목록은 사람인 경력 필터(신입·경력 3년 이하·경력무관)를 켜고 받는다. 예전 ② 수정 확인은 ①에 합쳤다 — 사람인이 '수정' 표시를 약 24시간만 보여 줘서 매일 봐야 한다.
@@ -120,7 +123,8 @@ py -3.12 db_load.py load --run gpt-5.6-luna-ex            #    공고·추출 �
    Get-ChildItem db/migrations/*.sql | Sort-Object Name | ForEach-Object {
      docker cp $_.FullName career-db:/tmp/m.sql; docker exec career-db psql -U career -d career -v ON_ERROR_STOP=1 -f /tmp/m.sql }
    ```
-5. Airflow를 띄운다. 이미지는 처음에 15~20분 걸리고 약 19GB다.
+5. 팀원 7개판 파일 `career-embedding-analysis.html`을 `out/team_categories/`에 둔다(공고 글이라 저장소에 없음). 없으면 '카테고리 붙이기' 태스크가 실패하고 Slack으로 알린다.
+6. Airflow를 띄운다. 이미지는 처음에 15~20분 걸리고 약 19GB다.
    ```powershell
    docker compose -f docker-compose.airflow.yml build
    docker compose -f docker-compose.airflow.yml up -d
@@ -221,6 +225,7 @@ git clone https://github.com/ldm310/Capstone1-Career.git C:\career-airflow
 git -C C:\career-airflow checkout --detach origin/main
 copy job-skill\.env C:\career-airflow\job-skill\.env                  # RDS_HOST·RDS_PASSWORD 가 든 운영 설정
 robocopy job-skill\data\paddlex C:\career-airflow\job-skill\data\paddlex /E   # OCR 모델을 다시 받지 않게
+robocopy job-skill\out\team_categories C:\career-airflow\job-skill\out\team_categories career-embedding-analysis.html llm_labels.jsonl   # 카테고리: 팀원 파일·LLM 결과(로컬 전용)
 docker compose -f job-skill\docker-compose.airflow.yml down                       # 작업 폴더의 Airflow 내리기
 docker compose -f C:\career-airflow\job-skill\docker-compose.airflow.yml up -d   # 전용 폴더로 올리기(이미지는 그대로 씀)
 ```

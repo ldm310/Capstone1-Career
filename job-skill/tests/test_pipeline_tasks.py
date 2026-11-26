@@ -516,3 +516,26 @@ def test_daily_collect_remembers_modified_postings(daily, tmp_path):
     """'수정'으로 고른 공고는 DB 에 '다시 확인할 공고'로 표시해 둔다(확인·저장에 실패하면 다음 날 다시 고르게)."""
     daily.step_collect(str(tmp_path), include_pending=True)
     assert daily._calls["due"] == ["O1"]
+
+
+def test_report_has_category_line(tmp_path):
+    """카테고리 붙이기 결과는 추출 줄 바로 아래 한 줄(2026-11-27). 못 붙인 공고가 있으면 적고, 결과가 없으면 줄도 없다."""
+    import pipeline_tasks
+    _report_run(tmp_path)
+    cat = {"공고": 990, "새 글": 12, "비용": 0.004, "못 붙인 공고": 0, "고침": 3}
+    lines = pipeline_tasks.backfill_report(str(tmp_path), {"new": 4, "excluded": 7}, cat).splitlines()
+    assert lines[2:5] == ["• 추출: 1/4건 · 확인 필요 1", "• 카테고리: 공고 3개 고침 · 새 글 12개 LLM $0.00",
+                          "• 비용: $0.73 (상한 $10)"]
+    msg = pipeline_tasks.daily_report(str(tmp_path), {}, {}, 0.73, {**cat, "못 붙인 공고": 2})
+    assert "• 카테고리: 공고 3개 고침 · 새 글 12개 LLM $0.00 · 못 붙인 공고 2(다음에 다시)" in msg.splitlines()
+    assert "카테고리" not in pipeline_tasks.daily_report(str(tmp_path), {}, {}, 0.73)
+
+
+def test_step_categories_writes_posting_table(monkeypatch):
+    """카테고리 태스크는 공고 표에 쓰는 한 번 돌리기(team_categories.update(apply=True))를 그대로 부른다."""
+    import pipeline_tasks
+    import team_categories
+    seen = []
+    monkeypatch.setattr(team_categories, "update", lambda **k: seen.append(k) or {"고침": 1})
+    assert pipeline_tasks.step_categories() == {"고침": 1}
+    assert seen == [{"apply": True}]
