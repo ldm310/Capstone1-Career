@@ -1,7 +1,13 @@
 """lv-stat 2단계 변수 점검용 공통 부품. 버림용 스파이크(제품 코드 아님, 2026-11-26).
+2단계 스파이크를 스테이징 서비스로 옮김(2026-11-27).
 
 - 받은 레포는 읽기만 한다(git plumbing). 실행·빌드·설치·시험하지 않는다.
-- 사람·레포 색인은 s2/index/<pid>/<repo_key>.json (s2_index.py가 만든다).
+- 작업 폴더 S2 = 환경 변수 LV_S2_HOME(요청마다 따로), 없으면 코드 폴더. people.json·index/·out/·.emptyhome/이 그 아래다.
+  불러올 때 정하므로 LV_S2_HOME은 불러오기 전에 절대 경로로 둔다(git -C가 폴더를 바꾸므로 HOME이 상대 경로면 안 됨).
+  Linguist 자료(data/linguist/)는 코드 폴더에서 읽는다.
+- 사람·레포 색인은 <S2>/index/<pid>/<repo_key>.json (s2_index.py가 만든다).
+- git 자식 프로세스에는 토큰을 넘기지 않는다(GENV). 빠진 파일 내용 받기(lazy fetch)는 <레포>/.git/lv-allow-lazy가
+  있는 레포(--filter=blob:none으로 받은 큰 레포)의 git()만 허용한다.
 - 카테고리 추출기는 load_person(pid)로 색인을 읽고, Repo.text()로 파일을 읽는다.
 """
 import datetime
@@ -11,19 +17,27 @@ import os
 import re
 import subprocess
 
-S2 = os.path.dirname(os.path.abspath(__file__))
+CODE = os.path.dirname(os.path.abspath(__file__))
+S2 = os.environ.get('LV_S2_HOME') or CODE
 INDEX = os.path.join(S2, 'index')
 OUT = os.path.join(S2, 'out')
-LINGUIST = os.path.join(os.path.dirname(S2), 'linguist-dl', 'languages.yml')
+LINGUIST = os.path.join(CODE, 'data', 'linguist', 'languages.yml')
 EMPTY_HOME = os.path.join(S2, '.emptyhome')
 os.makedirs(EMPTY_HOME, exist_ok=True)
-GENV = dict(os.environ, GIT_TERMINAL_PROMPT='0', GIT_LFS_SKIP_SMUDGE='1', GIT_NO_LAZY_FETCH='1',
+# git 자식 프로세스에 넘기지 않는 비밀값. 토큰은 같은 프로세스의 GitHub API 부품(ghapi)만 os.environ에서 읽는다.
+SECRET_ENV = ('LV_GITHUB_TOKEN', 'GH_TOKEN', 'GITHUB_TOKEN', 'GH_ENTERPRISE_TOKEN', 'GITHUB_ENTERPRISE_TOKEN', 'ANTHROPIC_API_KEY')
+GENV = dict({k: v for k, v in os.environ.items() if k not in SECRET_ENV},
+            GIT_TERMINAL_PROMPT='0', GIT_LFS_SKIP_SMUDGE='1', GIT_NO_LAZY_FETCH='1',
             GIT_CONFIG_NOSYSTEM='1', HOME=EMPTY_HOME, XDG_CONFIG_HOME=EMPTY_HOME, GIT_ASKPASS='/usr/bin/false')
+LAZY_MARK = 'lv-allow-lazy'      # <레포>/.git/ 아래 표시 파일. 큰 레포를 --filter=blob:none으로 받는 쪽이 만든다
 KST = datetime.timezone(datetime.timedelta(hours=9))
 
 
 def git(d, *a, inp=None, timeout=600, check=False):
-    p = subprocess.run(['git', '-C', d, '-c', 'core.hooksPath=/dev/null', '-c', 'core.quotePath=false', *a], input=inp, capture_output=True, env=GENV, timeout=timeout)
+    env = GENV
+    if os.path.exists(os.path.join(d, '.git', LAZY_MARK)):       # 표시한 레포만 빠진 파일 내용을 받으러 간다
+        env = {k: v for k, v in GENV.items() if k != 'GIT_NO_LAZY_FETCH'}
+    p = subprocess.run(['git', '-C', d, '-c', 'core.hooksPath=/dev/null', '-c', 'core.quotePath=false', *a], input=inp, capture_output=True, env=env, timeout=timeout)
     if check and p.returncode != 0:
         raise RuntimeError(f'git {a[:2]} 실패: {p.stderr.decode(errors="replace")[:200]}')
     return p.returncode, p.stdout

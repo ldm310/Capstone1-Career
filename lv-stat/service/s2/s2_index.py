@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """lv-stat 2단계 S1~S3(받기·계정 확인·색인). 버림용 스파이크(2026-11-26).
+2단계 스파이크를 스테이징 서비스로 옮김(2026-11-27): gh 대신 ghapi, 색인은 작업 폴더(LV_S2_HOME) 아래.
 
 usage: python3 -I s2_index.py P01 [P02 ...]
 - 계정 확인: GitHub API 'commits?author=<login>&sha=<분석 브랜치>'가 돌려준 SHA만 내 커밋이다(계정에 연결된 커밋).
   noreply 이메일(<id>+<login>@users.noreply.github.com)도 내 커밋으로 본다. 본인이 알려 준 이메일은 후보에게 받을 수 없어 없다.
-- GitHub는 gh로 GET만 부른다. 받은 코드는 읽기만 한다.
+- GitHub는 ghapi로 GET만 부른다(토큰은 LV_GITHUB_TOKEN, API에만 쓴다). 받은 코드는 읽기만 한다.
 """
 import json
 import os
@@ -14,22 +15,27 @@ import sys
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import ghapi as G  # noqa: E402
 import s2lib as L  # noqa: E402
 
 MAX_BLAME = 300_000
 AI_COAUTHOR = re.compile(r'Co-authored-by:[^\n]*(claude|anthropic|copilot|cursor|codex|openai|chatgpt|gemini|devin|aider|codeium|windsurf)', re.I)
 
 
-def gh_lines(path, jq, paginate=True):
-    args = ['gh', 'api'] + (['--paginate'] if paginate else []) + [path, '--jq', jq]
-    for attempt in range(3):
-        p = subprocess.run(args, capture_output=True, text=True, timeout=300)
-        if p.returncode == 0:
-            return [x for x in p.stdout.splitlines() if x.strip()]
-        if '409' in p.stderr or '404' in p.stderr:
-            return []
-        time.sleep(3 * (attempt + 1))
-    raise RuntimeError(f'gh 실패: {path}: {p.stderr[:200]}')
+def api_shas(path):
+    """커밋 목록 API → SHA 목록(옛 jq '.[].sha'). 없는 레포·빈 레포(404·409)는 []."""
+    return [c['sha'] for c in G.get_all(path) if c.get('sha')]
+
+
+def api_prs(path):
+    """PR 목록 API → 옛 jq와 같은 칸만 남긴 목록:
+    {number, title, body: ((.body // "") | .[0:4000]), merged_at, merge_commit_sha, user: .user.login,
+     head_sha: .head.sha, created_at, labels: [.labels[].name]}"""
+    return [dict(number=p.get('number'), title=p.get('title'), body=(p.get('body') or '')[:4000],
+                 merged_at=p.get('merged_at'), merge_commit_sha=p.get('merge_commit_sha'),
+                 user=(p.get('user') or {}).get('login'), head_sha=(p.get('head') or {}).get('sha'),
+                 created_at=p.get('created_at'), labels=[x.get('name') for x in p.get('labels') or []])
+            for p in G.get_all(path)]
 
 
 def ensure_ref(d, branch):
@@ -172,7 +178,7 @@ def index_repo(pid, login, r):
         refs = [dict(name='HEAD', ref='HEAD', sha=out.decode().strip())]
     own = set()
     for x in refs:
-        own.update(gh_lines(f"repos/{r['full_name']}/commits?author={login}&sha={x['name'] if x['name'] != 'HEAD' else r['default_branch']}&per_page=100", '.[].sha'))
+        own.update(api_shas(f"repos/{r['full_name']}/commits?author={G.q(login)}&sha={G.q(x['name'] if x['name'] != 'HEAD' else r['default_branch'])}&per_page=100"))
     cs = commits_of(d, [x['ref'] for x in refs], own, login)
     own_shas = {c['sha'] for c in cs if c['own']}
     touched = {f['path'] for c in cs if c['own'] for f in c['files']}
@@ -186,9 +192,7 @@ def index_repo(pid, login, r):
         f['my_lines'] = sum(b - a + 1 for a, b in f['my_ranges']) if f['my_ranges'] else 0
     prs = []
     if r.get('prs'):
-        for line in gh_lines(f"repos/{r['full_name']}/pulls?state=all&per_page=100",
-                             '.[] | {number, title, body: ((.body // "") | .[0:4000]), merged_at, merge_commit_sha, user: .user.login, head_sha: .head.sha, created_at, labels: [.labels[].name]}'):
-            prs.append(json.loads(line))
+        prs = api_prs(f"repos/{r['full_name']}/pulls?state=all&per_page=100")
     tot = len(cs)
     return dict(key=r['key'], full_name=r['full_name'], dir=d, refs=refs, commits=cs, files=files, prs=prs,
                 own_share=round(len(own_shas) / tot, 3) if tot else 0, api_own=len(own), evidence=r.get('evidence', False))
