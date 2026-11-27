@@ -22,8 +22,14 @@ MAX_BLAME = 300_000
 AI_COAUTHOR = re.compile(r'Co-authored-by:[^\n]*(claude|anthropic|copilot|cursor|codex|openai|chatgpt|gemini|devin|aider|codeium|windsurf)', re.I)
 
 
-# 목록 API는 옛 gh api --paginate처럼 다음 쪽이 없을 때까지 받는다(2단계 동작 그대로, 쪽 수 상한 없음).
+# 목록 API는 옛 gh api --paginate처럼 다음 쪽이 없을 때까지 받는다(쪽 수 상한 없음).
 # ghapi.get_all 기본값(10쪽)에서 멈추면 1,000개가 넘는 내 커밋 SHA·PR이 표시 없이 빠진다.
+# 옛 gh 호출과 다른 점: 목록 하나를 300초로 묶던 제한(subprocess timeout)이 없고(ghapi는 요청마다 30초),
+# 쪽마다 줄이지 않고 모든 쪽을 메모리에 받은 뒤 줄인다.
+# 커밋 목록은 작성자로 거른 것이지만 PR 목록은 레포의 모든 PR이다. 그래서 PR이 많은 레포는 요청 수·시간·메모리가
+# PR 수만큼 늘고, 한 쪽이라도 실패하면(호출 한도 포함) 그 레포 색인 전체가 error가 된다(main).
+# 2단계는 본인 소유·포크 아님·400MB 이하 레포만 PR을 받았다(가장 많은 레포가 PR 122개). prs를 켤 레포는
+# people.json을 만드는 쪽이 정한다.
 API_PAGES = sys.maxsize
 
 
