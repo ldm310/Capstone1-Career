@@ -638,16 +638,28 @@ test.describe("store", () => {
   test("allows new job after failure", async () => {
     const first = await store.createJob(jobRequest("subject-a"));
     // 작업자가 집었다가, 다시 시작되며 진행 중이던 요청을 실패로 닫는다(작업자 recover).
+    const startedAt = new Date().toISOString();
     await workerUpdate(first.id, {
       status: "running",
       stage: "색인",
-      startedAt: new Date().toISOString(),
+      startedAt,
     });
+    const error = "작업자가 다시 시작되어 중단됐습니다. 다시 요청해 주세요.";
+    const finishedAt = new Date().toISOString();
     await workerUpdate(first.id, {
       status: "failed",
       stage: "실패",
-      error: "작업자가 다시 시작되어 중단됐습니다. 다시 요청해 주세요.",
-      finishedAt: new Date().toISOString(),
+      error,
+      finishedAt,
+    });
+    // 화면은 실패 이유(error)를 그대로 보인다(Review Focus 3). latestJob이 작업자가 더한 칸을 함께 준다.
+    expect(await store.latestJob("staging", "subject-a")).toEqual({
+      ...first,
+      status: "failed",
+      stage: "실패",
+      startedAt,
+      finishedAt,
+      error,
     });
     // 두 요청의 createdAt이 같은 밀리초가 되지 않게 조금 기다린다.
     await new Promise((resolve) => setTimeout(resolve, 5));
