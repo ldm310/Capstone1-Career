@@ -7,11 +7,14 @@
   Linguist 자료(data/linguist/)는 코드 폴더에서 읽는다.
 - 사람·레포 색인은 <S2>/index/<pid>/<repo_key>.json (s2_index.py가 만든다).
 - git 자식 프로세스에는 토큰을 넘기지 않는다(GENV). GENV는 빠진 파일 내용 받기(lazy fetch)를 막는다(GIT_NO_LAZY_FETCH=1).
-  git()은 늘 GENV를 쓴다. git()이 lazy fetch를 켜는 길은 없다.
+  git()은 늘 GENV를 쓴다. git()이 lazy fetch를 켜는 길은 없다. 다만 GIT_NO_LAZY_FETCH는 git 2.45부터라 그 전 git은 이 값을 모른다.
 - 큰 레포 표시: <레포>/.git/lv-partial(PARTIAL_MARK)은 --filter=blob:none으로 받은 큰 레포다(받는 쪽이 만든다).
   s2_index는 그 레포에서 내 경로의 파일 내용(합친 커밋에서만 생긴 판 포함)만 한 번에 받는다(prefetch_mine).
   「제안」(확인 전): 남의 경로는 blame이 읽는 판(내 경로를 만든 커밋이 없앤 파일의 그 판)만 받는다.
+  받기 앞뒤로 그 레포의 부분 clone 설정(promisor)을 지우므로(s2_index.close_promisor), 옛 git도 그 레포에서는 그 뒤로 받으러 가지
+  않는다(뒤에 도는 추출기도 같음).
   s2_index의 git_lazy(2단계 코드 그대로)는 표시 없는 레포에서만, numstat이 실패하면 lazy fetch를 허용해 다시 부른다.
+  표시 없는 레포(blob:limit=1m)는 설정을 지우지 않으므로, 옛 git에서는 빠진 큰 파일(1MB 넘음)을 받으러 갈 수 있다(2단계와 같음).
 - 카테고리 추출기는 load_person(pid)로 색인을 읽고, Repo.text()로 파일을 읽는다.
 """
 import datetime
