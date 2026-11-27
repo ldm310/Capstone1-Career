@@ -49,6 +49,22 @@ function profile(
   };
 }
 
+// L 언어만 바꾼 합성 프로필. lv·best(가장 높은 언어)는 시험에서 손으로 준다.
+function withLanguages(
+  languages: Record<string, number>,
+  lv: number,
+  best: string,
+): LvProfile {
+  const p = profile();
+  return {
+    ...p,
+    categories: {
+      ...p.categories,
+      L: { ...p.categories.L, lv, languages, best },
+    },
+  };
+}
+
 function scoreOf(p: LvProfile, text: string, categoryCodes: string[]) {
   return scoreKeyword(p, { text, categoryCodes });
 }
@@ -85,6 +101,35 @@ test.describe("score", () => {
     expect(detectLanguages("C언어 가능자")).toEqual(["C"]);
   });
 
+  test("SQL is a language, MySQL and NoSQL are not", () => {
+    expect(detectLanguages("SQL 활용 능력")).toEqual(["SQL"]);
+    expect(detectLanguages("PL/SQL 또는 T-SQL")).toEqual(["SQL"]);
+    expect(detectLanguages("MySQL, PostgreSQL, NoSQL, SQLite")).toEqual([]);
+  });
+
+  test("R is a word on its own, not in R&D, AR/VR or R-CNN", () => {
+    expect(detectLanguages("Python 또는 R 활용")).toEqual(["Python", "R"]);
+    expect(detectLanguages("Python/R 분석")).toEqual(["Python", "R"]);
+    expect(detectLanguages("R언어 통계 분석")).toEqual(["R"]);
+    expect(detectLanguages("R&D 경험, R&R 정의")).toEqual([]);
+    expect(detectLanguages("AR/VR 서비스, Faster R-CNN")).toEqual([]);
+  });
+
+  test("Shell takes Bash and Korean names, PowerShell is its own", () => {
+    const rows: [string, string[]][] = [
+      ["Shell, Python 스크립트 작성", ["Python", "Shell"]],
+      ["Bash 스크립트", ["Shell"]],
+      ["리눅스 쉘 스크립트", ["Shell"]],
+      ["유닉스셸 명령", ["Shell"]],
+      ["PowerShell 스크립트", ["PowerShell"]],
+      ["Power Shell 스크립트", ["PowerShell"]],
+      ["파워쉘 스크립트", ["PowerShell"]],
+      ["파워 셸 스크립트", ["PowerShell"]],
+    ];
+    for (const [text, want] of rows)
+      expect(detectLanguages(text), text).toEqual(want);
+  });
+
   test("dictionary returns Linguist names", () => {
     const rows: [string, string[]][] = [
       ["JAVA, python 개발", ["Java", "Python"]],
@@ -97,6 +142,8 @@ test.describe("score", () => {
         "Swift, Dart, Ruby, PHP7, Scala",
         ["Swift", "Dart", "Ruby", "PHP", "Scala"],
       ],
+      ["Lua, Groovy, CUDA11", ["Lua", "Groovy", "Cuda"]],
+      ["C#, F#", ["C#", "F#"]],
     ];
     for (const [text, want] of rows)
       expect(detectLanguages(text), text).toEqual(want);
@@ -138,6 +185,89 @@ test.describe("score", () => {
   test("L without language uses best", () => {
     expect(scoreOf(profile(), "자료구조와 알고리즘 이해", ["L"])).toEqual({
       score: 66,
+      used: ["L"],
+    });
+  });
+
+  test("L uses SQL, R and Shell values the worker writes", () => {
+    // SQL 0.5 × 20 = 10. SQL을 못 찾으면 언어 없는 문장이 되어 L LV 3.3으로 66이 된다.
+    const sql = withLanguages({ Java: 3.3, SQL: 0.5 }, 3.3, "Java");
+    expect(scoreOf(sql, "SQL 활용 능력", ["L"])).toEqual({
+      score: 10,
+      used: ["L"],
+    });
+    // R 3.5와 Python 1.0 중 높은 3.5 × 20 = 70. R을 못 찾으면 Python만 남아 20이 된다.
+    const r = withLanguages({ R: 3.5, Python: 1.0 }, 3.5, "R");
+    expect(scoreOf(r, "Python 또는 R 활용", ["L"])).toEqual({
+      score: 70,
+      used: ["L"],
+    });
+    // Shell 3.0과 Python 0.5 중 높은 3.0 × 20 = 60. Shell을 못 찾으면 10이 된다.
+    const shell = withLanguages({ Shell: 3.0, Python: 0.5 }, 3.0, "Shell");
+    expect(scoreOf(shell, "Shell, Python 스크립트 작성", ["L"])).toEqual({
+      score: 60,
+      used: ["L"],
+    });
+  });
+
+  test("L finds the person's own languages outside the dictionary", () => {
+    const p = withLanguages({ Elixir: 4.0, Python: 1.0 }, 4.0, "Elixir");
+    // 사전에 없는 Elixir도 그 사람의 언어라 대소문자 없이 찾는다: 높은 4.0 × 20 = 80.
+    // 사전만 보면 Python만 남아 20이 된다.
+    expect(scoreOf(p, "Python, elixir 경험", ["L"])).toEqual({
+      score: 80,
+      used: ["L"],
+    });
+    // 문장에 적히지 않은 언어는 넣지 않는다: Python 1.0 × 20 = 20
+    expect(scoreOf(p, "Python 경험", ["L"])).toEqual({
+      score: 20,
+      used: ["L"],
+    });
+    // 이름의 +도 글자 그대로 찾는다: Objective-C++ 4.0 × 20 = 80
+    // (사전의 Objective-C도 걸리지만 이 사람은 안 써서 0이다)
+    const objcpp = withLanguages(
+      { "Objective-C++": 4.0, Python: 1.0 },
+      4.0,
+      "Objective-C++",
+    );
+    expect(scoreOf(objcpp, "Objective-C++ 경험", ["L"])).toEqual({
+      score: 80,
+      used: ["L"],
+    });
+  });
+
+  test("own-language names match whole words only", () => {
+    // Redis의 Red, Clean의 Lean은 언어가 아니다: JavaScript 1.0 × 20 = 20
+    const p = withLanguages(
+      { Red: 4.0, Lean: 4.0, JavaScript: 1.0 },
+      4.0,
+      "Red",
+    );
+    expect(
+      scoreOf(p, "Redis 캐시와 Clean Code, JavaScript 개발", ["L"]),
+    ).toEqual({ score: 20, used: ["L"] });
+  });
+
+  test("short own-language names need clear word edges", () => {
+    // 두 글자 이하 이름(D·Io)은 대소문자를 가리고 영문·숫자·_·&·-에 붙은 것을 세지 않는다.
+    const p = withLanguages({ D: 4.0, Io: 4.0, Python: 1.0 }, 4.0, "D");
+    // R&D의 D와 socket.io의 io는 언어가 아니다: Python 1.0 × 20 = 20
+    expect(scoreOf(p, "R&D 부서에서 socket.io와 Python 개발", ["L"])).toEqual({
+      score: 20,
+      used: ["L"],
+    });
+    // 따로 적힌 D는 언어다: 높은 4.0 × 20 = 80
+    expect(scoreOf(p, "D, Python 개발", ["L"])).toEqual({
+      score: 80,
+      used: ["L"],
+    });
+  });
+
+  test("dictionary names keep dictionary rules", () => {
+    // Java는 사전 규칙으로만 찾으므로 "Java Script"는 JavaScript(안 써서 0)다.
+    // 이름 그대로 다시 찾으면 Java 3.3이 걸려 66이 된다.
+    expect(scoreOf(profile(), "Java Script 경험", ["L"])).toEqual({
+      score: 0,
       used: ["L"],
     });
   });
