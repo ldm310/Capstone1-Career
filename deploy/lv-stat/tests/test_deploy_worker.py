@@ -1,6 +1,13 @@
-"""deploy_worker.sh 시험: 가짜 HOME·가짜 sudo/systemctl 로만 돈다(실제 서비스·EC2·GitHub 는 안 건드림)."""
+"""deploy_worker.sh 시험: 가짜 HOME·가짜 sudo/systemctl 로만 돈다(실제 서비스·EC2·GitHub 는 안 건드림).
+
+스크립트가 PATH 로 찾아 부르는 외부 명령(TRACED·STUBS)은 기록용 껍데기를 거친다. 껍데기는 인자를 argv.log 에
+적고, 자기 환경에 시험용 토큰 값이 있으면 ENV-LEAK 를 적은 뒤 진짜 명령(또는 가짜 동작)을 부른다. run_script 는
+돌릴 때마다 토큰 값이 출력·외부 명령의 인자·외부 명령의 환경에 없는지 본다. 목록에 없는 명령과 절대 경로로
+부르는 명령(/usr/bin/printf 등)은 이 방법으로 보지 못한다.
+"""
 import os
 from pathlib import Path
+import shutil
 import stat
 import subprocess
 import tempfile
@@ -10,18 +17,44 @@ import unittest
 SCRIPT = Path(__file__).resolve().parents[1] / 'deploy_worker.sh'
 SVC = 'career-lv-worker-staging'
 TOKEN = 'ghp_' + 'Fake0Token1Value2For3Tests4Only5xyz'   # 시험용 가짜 값
+FAILED_TOKEN = 'ghp_' + 'Second0Fake1Token2' * 2        # 시험용 가짜 값(실패해 되돌린 배포가 가져온 토큰)
+ROTATED_TOKEN = 'ghp_' + 'Third0Fake1Token3' * 2        # 시험용 가짜 값(바꾼 토큰)
+SECRETS = (TOKEN, FAILED_TOKEN, ROTATED_TOKEN)
+PATH0 = os.environ['PATH']
+BASH = shutil.which('bash', path=PATH0)
+# 기록용 껍데기를 씌울 외부 명령: 스크립트가 쓰는 것과, 고치다가 토큰을 인자로 넘기기 쉬운 것
+TRACED = ('awk', 'basename', 'bash', 'cat', 'chmod', 'cmp', 'cp', 'curl', 'cut', 'date', 'dd', 'df', 'dirname',
+          'env', 'expr', 'find', 'free', 'git', 'grep', 'head', 'id', 'install', 'ln', 'ls', 'mkdir', 'mktemp', 'mv',
+          'printf', 'python3', 'readlink', 'realpath', 'rm', 'sed', 'seq', 'sh', 'sort', 'stat', 'tail', 'tee',
+          'timeout', 'touch', 'tr', 'wc', 'xargs')
+
+
+def traced(name):
+    """기록 줄(sh). 찾을 토큰 값은 needles 파일에서 읽는다(이 프로세스의 인자·환경에 올리지 않음)."""
+    return ('#!/bin/sh\n'
+            f'printf "%s\\n" "{name} $*" >> "$STUB_DIR/argv.log"\n'
+            'exported=$(export -p)\n'
+            'while IFS= read -r needle; do\n'
+            f'  case "$exported" in *"$needle"*) printf "%s\\n" "ENV-LEAK {name}" >> "$STUB_DIR/argv.log" ;; esac\n'
+            'done < "$STUB_DIR/needles"\n')
+
 
 STUBS = {
-    'sudo': '#!/bin/sh\n[ "$1" = -n ] && shift\nexec "$@"\n',
-    'systemctl': '#!/bin/sh\n'
-                 'flag=no; [ -n "${LV_GITHUB_TOKEN+x}" ] && flag=yes\n'
+    'sudo': '[ "$1" = -n ] && shift\nexec "$@"\n',
+    'systemctl': 'flag=no; [ -n "${LV_GITHUB_TOKEN+x}" ] && flag=yes\n'
                  'echo "$* token-env=$flag" >> "$STUB_DIR/systemctl.log"\n'
                  'case "$1" in\n'
                  '  is-active) [ "$(cat "$STUB_DIR/active")" = yes ] && exit 0; exit 3 ;;\n'
                  '  show) echo 0 ;;\n'
+                 # systemd 처럼: 서비스 파일은 daemon-reload 때 읽고, restart 는 그때 읽어 둔 설정으로 켠다
+                 f'  daemon-reload) mm=none; u="$LV_UNIT_DIR/{SVC}.service"\n'
+                 '    if [ -f "$u" ]; then while IFS= read -r l; do case "$l" in MemoryMax=*) mm=$l ;; esac; done < "$u"; fi\n'
+                 '    echo "$mm" > "$STUB_DIR/loaded" ;;\n'
+                 '  restart) mm=none; [ -f "$STUB_DIR/loaded" ] && read -r mm < "$STUB_DIR/loaded"\n'
+                 '    echo "$mm" >> "$STUB_DIR/restarts.log" ;;\n'
                  'esac\nexit 0\n',
-    'journalctl': '#!/bin/sh\nexit 0\n',
-    'sleep': '#!/bin/sh\nexit 0\n',
+    'journalctl': 'exit 0\n',
+    'sleep': 'exit 0\n',
 }
 
 FAKE_WORKER = '''import os, sys
@@ -41,17 +74,35 @@ def sha(n):
     return f'{n:040x}'
 
 
+def write_exe(path, body):
+    path.write_text(body)
+    path.chmod(0o755)
+
+
 class DeployWorkerTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        # 껍데기·가짜 명령은 한 번만 만든다(macOS 는 새 실행 파일을 처음 돌릴 때 느림). 기록은 시험마다 따로(STUB_DIR)
+        cls.bin_temp = tempfile.TemporaryDirectory()
+        cls.bin = Path(cls.bin_temp.name).resolve()
+        for name in TRACED:
+            real = shutil.which(name, path=PATH0)
+            if real:   # 이 컴퓨터에 없는 명령(macOS 의 free·timeout 등)은 없는 그대로 둔다
+                write_exe(cls.bin / name, traced(name) + f'exec "{real}" "$@"\n')
+        for name, body in STUBS.items():
+            write_exe(cls.bin / name, traced(name) + body)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.bin_temp.cleanup()
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         root = Path(self.temp.name).resolve()
         self.home, self.units, self.stub = root / 'home', root / 'units', root / 'stub'
         for d in (self.home, self.units, self.stub):
             d.mkdir()
-        for name, body in STUBS.items():
-            p = self.stub / name
-            p.write_text(body)
-            p.chmod(0o755)
+        (self.stub / 'needles').write_text(''.join(s + '\n' for s in SECRETS))
         self.set_active(True)
         self.src = self.make_source(root / 'src')
         self.base = self.home / 'lv-stat' / 'staging'
@@ -73,19 +124,39 @@ class DeployWorkerTest(unittest.TestCase):
     def set_active(self, active):
         (self.stub / 'active').write_text('yes' if active else 'no')
 
-    def log(self):
-        p = self.stub / 'systemctl.log'
+    def read_stub(self, name):
+        p = self.stub / name
         return p.read_text() if p.exists() else ''
+
+    def log(self):
+        return self.read_stub('systemctl.log')
+
+    def loaded_at_restart(self):
+        """restart 할 때마다 systemd(가짜)가 읽어 두었던 서비스 설정의 MemoryMax 줄"""
+        return self.read_stub('restarts.log').splitlines()
+
+    def holders(self, secret):
+        """HOME 아래에서 그 값을 담은 파일(링크 제외)"""
+        return [p for p in self.home.rglob('*') if p.is_file() and not p.is_symlink() and secret.encode() in p.read_bytes()]
 
     def run_script(self, commit, src=None, token=None, **extra):
         env = {k: v for k, v in os.environ.items() if k not in ('LV_GITHUB_TOKEN', 'TARGET', 'DEPLOY_ENV', 'CAREER_ENV')}
-        env.update(HOME=str(self.home), PATH=f'{self.stub}:{os.environ["PATH"]}', STUB_DIR=str(self.stub),
+        env.update(HOME=str(self.home), PATH=f'{self.bin}:{PATH0}', STUB_DIR=str(self.stub),
                    GITHUB_REF_NAME='develop', LV_UNIT_DIR=str(self.units), LV_CHECK_ROUNDS='2')
         if token is not None:
             env['LV_GITHUB_TOKEN'] = token
         env.update(extra)
-        return subprocess.run(['bash', str(SCRIPT), commit, str(src or self.src)], env=env,
-                              capture_output=True, text=True, timeout=120)
+        r = subprocess.run([BASH, str(SCRIPT), commit, str(src or self.src)], env=env,
+                           capture_output=True, text=True, timeout=120)
+        self.assert_token_stays_in_shell(r)
+        return r
+
+    def assert_token_stays_in_shell(self, r):
+        """토큰 값은 셸 변수로만 든다: 출력·외부 명령의 인자·외부 명령의 환경 어디에도 없다(걸린 줄만 보여 줌)."""
+        out, argv = (r.stdout + r.stderr).splitlines(), self.read_stub('argv.log').splitlines()
+        self.assertEqual([l for l in out if any(s in l for s in SECRETS)], [], '토큰 값이 출력에 나옴')
+        self.assertEqual([l for l in argv if any(s in l for s in SECRETS)], [], '토큰 값이 외부 명령의 인자에 나옴')
+        self.assertEqual([l for l in argv if l.startswith('ENV-LEAK')], [], '토큰 값이 외부 명령의 환경에 나옴')
 
     def current(self):
         link = self.base / 'current'
@@ -115,17 +186,25 @@ class DeployWorkerTest(unittest.TestCase):
 
     # --- 토큰 파일 --------------------------------------------------------------
     def test_token_file_is_owner_only_and_value_never_printed_or_inherited(self):
-        r = self.run_script(sha(1), token=f'  {TOKEN}\n')
+        r = self.run_script(sha(1), token=f'  {TOKEN}\n')        # 출력·인자·자식 환경은 run_script 가 본다
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertEqual(self.envfile.read_text(), f'LV_GITHUB_TOKEN={TOKEN}\n')
         self.assertEqual(stat.S_IMODE(self.envfile.stat().st_mode), 0o600)
-        self.assertNotIn(TOKEN, r.stdout + r.stderr)
-        self.assertNotIn(TOKEN, self.log())                       # 명령줄에 안 나옴
         self.assertNotIn('token-env=yes', self.log())             # sudo·systemctl 에 안 넘김
         self.assertEqual((self.home / 'career-data-staging/lv-stat/selfcheck-env.txt').read_text(), 'token-absent')
-        holders = [p for p in self.home.rglob('*') if p.is_file() and not p.is_symlink() and TOKEN.encode() in p.read_bytes()]
-        self.assertEqual(holders, [self.envfile])                 # 사본·임시 파일이 남지 않음
+        self.assertEqual(self.holders(TOKEN), [self.envfile])     # 사본·임시 파일이 남지 않음
         self.assertNotIn(TOKEN, self.unit.read_text())
+
+    def test_new_token_replaces_old_and_leaves_no_copy_of_old(self):
+        self.assertEqual(self.run_script(sha(1), token=TOKEN).returncode, 0)
+        r = self.run_script(sha(2), token=ROTATED_TOKEN)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(self.current(), sha(2))
+        self.assertEqual(self.envfile.read_text(), f'LV_GITHUB_TOKEN={ROTATED_TOKEN}\n')
+        self.assertEqual(stat.S_IMODE(self.envfile.stat().st_mode), 0o600)
+        self.assertEqual(self.holders(ROTATED_TOKEN), [self.envfile])
+        self.assertEqual(self.holders(TOKEN), [])                 # 옛 토큰의 사본(되돌리기용)도 남지 않음
+        self.assertFalse((self.base / 'lv-worker.env.prev').exists())
 
     def test_empty_secret_keeps_existing_token_file(self):
         self.envfile.parent.mkdir(parents=True)
@@ -187,20 +266,20 @@ class DeployWorkerTest(unittest.TestCase):
         self.assertEqual(self.current(), sha(1))
 
     # --- 되돌리기 ---------------------------------------------------------------
-    def test_rolls_back_release_and_token_when_new_release_is_not_active(self):
+    def test_rolls_back_release_unit_and_token_when_new_release_is_not_active(self):
         self.assertEqual(self.run_script(sha(1), token=TOKEN).returncode, 0)
-        unit_before = self.unit.read_text()
+        old_unit = self.unit.read_text().replace('MemoryMax=1500M', 'MemoryMax=999M')   # 옛 배포가 쓴 다른 설정
+        self.unit.write_text(old_unit)
         self.set_active(False)
-        new_token = 'ghp_' + 'Second0Fake1Token2' * 2
-        r = self.run_script(sha(2), token=new_token)
+        r = self.run_script(sha(2), token=FAILED_TOKEN)
         self.assertEqual(r.returncode, 1)
         self.assertEqual(self.current(), sha(1))
-        self.assertEqual(self.unit.read_text(), unit_before)
+        self.assertEqual(self.unit.read_text(), old_unit)                    # 서비스 설정도 옛 것으로
+        # restart 마다 systemd 가 읽어 둔 설정: 1판, 2판(새 설정), 되돌린 1판(옛 설정을 다시 읽은 뒤)
+        self.assertEqual(self.loaded_at_restart(), ['MemoryMax=1500M', 'MemoryMax=1500M', 'MemoryMax=999M'])
         self.assertEqual(self.envfile.read_text(), f'LV_GITHUB_TOKEN={TOKEN}\n')
         self.assertEqual(stat.S_IMODE(self.envfile.stat().st_mode), 0o600)
         self.assertFalse((self.base / 'lv-worker.env.prev').exists())
-        self.assertNotIn(new_token, r.stdout + r.stderr)
-        self.assertEqual(self.log().count(f'restart {SVC}'), 3)   # 1판, 2판, 되돌린 1판
 
     def test_first_deploy_failure_removes_service(self):
         self.set_active(False)
