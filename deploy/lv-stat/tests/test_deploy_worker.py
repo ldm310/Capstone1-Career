@@ -4,6 +4,8 @@
 적고, 자기 환경에 시험용 토큰 값이 있으면 ENV-LEAK 를 적은 뒤 진짜 명령(또는 가짜 동작)을 부른다. run_script 는
 돌릴 때마다 토큰 값이 출력·외부 명령의 인자·외부 명령의 환경에 없는지 본다. 목록에 없는 명령과 절대 경로로
 부르는 명령(/usr/bin/printf 등)은 이 방법으로 보지 못한다.
+가짜 journalctl·systemctl status 는 합성 작업자 로그를 내놓는다. 출력은 공개 CI 로그가 되므로 run_script 는
+그 로그가 출력에 나오지 않는지도 본다.
 """
 import os
 from pathlib import Path
@@ -20,11 +22,17 @@ TOKEN = 'ghp_' + 'Fake0Token1Value2For3Tests4Only5xyz'   # 시험용 가짜 값
 FAILED_TOKEN = 'ghp_' + 'Second0Fake1Token2' * 2        # 시험용 가짜 값(실패해 되돌린 배포가 가져온 토큰)
 ROTATED_TOKEN = 'ghp_' + 'Third0Fake1Token3' * 2        # 시험용 가짜 값(바꾼 토큰)
 SECRETS = (TOKEN, FAILED_TOKEN, ROTATED_TOKEN)
+# 작업자 로그(journal)의 합성 예: 지난 작업자가 분석한 계정·레포 이름이 남는다. 공개 CI 로그에 옮기면 안 된다
+WORKER_LOG_LOGIN = 'synthetic-login-q7z'
+WORKER_LOG = (f'lv-worker[4242]: job 7f3c failed: {WORKER_LOG_LOGIN}/synthetic-repo-q7z\n'
+              f'lv-worker[4242]: Traceback: work/7f3c/{WORKER_LOG_LOGIN}/synthetic-repo-q7z/README.md\n')
+FAKE_GIT_VERSION = '2.99.0.synthetic'   # 가짜 git 이 알려 주는 판
 PATH0 = os.environ['PATH']
 BASH = shutil.which('bash', path=PATH0)
+GIT = shutil.which('git', path=PATH0)
 # 기록용 껍데기를 씌울 외부 명령: 스크립트가 쓰는 것과, 고치다가 토큰을 인자로 넘기기 쉬운 것
 TRACED = ('awk', 'basename', 'bash', 'cat', 'chmod', 'cmp', 'cp', 'curl', 'cut', 'date', 'dd', 'df', 'dirname',
-          'env', 'expr', 'find', 'free', 'git', 'grep', 'head', 'id', 'install', 'ln', 'ls', 'mkdir', 'mktemp', 'mv',
+          'env', 'expr', 'find', 'free', 'grep', 'head', 'id', 'install', 'ln', 'ls', 'mkdir', 'mktemp', 'mv',
           'printf', 'python3', 'readlink', 'realpath', 'rm', 'sed', 'seq', 'sh', 'sort', 'stat', 'tail', 'tee',
           'timeout', 'touch', 'tr', 'wc', 'xargs')
 
@@ -45,7 +53,11 @@ STUBS = {
                  'echo "$* token-env=$flag" >> "$STUB_DIR/systemctl.log"\n'
                  'case "$1" in\n'
                  '  is-active) [ "$(cat "$STUB_DIR/active")" = yes ] && exit 0; exit 3 ;;\n'
-                 '  show) echo 0 ;;\n'
+                 # show -p … --value 은 NRestarts 숫자, 그 밖은 멈춘 서비스의 상태 줄
+                 '  show) case " $* " in *" --value "*) echo 0 ;;\n'
+                 '    *) printf "ActiveState=failed\\nSubState=failed\\nResult=exit-code\\nExecMainStatus=1\\nNRestarts=0\\n" ;; esac ;;\n'
+                 # 진짜 systemctl status 처럼 -n 0 이 아니면 작업자 로그 끝부분도 보여 준다
+                 '  status) case " $* " in *" -n 0 "*|*" -n0 "*|*" --lines=0 "*) ;; *) cat "$STUB_DIR/journal" ;; esac ;;\n'
                  # systemd 처럼: 서비스 파일은 daemon-reload 때 읽고, restart 는 그때 읽어 둔 설정으로 켠다
                  f'  daemon-reload) mm=none; u="$LV_UNIT_DIR/{SVC}.service"\n'
                  '    if [ -f "$u" ]; then while IFS= read -r l; do case "$l" in MemoryMax=*) mm=$l ;; esac; done < "$u"; fi\n'
@@ -53,8 +65,10 @@ STUBS = {
                  '  restart) mm=none; [ -f "$STUB_DIR/loaded" ] && read -r mm < "$STUB_DIR/loaded"\n'
                  '    echo "$mm" >> "$STUB_DIR/restarts.log" ;;\n'
                  'esac\nexit 0\n',
-    'journalctl': 'exit 0\n',
+    'journalctl': 'cat "$STUB_DIR/journal"\n',
     'sleep': 'exit 0\n',
+    'git': f'[ "$1" = --version ] && {{ echo "git version {FAKE_GIT_VERSION}"; exit 0; }}\n'
+           + (f'exec "{GIT}" "$@"\n' if GIT else 'exit 127\n'),
 }
 
 FAKE_WORKER = '''import os, sys
@@ -103,6 +117,7 @@ class DeployWorkerTest(unittest.TestCase):
         for d in (self.home, self.units, self.stub):
             d.mkdir()
         (self.stub / 'needles').write_text(''.join(s + '\n' for s in SECRETS))
+        (self.stub / 'journal').write_text(WORKER_LOG)
         self.set_active(True)
         self.src = self.make_source(root / 'src')
         self.base = self.home / 'lv-stat' / 'staging'
@@ -148,15 +163,17 @@ class DeployWorkerTest(unittest.TestCase):
         env.update(extra)
         r = subprocess.run([BASH, str(SCRIPT), commit, str(src or self.src)], env=env,
                            capture_output=True, text=True, timeout=120)
-        self.assert_token_stays_in_shell(r)
+        self.assert_nothing_leaks(r)
         return r
 
-    def assert_token_stays_in_shell(self, r):
-        """토큰 값은 셸 변수로만 든다: 출력·외부 명령의 인자·외부 명령의 환경 어디에도 없다(걸린 줄만 보여 줌)."""
+    def assert_nothing_leaks(self, r):
+        """토큰 값은 셸 변수로만 든다: 출력·외부 명령의 인자·외부 명령의 환경 어디에도 없다.
+        출력(CI 로그, 공개)에는 작업자 로그도 옮기지 않는다. 실패하면 걸린 줄만 보여 준다."""
         out, argv = (r.stdout + r.stderr).splitlines(), self.read_stub('argv.log').splitlines()
         self.assertEqual([l for l in out if any(s in l for s in SECRETS)], [], '토큰 값이 출력에 나옴')
         self.assertEqual([l for l in argv if any(s in l for s in SECRETS)], [], '토큰 값이 외부 명령의 인자에 나옴')
         self.assertEqual([l for l in argv if l.startswith('ENV-LEAK')], [], '토큰 값이 외부 명령의 환경에 나옴')
+        self.assertEqual([l for l in out if WORKER_LOG_LOGIN in l], [], '작업자 로그가 CI 로그에 나옴')
 
     def current(self):
         link = self.base / 'current'
@@ -280,6 +297,22 @@ class DeployWorkerTest(unittest.TestCase):
         self.assertEqual(self.envfile.read_text(), f'LV_GITHUB_TOKEN={TOKEN}\n')
         self.assertEqual(stat.S_IMODE(self.envfile.stat().st_mode), 0o600)
         self.assertFalse((self.base / 'lv-worker.env.prev').exists())
+
+    def test_rollback_reports_systemd_state_not_worker_log(self):
+        """CI 로그는 공개된다. 되돌릴 때는 systemd 가 알려 주는 상태만 남기고 작업자 로그(분석한 계정·레포)는 옮기지 않는다."""
+        self.assertEqual(self.run_script(sha(1)).returncode, 0)
+        self.set_active(False)
+        r = self.run_script(sha(2))
+        self.assertEqual(r.returncode, 1)
+        self.assertNotIn(WORKER_LOG_LOGIN, r.stdout + r.stderr)
+        for want in ('Result=exit-code', 'ExecMainStatus=1'):   # 왜 멈췄는지(종료 코드·메모리 초과 등)는 남긴다
+            self.assertIn(want, r.stderr)
+
+    def test_server_summary_leaves_out_git_version(self):
+        """받은 레포를 여는 git 의 판은 공개 CI 로그에 남기지 않는다(그 판에 맞는 약점을 고르기 쉬움)."""
+        r = self.run_script(sha(1))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertNotIn(FAKE_GIT_VERSION, r.stdout + r.stderr)
 
     def test_first_deploy_failure_removes_service(self):
         self.set_active(False)

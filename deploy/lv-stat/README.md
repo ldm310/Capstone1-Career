@@ -11,6 +11,7 @@
 - 토큰 파일: `~/career-data-staging/lv-worker.env`(소유자만 읽음)
 - 자원 한도(「Claude 임시값」, 실제 분석으로 맞출 값): `Nice=10`, `IOSchedulingClass=idle`, `CPUQuota=100%`, `MemoryMax=1500M`. 같은 EC2의 운영 웹과 스테이징 웹·백엔드보다 우선순위를 낮췄다.
 - 배포 순서: 판 복사 → `worker.py --self-check`(Python 3.10 이상·git·데이터 폴더 쓰기) → 토큰 파일 → `current` 교체 → 서비스 다시 켜기 → 10초 동안 active인지 확인한다. 자체 점검에 실패하면 도는 작업자를 건드리지 않는다. 다시 켠 뒤 멈추면 이전 판, 서비스 설정, 토큰 파일로 자동으로 되돌리고 잡은 실패로 끝난다. 같은 커밋으로 다시 돌리면 서비스만 다시 켠다.
+- CI 로그: 팀 레포가 공개라 Actions 로그도 공개된다. 그래서 스크립트는 작업자 로그(분석한 계정·레포 이름이 들어 있음)와 git 판을 CI 로그에 남기지 않는다. 되돌릴 때는 systemd 상태 값(`ActiveState`·`Result`·`ExecMainStatus` 등)만 남긴다. 원인은 EC2에서 `journalctl -u career-lv-worker-staging -n 50`으로 본다.
 
 ## GitHub 토큰 (Secret `STAGING_LV_GITHUB_TOKEN`)
 
@@ -49,7 +50,7 @@ sudo systemctl restart career-lv-worker-staging
 
 ```
 bash -n deploy/lv-stat/deploy_worker.sh
-python3 -m unittest discover -s deploy/lv-stat/tests -v
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s deploy/lv-stat/tests -v
 ```
 
-시험은 가짜 HOME, sudo, systemctl만 쓰고 실제 서비스·EC2·GitHub에는 닿지 않는다. 확인하는 것은 운영 거부, 토큰 파일 권한(600), 값이 출력되지 않는 것, 같은 커밋 재실행, 되돌리기, 판 5개 유지다. CI의 `lv-stat` 잡이 Python 3.10으로 같은 시험을 돌린다.
+시험은 가짜 HOME, sudo, systemctl, journalctl만 쓰고 실제 서비스·EC2·GitHub에는 닿지 않는다. 스크립트가 PATH로 부르는 명령은 기록용 껍데기를 거친다. 그래서 돌릴 때마다 토큰 값이 출력, 명령 인자, 자식 환경에 없는지 본다(절대 경로로 부르는 명령은 못 봄). 확인하는 것은 운영 거부, 토큰 파일 권한(600), 토큰을 바꾼 뒤 옛 사본이 남지 않는 것, 같은 커밋 재실행, 되돌리기(판·서비스 설정·토큰 파일), CI 로그에 작업자 로그와 git 판이 없는 것, 판 5개 유지다. CI의 `lv-stat` 잡이 Python 3.10으로 같은 시험을 돌린다. `PYTHONDONTWRITEBYTECODE=1`을 붙이면 `__pycache__`가 생기지 않는다(`deploy/lv-stat/.gitignore`에도 넣었다).

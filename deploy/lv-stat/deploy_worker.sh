@@ -50,8 +50,9 @@ py=$(command -v python3) || { echo "python3 가 없습니다" >&2; exit 1; }
 [[ "$py" =~ ^/[A-Za-z0-9._/-]+$ ]] || { echo "python3 경로가 절대 경로가 아닙니다: $py" >&2; exit 1; }
 command -v git >/dev/null || { echo "git 이 없습니다" >&2; exit 1; }
 sudo -n true || { echo "비밀번호 없는 sudo 가 필요합니다(러너 계정)" >&2; exit 1; }
-# 서버 상태를 로그에 남긴다(Python·git 판, 남은 디스크·메모리) — 상한값을 맞출 때 쓴다
-echo "서버: $("$py" -c 'import sys; print("Python", sys.version.split()[0])' 2>/dev/null) · $(git --version 2>/dev/null)"
+# 서버 상태를 로그에 남긴다(Python 판, 남은 디스크·메모리) — 상한값을 맞출 때 쓴다.
+#   git 판은 남기지 않는다: CI 로그는 공개되고, git 은 남이 고른 레포를 받으므로 그 판에 맞는 약점을 고르기 쉽다
+echo "서버: $("$py" -c 'import sys; print("Python", sys.version.split()[0])' 2>/dev/null)"
 df -h "$HOME" 2>/dev/null | tail -1 | awk '{print "디스크(HOME): 전체 " $2 ", 남음 " $4}' || true
 command -v free >/dev/null && free -m | awk '/^Mem:/ {print "메모리(MB): 전체 " $2 ", 사용 가능 " $7}' || true
 
@@ -167,7 +168,9 @@ activate() {   # if 안에서 불리므로 set -e 가 안 먹음 — 줄마다 |
 
 rollback() {
   echo "새 판(${sha:0:7})이 돌지 않아 이전 상태로 되돌립니다" >&2
-  sudo journalctl -u "$svc" -n 30 --no-pager >&2 2>/dev/null || true
+  # CI 로그는 공개된다(공개 레포). 작업자 로그(분석한 계정·레포 이름)는 옮기지 않고 systemd 상태 값만 남긴다
+  systemctl show -p ActiveState,SubState,Result,ExecMainStatus,NRestarts "$svc" >&2 2>/dev/null || true
+  echo "작업자 로그는 EC2 에서 보세요: journalctl -u $svc -n 50 --no-pager" >&2
   case "$env_state" in
     replaced) mv -f "$base/lv-worker.env.prev" "$envfile" || true ;;
     created)  rm -f "$envfile" || true ;;
