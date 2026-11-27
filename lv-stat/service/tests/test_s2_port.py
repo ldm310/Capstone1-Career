@@ -16,10 +16,14 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 CODE = os.path.realpath(os.path.join(HERE, "..", "s2"))
+# 코드 폴더의 Linguist 자료(MIT): 코드가 읽는 세 파일과 LICENSE.
+# vendor.yml·documentation.yml이 없으면 linguist_lists()가 말없이 빈 목록을 돌려줘 남의 코드가 내 줄로 잡힌다.
+LINGUIST_FILES = ("languages.yml", "vendor.yml", "documentation.yml", "LICENSE")
 
 # 시험용 가짜 비밀값(진짜 값 아님). git 자식 프로세스에는 하나도 가면 안 된다.
 FAKE_SECRETS = {
@@ -145,7 +149,7 @@ def fake_gh(root):
 
 
 class FakeAPI:
-    """127.0.0.1 빈 포트의 가짜 GitHub API. routes[요청 대상] = (본문, 헤더). 없는 대상은 404."""
+    """127.0.0.1 빈 포트의 가짜 GitHub API. routes[요청 대상] = (본문, 헤더[, 상태 코드(기본 200)]). 없는 대상은 404."""
 
     def __init__(self):
         self.routes = {}
@@ -157,7 +161,8 @@ class FakeAPI:
                 target = self.requestline.split()[1]  # 받은 그대로(퍼센트 인코딩 포함)
                 owner.seen.append((target, self.headers.get("Authorization")))
                 if target in owner.routes:
-                    status, (body, headers) = 200, owner.routes[target]
+                    body, headers, *rest = owner.routes[target]
+                    status = rest[0] if rest else 200
                 else:
                     status, body, headers = 404, {"message": "Not Found"}, {}
                 raw = json.dumps(body).encode("utf-8")
@@ -223,10 +228,12 @@ class S2PortTest(unittest.TestCase):
         self.assertEqual(out["OUT"], os.path.join(self.home, "out"))
         self.assertEqual(out["EMPTY_HOME"], os.path.join(self.home, ".emptyhome"))
         self.assertTrue(os.path.isdir(out["EMPTY_HOME"]))  # 불러올 때 만든다
-        # Linguist 자료는 작업 폴더가 아니라 코드 폴더에서 읽는다.
+        # Linguist 자료는 작업 폴더가 아니라 코드 폴더에서 읽는다. 자료 파일이 모두 실제로 있어야 한다.
         self.assertEqual(out["CODE"], CODE)
         self.assertEqual(out["LINGUIST"], os.path.join(CODE, "data", "linguist", "languages.yml"))
-        self.assertTrue(os.path.isfile(out["LINGUIST"]))
+        folder = os.path.dirname(out["LINGUIST"])
+        missing = [n for n in LINGUIST_FILES if not os.path.isfile(os.path.join(folder, n))]
+        self.assertEqual(missing, [], "코드 폴더에 Linguist 자료가 없다(git에 들어 있는지 확인)")
 
     def test_unset_home_falls_back_to_code_folder(self):
         # 추출기(cat_*)는 LV_S2_HOME 없이도 s2lib를 불러야 한다.
@@ -311,6 +318,22 @@ class S2PortTest(unittest.TestCase):
         self.assertEqual({a for _, a in api.seen}, {"Bearer test-api-token"})  # 토큰은 API에만 간다
         self.assertEqual(data["api_own"], 1)
         self.assertEqual([c["subject"] for c in data["commits"] if c["own"]], ["mine via api"])
+
+    def test_index_rate_limit_recorded(self):
+        # 색인 중 GitHub 호출 한도(403 + X-RateLimit-Remaining: 0). s2_index는 기다리지도 다시 부르지도 않는다.
+        # 그 레포 색인의 error에 사용자에게 보일 글을 남기고 0으로 끝난다. 그 레포는 noreply 내 커밋까지 비어 있다.
+        # 분석 단계(Task 4)는 이 error를 보고 요청을 실패로 바꿔야 한다. 이 시험은 그 약속(색인 파일 모양)을 고정한다.
+        clone, _ = make_repo(self.tmp, "main", [(OWN_EMAIL, "mine 1", {"app.py": "a = 1\n"})])
+        api = FakeAPI()
+        self.addCleanup(api.close)
+        commits = "/repos/tester/demo/commits?author=tester&sha=main&per_page=100"
+        api.routes[commits] = ({"message": "API rate limit exceeded"},
+                               {"X-RateLimit-Remaining": "0", "X-RateLimit-Reset": str(int(time.time()) + 150)}, 403)
+        person, data = self.run_index(clone, "main", prs=True, LV_GITHUB_API=api.base)
+        self.assertEqual([t for t, _ in api.seen], [commits])  # 한 번만 불렀다(다시 시도 없음, PR 목록도 안 감)
+        self.assertEqual(person["repo_keys"], ["tester__demo"])
+        self.assertRegex(data["error"], r"^RateLimited\('GitHub 호출 한도에 걸렸습니다\(\d+분 뒤 다시 시도\)'\)$")
+        self.assertEqual((data["refs"], data["commits"], data["files"]), ([], [], []))
 
     def test_index_pr_fields_match_old_jq(self):
         clone, _ = make_repo(self.tmp, "main", [(OWN_EMAIL, "mine 1", {"app.py": "a = 1\n"})])

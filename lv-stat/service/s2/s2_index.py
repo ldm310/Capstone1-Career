@@ -22,9 +22,14 @@ MAX_BLAME = 300_000
 AI_COAUTHOR = re.compile(r'Co-authored-by:[^\n]*(claude|anthropic|copilot|cursor|codex|openai|chatgpt|gemini|devin|aider|codeium|windsurf)', re.I)
 
 
+# 「미정」 목록 API 쪽 상한: 100개씩 10쪽(1,000개)까지 받는다(ghapi.get_all 기본값). 옛 gh api --paginate는 끝까지 받았다.
+# 넘치면 오래된 내 커밋 SHA·PR이 표시 없이 빠진다. 상한과 잘림 표시는 사용자가 정한다.
+API_PAGES = 10
+
+
 def api_shas(path):
     """커밋 목록 API → SHA 목록(옛 jq '.[].sha'). 없는 레포·빈 레포(404·409)는 []."""
-    return [c['sha'] for c in G.get_all(path) if c.get('sha')]
+    return [c['sha'] for c in G.get_all(path, max_pages=API_PAGES) if c.get('sha')]
 
 
 def api_prs(path):
@@ -35,7 +40,7 @@ def api_prs(path):
                  merged_at=p.get('merged_at'), merge_commit_sha=p.get('merge_commit_sha'),
                  user=(p.get('user') or {}).get('login'), head_sha=(p.get('head') or {}).get('sha'),
                  created_at=p.get('created_at'), labels=[x.get('name') for x in p.get('labels') or []])
-            for p in G.get_all(path)]
+            for p in G.get_all(path, max_pages=API_PAGES)]
 
 
 def ensure_ref(d, branch):

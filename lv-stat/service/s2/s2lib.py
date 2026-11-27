@@ -6,8 +6,10 @@
   불러올 때 정하므로 LV_S2_HOME은 불러오기 전에 절대 경로로 둔다(git -C가 폴더를 바꾸므로 HOME이 상대 경로면 안 됨).
   Linguist 자료(data/linguist/)는 코드 폴더에서 읽는다.
 - 사람·레포 색인은 <S2>/index/<pid>/<repo_key>.json (s2_index.py가 만든다).
-- git 자식 프로세스에는 토큰을 넘기지 않는다(GENV). 빠진 파일 내용 받기(lazy fetch)는 <레포>/.git/lv-allow-lazy가
-  있는 레포(--filter=blob:none으로 받은 큰 레포)의 git()만 허용한다.
+- git 자식 프로세스에는 토큰을 넘기지 않는다(GENV). GENV는 빠진 파일 내용 받기(lazy fetch)를 막는다(GIT_NO_LAZY_FETCH=1).
+  <레포>/.git/lv-allow-lazy가 있는 레포는 git()의 모든 호출에 lazy fetch를 허용한다. 그래서 빠진 내용이 있으면
+  log --numstat은 커밋마다, cat-file --batch-check는 빠진 파일마다 받으러 간다(내 커밋이 바꾼 파일만 받지 않는다).
+  s2_index의 git_lazy(2단계 코드 그대로)는 표시가 없어도 numstat이 실패하면 lazy fetch를 허용해 다시 부른다.
 - 카테고리 추출기는 load_person(pid)로 색인을 읽고, Repo.text()로 파일을 읽는다.
 """
 import datetime
