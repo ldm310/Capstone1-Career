@@ -70,6 +70,9 @@ class GhApiTest(unittest.TestCase):
         self.fake = FakeGitHub()
         self.addCleanup(self.fake.close)
         os.environ["LV_GITHUB_API"] = self.fake.base
+        # 다른 호스트 역할(다른 포트). 토큰이 여기로 가면 안 된다.
+        self.other = FakeGitHub()
+        self.addCleanup(self.other.close)
 
         self.sleeps = []
         saved_sleep = ghapi._sleep
@@ -133,6 +136,27 @@ class GhApiTest(unittest.TestCase):
         del os.environ["LV_GITHUB_TOKEN"]
         ghapi.get("/me")
         self.assertIsNone(self.fake.seen[-1][1])
+
+    def test_absolute_foreign_url_gets_no_token(self):
+        os.environ["LV_GITHUB_TOKEN"] = "abc"
+        self.other.routes["/x"] = [resp(200, {"ok": True})]
+        self.assertEqual(ghapi.get(self.other.base + "/x"), {"ok": True})
+        self.assertIsNone(self.other.seen[-1][1])
+
+    def test_cross_host_redirect_drops_token(self):
+        os.environ["LV_GITHUB_TOKEN"] = "abc"
+        self.fake.routes["/moved"] = [resp(302, None, {"Location": self.other.base + "/target"})]
+        self.other.routes["/target"] = [resp(200, {"ok": True})]
+        self.assertEqual(ghapi.get("/moved"), {"ok": True})
+        self.assertEqual(self.fake.seen[-1][1], "Bearer abc")
+        self.assertIsNone(self.other.seen[-1][1])
+
+    def test_same_host_redirect_keeps_token(self):
+        os.environ["LV_GITHUB_TOKEN"] = "abc"
+        self.fake.routes["/old"] = [resp(301, None, {"Location": self.fake.base + "/new"})]
+        self.fake.routes["/new"] = [resp(200, {"ok": True})]
+        self.assertEqual(ghapi.get("/old"), {"ok": True})
+        self.assertEqual(self.fake.seen[-1][1], "Bearer abc")
 
     def test_offline_switch(self):
         self.fake.routes["/x"] = [resp(200, [{"n": 1}])]

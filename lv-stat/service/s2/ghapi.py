@@ -45,12 +45,28 @@ def _url(path):
     return _base() + path
 
 
-def _headers():
+def _origin(url):
+    parts = urllib.parse.urlsplit(url)
+    return (parts.scheme.lower(), parts.netloc.lower())
+
+
+def _headers(url):
+    """API 주소(LV_GITHUB_API 또는 기본값)와 같은 출처일 때만 토큰을 붙인다."""
     h = {"Accept": "application/vnd.github+json", "User-Agent": "lv-stat-worker"}
     token = os.environ.get("LV_GITHUB_TOKEN", "").strip()
-    if token:
+    if token and _origin(url) == _origin(_base()):
         h["Authorization"] = f"Bearer {token}"
     return h
+
+
+class _TokenSafeRedirect(urllib.request.HTTPRedirectHandler):
+    """다른 출처로 넘어가는 3xx에서는 Authorization을 떼고 따라간다."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        new = super().redirect_request(req, fp, code, msg, headers, newurl)
+        if new is not None and _origin(newurl) != _origin(_base()):
+            new.remove_header("Authorization")
+        return new
 
 
 def _reset_epoch(headers):
@@ -66,9 +82,10 @@ def request(path, timeout=30):
         raise NotFound("오프라인 시험 모드")
     url = _url(path)
     for attempt in range(RETRY_LIMIT + 1):
-        req = urllib.request.Request(url, headers=_headers())
+        req = urllib.request.Request(url, headers=_headers(url))
+        opener = urllib.request.build_opener(_TokenSafeRedirect)
         try:
-            with urllib.request.urlopen(req, timeout=timeout) as resp:
+            with opener.open(req, timeout=timeout) as resp:
                 headers = {k.lower(): v for k, v in resp.headers.items()}
                 raw = resp.read()
         except urllib.error.HTTPError as e:
