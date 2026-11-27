@@ -4,8 +4,8 @@
 
 ## 지금 상태 (2026-11-24)
 
-- 설계 중입니다. 카테고리별 레벨 계산 방법과 변수 단계는 아직 정하지 않았고, 팀 확인을 받은 뒤 개발을 시작합니다.
-- 카테고리는 선영 님이 고정한 `flat-10-infra-review-20261119`(기술 카테고리 10개)를 기준으로 검토합니다.
+- 개발 중입니다. 카테고리 7개의 LV 계산 규칙은 [docs/lv-calc-7categories-2026-11-24.md](docs/lv-calc-7categories-2026-11-24.md), 백엔드 기준은 [docs/backend-lv-v5-6vars-final-2026-11-24.md](docs/backend-lv-v5-6vars-final-2026-11-24.md)에 있습니다. 단계 시작값 같은 숫자는 임시값이고 8명 테스트로 맞춥니다.
+- 7개 카테고리를 선영 님이 고정한 기술 카테고리 10개(`flat-10-infra-review-20261119`)와 어떻게 잇는지는 아직 정하지 않았습니다.
 - 결과를 저장할 자리는 `frontend/docs/user-posting-levels.md`의 `career_lv_*` 표입니다.
 - 결정과 미정 사항은 [docs/2026-11-14-역량-stat-변경-방식.md](docs/2026-11-14-역량-stat-변경-방식.md)에 있습니다.
 
