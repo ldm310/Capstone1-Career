@@ -36,6 +36,14 @@ FAKE_SECRETS = {
 }
 OWN_EMAIL = "123+tester@users.noreply.github.com"
 OTHER_EMAIL = "other@example.com"
+# 색인 중 호출 한도에 걸린 레포의 error(분석 단계가 이 글을 보고 요청을 실패로 바꾼다)
+RATE_LIMIT_ERROR = r"^RateLimited\('GitHub 호출 한도에 걸렸습니다\(\d+분 뒤 다시 시도\)'\)$"
+
+
+def rate_limited():
+    """FakeAPI 응답: GitHub 호출 한도(403 + X-RateLimit-Remaining: 0, 150초 뒤 풀림)."""
+    return ({"message": "API rate limit exceeded"},
+            {"X-RateLimit-Remaining": "0", "X-RateLimit-Reset": str(int(time.time()) + 150)}, 403)
 
 # 하위 프로세스에서 s2lib를 불러 값을 JSON 한 줄로 찍는다. argv[1] = s2lib.py가 있는 폴더.
 PROBE_PATHS = """
@@ -319,6 +327,36 @@ class S2PortTest(unittest.TestCase):
         self.assertEqual(data["api_own"], 1)
         self.assertEqual([c["subject"] for c in data["commits"] if c["own"]], ["mine via api"])
 
+    def test_index_lists_are_not_capped_at_ten_pages(self):
+        # 옛 gh api --paginate처럼 다음 쪽이 없을 때까지 받는다(2단계 동작). ghapi.get_all 기본값(10쪽)에서 멈추면
+        # 11쪽에만 있는 내 커밋이 표시 없이 '남의 커밋'이 되고, 11쪽의 PR도 빠진다.
+        clone, shas = make_repo(self.tmp, "main", [
+            ("dev@example.com", "mine on page 11", {"app.py": "a = 1\n"}),  # noreply가 아님: API로만 내 커밋
+            (OTHER_EMAIL, "theirs", {"other.py": "b = 2\n"}),
+        ])
+        api = FakeAPI()
+        self.addCleanup(api.close)
+        pages = 11
+        commits = "/repos/tester/demo/commits?author=tester&sha=main&per_page=100"
+        pulls = "/repos/tester/demo/pulls?state=all&per_page=100"
+        want = []
+        for first, item in (
+            (commits, lambda n: {"sha": shas[0] if n == pages else "%040x" % n}),  # 1~10쪽은 이 레포에 없는 SHA
+            (pulls, lambda n: {"number": n, "title": "PR %d" % n, "body": None, "user": {"login": "tester"},
+                               "head": {"sha": "e" * 40}, "labels": [], "created_at": "2026-01-03T01:00:00Z",
+                               "merged_at": None, "merge_commit_sha": None}),
+        ):
+            for n in range(1, pages + 1):
+                target = first if n == 1 else "%s&page=%d" % (first, n)
+                link = {"Link": '<%s%s&page=%d>; rel="next"' % (api.base, first, n + 1)} if n < pages else {}
+                api.routes[target] = ([item(n)], link)
+                want.append(target)
+        _, data = self.run_index(clone, "main", prs=True, LV_GITHUB_API=api.base)
+        self.assertEqual([t for t, _ in api.seen], want)
+        self.assertEqual(data["api_own"], pages)
+        self.assertEqual([c["subject"] for c in data["commits"] if c["own"]], ["mine on page 11"])
+        self.assertEqual([p["number"] for p in data["prs"]], list(range(1, pages + 1)))
+
     def test_index_rate_limit_recorded(self):
         # 색인 중 GitHub 호출 한도(403 + X-RateLimit-Remaining: 0). s2_index는 기다리지도 다시 부르지도 않는다.
         # 그 레포 색인의 error에 사용자에게 보일 글을 남기고 0으로 끝난다. 그 레포는 noreply 내 커밋까지 비어 있다.
@@ -327,13 +365,28 @@ class S2PortTest(unittest.TestCase):
         api = FakeAPI()
         self.addCleanup(api.close)
         commits = "/repos/tester/demo/commits?author=tester&sha=main&per_page=100"
-        api.routes[commits] = ({"message": "API rate limit exceeded"},
-                               {"X-RateLimit-Remaining": "0", "X-RateLimit-Reset": str(int(time.time()) + 150)}, 403)
+        api.routes[commits] = rate_limited()
         person, data = self.run_index(clone, "main", prs=True, LV_GITHUB_API=api.base)
         self.assertEqual([t for t, _ in api.seen], [commits])  # 한 번만 불렀다(다시 시도 없음, PR 목록도 안 감)
         self.assertEqual(person["repo_keys"], ["tester__demo"])
-        self.assertRegex(data["error"], r"^RateLimited\('GitHub 호출 한도에 걸렸습니다\(\d+분 뒤 다시 시도\)'\)$")
+        self.assertRegex(data.get("error", ""), RATE_LIMIT_ERROR)
         self.assertEqual((data["refs"], data["commits"], data["files"]), ([], [], []))
+
+    def test_index_rate_limit_while_listing_prs_recorded(self):
+        # PR 목록을 끝까지 받다가 2쪽에서 한도에 걸림. 받은 1쪽만 남기지 않고(말없이 줄지 않게) 커밋 조회 때와 같은 error를 남긴다.
+        clone, _ = make_repo(self.tmp, "main", [(OWN_EMAIL, "mine 1", {"app.py": "a = 1\n"})])
+        api = FakeAPI()
+        self.addCleanup(api.close)
+        commits = "/repos/tester/demo/commits?author=tester&sha=main&per_page=100"
+        pulls = "/repos/tester/demo/pulls?state=all&per_page=100"
+        api.routes[commits] = ([], {})
+        api.routes[pulls] = ([{"number": 1, "title": "PR 1", "body": None, "user": {"login": "tester"}, "labels": []}],
+                             {"Link": '<%s%s&page=2>; rel="next"' % (api.base, pulls)})
+        api.routes[pulls + "&page=2"] = rate_limited()
+        _, data = self.run_index(clone, "main", prs=True, LV_GITHUB_API=api.base)
+        self.assertEqual([t for t, _ in api.seen], [commits, pulls, pulls + "&page=2"])
+        self.assertRegex(data.get("error", ""), RATE_LIMIT_ERROR)
+        self.assertEqual((data["refs"], data["commits"], data["files"], data.get("prs", [])), ([], [], [], []))
 
     def test_index_pr_fields_match_old_jq(self):
         clone, _ = make_repo(self.tmp, "main", [(OWN_EMAIL, "mine 1", {"app.py": "a = 1\n"})])

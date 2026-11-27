@@ -5,7 +5,7 @@
 usage: python3 -I s2_index.py P01 [P02 ...]
 - 계정 확인: GitHub API 'commits?author=<login>&sha=<분석 브랜치>'가 돌려준 SHA만 내 커밋이다(계정에 연결된 커밋).
   noreply 이메일(<id>+<login>@users.noreply.github.com)도 내 커밋으로 본다. 본인이 알려 준 이메일은 후보에게 받을 수 없어 없다.
-- GitHub는 ghapi로 GET만 부른다(토큰은 LV_GITHUB_TOKEN, API에만 쓴다). 받은 코드는 읽기만 한다.
+- GitHub는 ghapi로 GET만 부른다(토큰은 LV_GITHUB_TOKEN, API에만 쓴다). 목록은 끝까지 받는다. 받은 코드는 읽기만 한다.
 """
 import json
 import os
@@ -22,9 +22,9 @@ MAX_BLAME = 300_000
 AI_COAUTHOR = re.compile(r'Co-authored-by:[^\n]*(claude|anthropic|copilot|cursor|codex|openai|chatgpt|gemini|devin|aider|codeium|windsurf)', re.I)
 
 
-# 「미정」 목록 API 쪽 상한: 100개씩 10쪽(1,000개)까지 받는다(ghapi.get_all 기본값). 옛 gh api --paginate는 끝까지 받았다.
-# 넘치면 오래된 내 커밋 SHA·PR이 표시 없이 빠진다. 상한과 잘림 표시는 사용자가 정한다.
-API_PAGES = 10
+# 목록 API는 옛 gh api --paginate처럼 다음 쪽이 없을 때까지 받는다(2단계 동작 그대로, 쪽 수 상한 없음).
+# ghapi.get_all 기본값(10쪽)에서 멈추면 1,000개가 넘는 내 커밋 SHA·PR이 표시 없이 빠진다.
+API_PAGES = sys.maxsize
 
 
 def api_shas(path):
