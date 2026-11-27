@@ -1,5 +1,6 @@
 import { isGuest, user } from "@/lib/server/store";
 import { postingLevels } from "@/lib/server/posting-levels";
+import { profilePostingLevels } from "@/lib/server/profile-levels";
 
 export const runtime = "nodejs";
 export async function GET(request: Request) {
@@ -19,7 +20,10 @@ export async function GET(request: Request) {
       { status: 400, headers },
     );
   try {
-    const result = await postingLevels(current.id, jobId, version);
+    // 분석 결과 파일(스테이징 LV 서비스)이 있으면 그것으로 계산하고, 없으면 지금처럼 저장된 LV(RDS)를 읽는다.
+    const result =
+      (await profilePostingLevels(current.id, jobId, version)) ??
+      (await postingLevels(current.id, jobId, version));
     if (!result)
       return Response.json(
         { error: "사용자 LV 저장소 미연결" },

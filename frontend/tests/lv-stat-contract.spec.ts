@@ -16,9 +16,11 @@ import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type * as KeywordsRoute from "@/app/api/jobs/keywords/route";
+import type * as MyLevelsRoute from "@/app/api/jobs/my-levels/route";
 import { detectLanguages, scoreKeyword } from "@/lib/lv-stat/score";
 import type * as JobKeywords from "@/lib/server/job-keywords";
 import type * as LvStore from "@/lib/server/lv-stat";
+import type * as ProfileLevels from "@/lib/server/profile-levels";
 import examples from "@/mock/reviewed-keyword-examples.json";
 import type {
   LvCategory,
@@ -106,6 +108,37 @@ function withLanguages(
 
 function scoreOf(p: LvProfile, text: string, categoryCodes: string[]) {
   return scoreKeyword(p, { text, categoryCodes });
+}
+
+// CONTRACT의 profileKey를 시험에서 따로 계산한다: sha256(namespace + ":" + subjectId)의 앞 32자.
+const contractKey = (namespace: string, subjectId: string) =>
+  createHash("sha256")
+    .update(`${namespace}:${subjectId}`)
+    .digest("hex")
+    .slice(0, 32);
+
+// 아무도 듣지 않는 로컬 포트(연결 거부)
+async function closedPort() {
+  const probe = createServer();
+  await new Promise<void>((resolve) => probe.listen(0, "127.0.0.1", resolve));
+  const { port } = probe.address() as AddressInfo;
+  await new Promise<void>((resolve) => probe.close(() => resolve()));
+  return `http://127.0.0.1:${port}`;
+}
+
+// 서버 기록(console.error)을 모은다. 실패 경로 시험의 출력이 깨끗하고, 기록에 남는 것을 시험할 수 있다.
+function captureErrors() {
+  const original = console.error;
+  const calls: unknown[][] = [];
+  console.error = (...args: unknown[]) => {
+    calls.push(args);
+  };
+  return {
+    calls,
+    restore: () => {
+      console.error = original;
+    },
+  };
 }
 
 test.describe("score", () => {
@@ -407,12 +440,6 @@ test.describe("store", () => {
     await rm(dataDir, { recursive: true, force: true });
   });
 
-  // CONTRACT의 profileKey를 시험에서 따로 계산한다: sha256(namespace + ":" + subjectId)의 앞 32자.
-  const contractKey = (namespace: string, subjectId: string) =>
-    createHash("sha256")
-      .update(`${namespace}:${subjectId}`)
-      .digest("hex")
-      .slice(0, 32);
   const profileFile = (namespace: string, subjectId: string) =>
     path.join(profilesDir(), `${contractKey(namespace, subjectId)}.json`);
 
@@ -959,6 +986,7 @@ test.describe("job keywords", () => {
   let backend: string;
   let previousUrl: string | undefined;
   let requests: string[] = [];
+  let errors: ReturnType<typeof captureErrors>;
 
   const failure = {
     status: 502,
@@ -1028,17 +1056,13 @@ test.describe("job keywords", () => {
     ],
     // 본문 모양이 맞아도 2xx가 아니면 실패다.
     "/api/postings/9005/skill-categories": [500, JSON.stringify(saved)],
+    // 끝에 쉼표가 남은 JSON. 해석 오류의 글(SyntaxError message)에 이 문장 일부가 들어간다.
+    "/api/postings/9007/skill-categories": [
+      200,
+      '{"version":"synthetic-v1","recruitUnits":[{"items":[{"text":"합성 요건 99"},]}]}',
+    ],
   };
   const hang = "/api/postings/9006/skill-categories";
-
-  // 아무도 듣지 않는 로컬 포트(연결 거부)
-  async function closedPort() {
-    const probe = createServer();
-    await new Promise<void>((resolve) => probe.listen(0, "127.0.0.1", resolve));
-    const { port } = probe.address() as AddressInfo;
-    await new Promise<void>((resolve) => probe.close(() => resolve()));
-    return `http://127.0.0.1:${port}`;
-  }
 
   test.beforeAll(async () => {
     server = createServer((request, response) => {
@@ -1067,9 +1091,11 @@ test.describe("job keywords", () => {
     previousUrl = process.env.BACKEND_URL;
     process.env.BACKEND_URL = backend;
     requests = [];
+    errors = captureErrors();
   });
 
   test.afterEach(() => {
+    errors.restore();
     if (previousUrl === undefined) delete process.env.BACKEND_URL;
     else process.env.BACKEND_URL = previousUrl;
   });
@@ -1132,6 +1158,56 @@ test.describe("job keywords", () => {
     // 없는 공고(404), JSON이 아닌 본문, recruitUnits가 null
     for (const id of ["be:9999", "be:9003", "be:9004"])
       expect(await jobKeywords(id), id).toEqual(failure);
+  });
+
+  test("failures are logged without backend address, body or posting text", async () => {
+    // 실패(502)가 아니면 기록하지 않는다: 분류된 공고, 빈 공고, 예시 공고, 다른 id, 잘못된 id, 연결 설정 없음
+    for (const id of [
+      "be:9001",
+      "be:9002",
+      "dummy:backend-platform",
+      "kr:1",
+      "",
+    ])
+      await jobKeywords(id);
+    delete process.env.BACKEND_URL;
+    await jobKeywords("be:9001");
+    expect(errors.calls).toEqual([]);
+
+    // [BACKEND_URL, 공고 번호, 기록의 error]. 2xx가 아닌 답은 그 상태를 남긴다. fetch·JSON 해석이 던진 오류는
+    // 이름만 남긴다: 그 글에는 백엔드 주소(주소 해석·자격 증명 오류)나 응답 본문 일부(JSON 해석 오류)가 들어간다.
+    const down = await closedPort();
+    const withSecret = backend.replace("http://", "http://lv-user:lv-secret@");
+    const rows: [string, string, unknown][] = [
+      [backend, "9005", expect.stringMatching(/\b500\b/)],
+      [backend, "9999", expect.stringMatching(/\b404\b/)],
+      [backend, "9003", "SyntaxError"],
+      [backend, "9007", "SyntaxError"],
+      [backend, "9004", "TypeError"],
+      [down, "9001", "TypeError"],
+      [withSecret, "9001", "TypeError"],
+      ["not a url", "9001", "TypeError"],
+    ];
+    for (const [url, posting] of rows) {
+      process.env.BACKEND_URL = url;
+      expect(await jobKeywords(`be:${posting}`), posting).toEqual(failure);
+    }
+    expect(errors.calls).toEqual(
+      rows.map(([, posting, error]) => [
+        "Job keyword lookup failed",
+        { postingId: posting, error },
+      ]),
+    );
+    const logged = JSON.stringify(errors.calls);
+    for (const leak of [
+      new URL(backend).host,
+      new URL(down).host,
+      "lv-secret",
+      "not a url",
+      "not json",
+      "요건",
+    ])
+      expect(logged, leak).not.toContain(leak);
   });
 
   test("no BACKEND_URL → 503", async () => {
@@ -1212,5 +1288,486 @@ test.describe("job keywords", () => {
       ]);
       expect(await response.text(), label).toBe(JSON.stringify(result.body));
     }
+  });
+});
+
+test.describe("profile levels", () => {
+  let profilePostingLevels: typeof ProfileLevels.profilePostingLevels;
+  let jobKeywords: typeof JobKeywords.jobKeywords;
+  let GET: typeof MyLevelsRoute.GET;
+  let server: Server;
+  let backend: string;
+  let loginHook: ReturnType<typeof registerHooks> | undefined;
+  let fakeDir: string;
+  let dataDir: string;
+  let requests: string[] = [];
+  let errors: ReturnType<typeof captureErrors>;
+
+  const subject = "synthetic-subject";
+  const version = "synthetic-v1";
+  const contractLabels = [
+    "2단계 규칙",
+    "LLM 보충 끔",
+    "제안 기준",
+    "본인 확인 안 됨",
+  ];
+  // 이 시험이 바꾸는 환경 변수. 시험마다 처음 값으로 되돌린다.
+  const envKeys = [
+    "CAREER_DATA_DIR",
+    "CAREER_PROFILE_NAMESPACE",
+    "CAREER_PROFILE_DATABASE_URL",
+    "CAREER_PROFILE_CA_FILE",
+    "BACKEND_URL",
+  ] as const;
+  const savedEnv: Partial<Record<(typeof envKeys)[number], string>> = {};
+  // posting-levels.ts가 globalThis에 두는 RDS 연결. 시험이 만든 연결은 시험마다 닫는다.
+  const pools = globalThis as unknown as {
+    careerLevelPool?: { end(): Promise<void> };
+  };
+
+  // Spring /api/postings/{id}/skill-categories 모양의 합성 문장(분류됨, 카운트에 들어감, 검토 끝).
+  const item = (
+    itemId: number,
+    text: string | null | undefined,
+    categoryCodes: string[],
+  ) => ({
+    itemId,
+    sourceCategory: "필수",
+    text,
+    assignment: {
+      status: "CLASSIFIED",
+      categoryCodes,
+      excludedFromCounts: false,
+      needsReview: false,
+      relatedGroups: [],
+    },
+  });
+  const posting = (
+    items: ReturnType<typeof item>[],
+    fields: Record<string, unknown> = { version },
+  ) =>
+    JSON.stringify({
+      postingId: 1,
+      ...fields,
+      analysisStatus: "ANALYZED",
+      recruitUnits: [{ unitId: 1, name: "합성 단위", items }],
+    });
+  // 작업 명세의 문장 3개: [B], [L, Java 문장], [Q]
+  const briefItems = [
+    item(1, "합성 서버 개발 경험", ["B"]),
+    item(2, "Java 기반 합성 서비스 개발", ["L"]),
+    item(3, "합성 코드 리뷰 경험", ["Q"]),
+  ];
+  // 경로 → [상태, 본문]. 없는 경로는 404(없는 공고)다.
+  const answers: Record<string, [number, string]> = {
+    "/api/postings/9101/skill-categories": [200, posting(briefItems)],
+    "/api/postings/9102/skill-categories": [
+      200,
+      posting([
+        item(11, "합성 데이터 모델링과 품질 관리", ["D", "Q", "D"]),
+        item(12, "합성 보안 점검과 배포 운영", ["S", "O"]),
+        item(13, "합성 데이터 파이프라인 운영", ["E"]),
+        item(14, "합성 화면 개발", ["F"]),
+        item(15, "합성 장비 연동", ["H"]),
+      ]),
+    ],
+    "/api/postings/9103/skill-categories": [
+      200,
+      posting(briefItems, { version: null }),
+    ],
+    "/api/postings/9104/skill-categories": [200, posting(briefItems, {})],
+    "/api/postings/9105/skill-categories": [
+      200,
+      posting([
+        item(21, undefined, ["B"]),
+        item(22, null, ["B"]),
+        item(23, "합성 서버 운영", ["B"]),
+      ]),
+    ],
+    "/api/postings/9106/skill-categories": [500, posting(briefItems)],
+  };
+
+  // 합성 분석 결과(CONTRACT 모양): B 2.0, D 3.0, O 1.5, E 0.0, F 판정 불가(null), A 0.0.
+  // L은 Java 2.5·Python 3.5(가장 높은 언어 Python, L 3.5)라 Java 문장을 Java로 재면 50, L LV로 재면 70이다.
+  function analyzed(subjectId = subject): LvProfile {
+    const p = profile({ B: 2.0, D: 3.0, O: 1.5, F: null });
+    return {
+      ...p,
+      subjectId,
+      categories: {
+        ...p.categories,
+        L: {
+          ...p.categories.L,
+          lv: 3.5,
+          languages: { Java: 2.5, Python: 3.5 },
+          best: "Python",
+        },
+      },
+    };
+  }
+
+  // 작업자처럼 profiles/<profileKey>.json에 결과를 둔다.
+  async function store(p: LvProfile) {
+    const file = path.join(
+      dataDir,
+      "lv-stat",
+      "profiles",
+      `${contractKey(p.namespace, p.subjectId)}.json`,
+    );
+    await mkdir(path.dirname(file), { recursive: true });
+    await writeFile(file, JSON.stringify(p));
+  }
+
+  // 화면 행 하나. 비교 값 없음, 확정, 분석 시각(profile.analyzedAt)이다.
+  const row = (
+    keywordId: string,
+    text: string,
+    categoryCodes: string[],
+    score: number,
+    evaluatedAt = "2026-11-28T00:00:00+09:00",
+  ) => ({
+    keywordId,
+    text,
+    categoryCodes,
+    score,
+    referenceScore: null,
+    referenceKind: null,
+    evaluationKind: "CONFIRMED",
+    evaluatedAt,
+  });
+  const briefRows = [
+    row("1", "합성 서버 개발 경험", ["B"], 40),
+    row("2", "Java 기반 합성 서비스 개발", ["L"], 50),
+  ];
+
+  // my-levels route의 로그인 확인(store.ts의 user·isGuest)은 Next 요청 안에서만 쿠키를 읽는다. 그래서 이 시험에서는
+  // 그 route가 읽는 store만 아래 시험용 로그인으로 바꾼다. 프로필 파일·가짜 백엔드·RDS 읽기는 진짜다.
+  type Login = {
+    user: { id: string; email: string; name: string } | null;
+    guest?: string;
+  };
+  const login = (value: Login | undefined) => {
+    (globalThis as { lvStatTestLogin?: Login }).lvStatTestLogin = value;
+  };
+  const member = (id: string) =>
+    login({ user: { id, email: `${id}@example.invalid`, name: "합성 회원" } });
+
+  async function myLevels(query: string) {
+    const response = await GET(
+      new Request(`http://local/api/jobs/my-levels?${query}`),
+    );
+    return {
+      status: response.status,
+      cacheControl: response.headers.get("cache-control"),
+      body: await response.json(),
+    };
+  }
+  const levelsFailure = {
+    status: 502,
+    cacheControl: "private, no-store",
+    body: { error: "저장된 사용자 LV를 불러오지 못했습니다." },
+  };
+  const noSavedLevels = {
+    status: 503,
+    cacheControl: "private, no-store",
+    body: { error: "사용자 LV 저장소 미연결" },
+  };
+
+  // RDS(저장된 LV)를 켜되 연결이 거부되는 곳을 준다. route가 RDS를 읽으면 오류(502)가 나서, 읽었는지 갈린다.
+  async function savedLevelsDown() {
+    process.env.CAREER_PROFILE_DATABASE_URL = `${(await closedPort()).replace("http://", "postgres://lv-test@")}/lv_test`;
+  }
+
+  test.beforeAll(async () => {
+    server = createServer((request, response) => {
+      requests.push(request.url!);
+      const [status, body] = answers[request.url!] ?? [404, "{}"];
+      response
+        .writeHead(status, { "Content-Type": "application/json" })
+        .end(body);
+    });
+    await new Promise<void>((resolve) =>
+      server.listen(0, "127.0.0.1", resolve),
+    );
+    backend = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+    fakeDir = await mkdtemp(path.join(tmpdir(), "lv-stat-login-"));
+    const fakeStore = path.join(fakeDir, "store.cjs");
+    await writeFile(
+      fakeStore,
+      [
+        "// 시험용 로그인: 시험이 globalThis.lvStatTestLogin에 넣은 사람이 로그인 사용자다.",
+        "exports.user = async () => globalThis.lvStatTestLogin?.user ?? null;",
+        "exports.isGuest = (id) => globalThis.lvStatTestLogin?.guest === id;",
+      ].join("\n"),
+    );
+    loginHook = registerHooks({
+      resolve: (specifier, context, nextResolve) =>
+        nextResolve(
+          specifier === "@/lib/server/store" &&
+            context.parentURL?.endsWith("/app/api/jobs/my-levels/route.ts")
+            ? fakeStore
+            : specifier,
+          context,
+        ),
+    });
+    ({ jobKeywords } = await import("@/lib/server/job-keywords"));
+    ({ profilePostingLevels } = await import("@/lib/server/profile-levels"));
+    ({ GET } = await import("@/app/api/jobs/my-levels/route"));
+  });
+
+  test.afterAll(async () => {
+    loginHook?.deregister();
+    delete (globalThis as { lvStatTestLogin?: Login }).lvStatTestLogin;
+    await rm(fakeDir, { recursive: true, force: true });
+    await new Promise<void>((resolve, reject) =>
+      server.close((error) => (error ? reject(error) : resolve())),
+    );
+  });
+
+  test.beforeEach(async () => {
+    for (const key of envKeys) savedEnv[key] = process.env[key];
+    dataDir = await mkdtemp(path.join(tmpdir(), "lv-stat-levels-"));
+    process.env.CAREER_DATA_DIR = dataDir;
+    process.env.CAREER_PROFILE_NAMESPACE = "staging";
+    delete process.env.CAREER_PROFILE_DATABASE_URL;
+    delete process.env.CAREER_PROFILE_CA_FILE;
+    process.env.BACKEND_URL = backend;
+    requests = [];
+    errors = captureErrors();
+    login(undefined);
+  });
+
+  test.afterEach(async () => {
+    errors.restore();
+    login(undefined);
+    await pools.careerLevelPool?.end();
+    delete pools.careerLevelPool;
+    for (const key of envKeys) {
+      const value = savedEnv[key];
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+    await rm(dataDir, { recursive: true, force: true });
+  });
+
+  test("rows computed from profile", async () => {
+    await store(analyzed());
+    // [B] → B 2.0 × 20 = 40, [L] Java 문장 → Java 2.5 × 20 = 50, [Q] → 점수 없음(행 없음)
+    expect(
+      (await profilePostingLevels(subject, "be:9101", version))?.levels,
+    ).toEqual(briefRows);
+    expect(requests).toEqual(["/api/postings/9101/skill-categories"]);
+  });
+
+  test("rows match page matching rule", async () => {
+    await store(analyzed());
+    const result = await profilePostingLevels(subject, "be:9102", version);
+    // 같은 코드 두 번과 재지 않는 Q·S·H도 문장 그대로 둔다. 0점도 점수다. F(판정 불가)·H만 있는 문장은 행이 없다.
+    expect(result?.levels).toEqual([
+      row("11", "합성 데이터 모델링과 품질 관리", ["D", "Q", "D"], 60),
+      row("12", "합성 보안 점검과 배포 운영", ["S", "O"], 30),
+      row("13", "합성 데이터 파이프라인 운영", ["E"], 0),
+    ]);
+    // 공고 화면(components/jobs/personal-job-comparison.tsx)은 /api/jobs/keywords로 받은 문장에
+    // keywordId·text·정렬한 categoryCodes가 모두 같은 행만 쓴다. 행마다 맞는 문장이 하나다.
+    const { body } = await jobKeywords("be:9102");
+    const keywords = "keywords" in body ? body.keywords : [];
+    for (const level of result!.levels)
+      expect(
+        keywords.filter(
+          (keyword) =>
+            keyword.id === level.keywordId &&
+            keyword.text === level.text &&
+            [...keyword.categoryCodes].sort().join() ===
+              [...level.categoryCodes].sort().join(),
+        ),
+        level.keywordId,
+      ).toHaveLength(1);
+  });
+
+  test("version mismatch returns no rows", async () => {
+    await store(analyzed());
+    // 화면이 물은 분류 버전과 공고 문장의 버전이 다르면 행이 없다. 문장 쪽 버전이 null이거나 없어도 같다.
+    const rows: [string, string][] = [
+      ["be:9101", "other-version"],
+      ["be:9103", version],
+      ["be:9104", version],
+    ];
+    for (const [jobId, asked] of rows)
+      expect(
+        await profilePostingLevels(subject, jobId, asked),
+        jobId,
+      ).toMatchObject({
+        jobId,
+        taxonomyVersion: asked,
+        source: "LV_STAT",
+        levels: [],
+      });
+  });
+
+  test("no profile returns null", async () => {
+    expect(await profilePostingLevels(subject, "be:9101", version)).toBeNull();
+    // 다른 사람의 결과, 다른 namespace의 결과는 이 사람 것이 아니다.
+    await store(analyzed("synthetic-other"));
+    await store({ ...analyzed(), namespace: "other-namespace" });
+    expect(await profilePostingLevels(subject, "be:9101", version)).toBeNull();
+    // 결과가 없으면 공고 문장도 받지 않는다(그래서 백엔드가 실패해도 저장된 LV로 넘어갈 수 있다).
+    expect(requests).toEqual([]);
+    // namespace는 로그인 저장소와 같은 CAREER_PROFILE_NAMESPACE다.
+    process.env.CAREER_PROFILE_NAMESPACE = "other-namespace";
+    expect(
+      await profilePostingLevels(subject, "be:9101", version),
+    ).not.toBeNull();
+  });
+
+  test("labels and sources present", async () => {
+    // 라벨·방식·아이디·분석 시각은 결과 파일 값을 그대로 쓴다(CONTRACT 값과 다른 합성 값으로 확인).
+    await store({
+      ...analyzed(),
+      login: "synthetic-login",
+      method: "synthetic-method-v9",
+      labels: ["합성 라벨 1", "합성 라벨 2"],
+      analyzedAt: "2026-11-27T12:34:56.000Z",
+    });
+    expect(await profilePostingLevels(subject, "be:9101", version)).toEqual({
+      jobId: "be:9101",
+      taxonomyVersion: version,
+      source: "LV_STAT",
+      levels: [
+        row("1", "합성 서버 개발 경험", ["B"], 40, "2026-11-27T12:34:56.000Z"),
+        row(
+          "2",
+          "Java 기반 합성 서비스 개발",
+          ["L"],
+          50,
+          "2026-11-27T12:34:56.000Z",
+        ),
+      ],
+      sources: [
+        {
+          id: "lv-stat:synthetic-login",
+          kind: "GITHUB",
+          title: "synthetic-login",
+          simulated: false,
+        },
+      ],
+      labels: ["합성 라벨 1", "합성 라벨 2"],
+      identityVerified: false,
+      methodVersion: "synthetic-method-v9",
+    });
+  });
+
+  test("posting that cannot be read throws", async () => {
+    await store(analyzed());
+    // 없는 공고(백엔드 404), 백엔드 오류(500), 문장 서버 연결 설정 없음(503)
+    for (const jobId of ["be:9999", "be:9106"])
+      await expect(
+        profilePostingLevels(subject, jobId, version),
+        jobId,
+      ).rejects.toThrow();
+    delete process.env.BACKEND_URL;
+    await expect(
+      profilePostingLevels(subject, "be:9101", version),
+    ).rejects.toThrow();
+  });
+
+  test("keywords without text give no row", async () => {
+    await store(analyzed());
+    // 문장 글이 없거나(null) 빠진 문장은 화면이 행을 맞출 수 없다.
+    expect(
+      (await profilePostingLevels(subject, "be:9105", version))?.levels,
+    ).toEqual([row("23", "합성 서버 운영", ["B"], 40)]);
+  });
+
+  test("route reads the profile before saved levels", async () => {
+    member(subject);
+    await store(analyzed());
+    // RDS가 켜져 있어도(연결 거부) 결과 파일이 있으면 RDS를 읽지 않는다.
+    await savedLevelsDown();
+    expect(await myLevels(`jobId=be:9101&version=${version}`)).toEqual({
+      status: 200,
+      cacheControl: "private, no-store",
+      body: {
+        jobId: "be:9101",
+        taxonomyVersion: version,
+        source: "LV_STAT",
+        levels: briefRows,
+        sources: [
+          {
+            id: "lv-stat:synthetic-user",
+            kind: "GITHUB",
+            title: "synthetic-user",
+            simulated: false,
+          },
+        ],
+        labels: contractLabels,
+        identityVerified: false,
+        methodVersion: "lv-stat-s2-20261127",
+      },
+    });
+  });
+
+  test("route falls back to saved levels without a profile", async () => {
+    member(subject);
+    const asked = `jobId=be:9101&version=${version}`;
+    // RDS 설정이 없으면 지금처럼 503
+    expect(await myLevels(asked)).toEqual(noSavedLevels);
+    // RDS를 읽다가 실패하면 지금처럼 502(결과 파일이 없을 때 RDS를 읽는다)
+    await savedLevelsDown();
+    expect(await myLevels(asked)).toEqual(levelsFailure);
+    expect(requests).toEqual([]);
+  });
+
+  test("route reads only the session user's profile", async () => {
+    member(subject);
+    await store(analyzed("synthetic-other"));
+    // 주소에 다른 사람 id를 넣어도 로그인한 사람의 결과만 읽는다(이 사람은 결과가 없어 RDS로 간다).
+    expect(
+      await myLevels(
+        `jobId=be:9101&version=${version}&userId=synthetic-other&subjectId=synthetic-other&subject=synthetic-other`,
+      ),
+    ).toEqual(noSavedLevels);
+    expect(requests).toEqual([]);
+  });
+
+  test("route answers 502 when the posting cannot be read", async () => {
+    member(subject);
+    await store(analyzed());
+    // 없는 공고(백엔드 404), 백엔드 오류(500)
+    for (const jobId of ["be:9999", "be:9106"])
+      expect(
+        await myLevels(`jobId=${jobId}&version=${version}`),
+        jobId,
+      ).toEqual(levelsFailure);
+  });
+
+  test("route checks login and input before reading a profile", async () => {
+    await store(analyzed());
+    await store(analyzed("synthetic-guest"));
+    const asked = `jobId=be:9101&version=${version}`;
+    const unauthorized = {
+      status: 401,
+      cacheControl: "private, no-store",
+      body: { error: "로그인이 필요합니다." },
+    };
+    // 로그인 안 함, 손님(결과 파일이 있어도)
+    expect(await myLevels(asked)).toEqual(unauthorized);
+    login({
+      user: {
+        id: "synthetic-guest",
+        email: "synthetic-guest@example.invalid",
+        name: "손님",
+      },
+      guest: "synthetic-guest",
+    });
+    expect(await myLevels(asked)).toEqual(unauthorized);
+    // 분류 버전이 없는 요청
+    member(subject);
+    expect(await myLevels("jobId=be:9101")).toEqual({
+      status: 400,
+      cacheControl: "private, no-store",
+      body: { error: "공고와 분류 버전을 확인해 주세요." },
+    });
+    expect(requests).toEqual([]);
   });
 });
