@@ -4,6 +4,7 @@ import os
 import sys
 import threading
 import time
+import traceback
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -21,6 +22,16 @@ def resp(status=200, body=None, headers=None):
     return status, dict(headers or {}), raw
 
 
+def raw(data):
+    """바이트를 그대로 보내고 연결을 닫는 응답(잘린 본문·깨진 상태 줄 시험용)."""
+    return "raw", {}, data
+
+
+# 본문을 100바이트라고 알리고 6바이트만 보낸 뒤 닫는다(본문을 받는 중 끊김 → IncompleteRead).
+CUT_BODY = (b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n"
+            b"Content-Length: 100\r\n\r\n" b'{"a":1')
+
+
 class FakeGitHub:
     """routes[path] = [응답, ...]. 두 개 이상이면 앞에서부터 하나씩 쓰고, 마지막은 계속 쓴다."""
 
@@ -31,12 +42,18 @@ class FakeGitHub:
 
         class Handler(http.server.BaseHTTPRequestHandler):
             def do_GET(self):
-                owner.seen.append((self.path, self.headers.get("Authorization")))
-                queue = owner.routes.get(self.path)
+                # http.server는 앞의 '//'를 '/'로 줄인다. 클라이언트 실수를 숨기지 않도록 받은 그대로 쓴다.
+                target = self.requestline.split()[1]
+                owner.seen.append((target, self.headers.get("Authorization")))
+                queue = owner.routes.get(target)
                 if not queue:
                     status, headers, body = resp(404, {"message": "Not Found"})
                 else:
                     status, headers, body = queue[0] if len(queue) == 1 else queue.pop(0)
+                if status == "raw":
+                    self.wfile.write(body)
+                    self.close_connection = True
+                    return
                 self.send_response(status)
                 for k, v in headers.items():
                     self.send_header(k, v)
@@ -96,6 +113,20 @@ class GhApiTest(unittest.TestCase):
             ghapi.get_all("/repos/a/b/commits?page=1"), [{"n": 1}, {"n": 2}]
         )
 
+    def test_gh_style_path_without_leading_slash(self):
+        # gh api처럼 경로 앞의 '/'는 있어도 없어도 되고, API 주소 끝의 '/'도 상관없다.
+        os.environ["LV_GITHUB_TOKEN"] = "abc"
+        self.fake.routes["/users/x"] = [resp(200, {"login": "x"})]
+        self.fake.routes["/repos/a/b/commits?author=x"] = [resp(200, [{"sha": "s1"}])]
+        self.assertEqual(ghapi.get_all("repos/a/b/commits?author=x"), [{"sha": "s1"}])
+        self.assertEqual(self.fake.seen[-1], ("/repos/a/b/commits?author=x", "Bearer abc"))
+        for base in (self.fake.base, self.fake.base + "/"):
+            for path in ("users/x", "/users/x"):
+                with self.subTest(base=base, path=path):
+                    os.environ["LV_GITHUB_API"] = base
+                    self.assertEqual(ghapi.get(path), {"login": "x"})
+                    self.assertEqual(self.fake.seen[-1], ("/users/x", "Bearer abc"))
+
     def test_search_items_unwrapped(self):
         self.fake.routes["/search/commits?q=x"] = [
             resp(200, {"items": [{"sha": "a"}, {"sha": "b"}]})
@@ -116,8 +147,11 @@ class GhApiTest(unittest.TestCase):
         ]
         with self.assertRaises(ghapi.RateLimited) as cm:
             ghapi.get_all("/limited")
-        message = str(cm.exception)
-        self.assertTrue("2분" in message or "3분" in message, message)
+        # 이 문구는 작업자가 화면에 그대로 보인다(review-focus 2). 문구 전체와 reset 값을 고정한다.
+        self.assertRegex(
+            str(cm.exception), r"^GitHub 호출 한도에 걸렸습니다\([23]분 뒤 다시 시도\)$"
+        )
+        self.assertEqual(cm.exception.reset_epoch, reset)
         self.assertEqual(self.sleeps, [])  # 한도 응답은 다시 부르지 않는다
 
     def test_429_is_rate_limited(self):
@@ -178,6 +212,55 @@ class GhApiTest(unittest.TestCase):
             ghapi.get("/down")
         self.assertEqual(len(self.fake.seen), 4)  # 첫 시도 + 재시도 3번
         self.assertEqual(len(self.sleeps), 3)
+
+    def test_cut_body_retries_three_times_then_fails(self):
+        # 본문을 받다 끊기면 연결 오류처럼 첫 시도 뒤 3번 다시 하고, 그래도 안 되면 GitHubError.
+        self.fake.routes["/cut"] = [raw(CUT_BODY)]
+        with self.assertRaises(ghapi.GitHubError):
+            ghapi.get("/cut")
+        self.assertEqual(len(self.fake.seen), 4)
+        self.assertEqual(self.sleeps, [1, 2, 4])
+
+    def test_cut_body_then_ok_succeeds(self):
+        self.fake.routes["/cut"] = [raw(CUT_BODY), resp(200, {"ok": True})]
+        self.assertEqual(ghapi.get("/cut"), {"ok": True})
+        self.assertEqual(len(self.fake.seen), 2)
+        self.assertEqual(self.sleeps, [1])
+
+    def test_garbled_status_line_is_retried(self):
+        # 상태 줄이 깨진 응답(BadStatusLine)도 연결 오류로 보고 다시 한다.
+        self.fake.routes["/garbled"] = [raw(b"garbage\r\n\r\n"), resp(200, {"ok": True})]
+        self.assertEqual(ghapi.get("/garbled"), {"ok": True})
+        self.assertEqual(len(self.fake.seen), 2)
+        self.assertEqual(self.sleeps, [1])
+
+    def test_bad_request_fails_fast_as_github_error(self):
+        # 다시 해도 같은 요청 오류는 날것의 예외 대신 바로 GitHubError(재시도 없음, 서버 호출 없음).
+        cases = {
+            "공백이 든 경로": (self.fake.base, "/search/commits?q=a b"),
+            "ASCII가 아닌 경로": (self.fake.base, "/repos/a/b/commits?sha=메인"),
+            "숫자가 아닌 포트": ("http://127.0.0.1:notaport", "/x"),
+            "scheme 없는 API 주소": ("api.invalid", "/x"),
+        }
+        for name, (base, path) in cases.items():
+            with self.subTest(name):
+                os.environ["LV_GITHUB_API"] = base
+                with self.assertRaises(ghapi.GitHubError):
+                    ghapi.get(path)
+        self.assertEqual(self.sleeps, [])
+        self.assertEqual(self.fake.seen, [])
+
+    def test_bad_token_header_fails_without_leaking_token(self):
+        # 헤더에 못 넣는 글자가 든 토큰: 보내지 않고 GitHubError. 메시지·traceback에 토큰이 없어야 한다.
+        os.environ["LV_GITHUB_TOKEN"] = "fake-token-1\nX"
+        self.fake.routes["/me"] = [resp(200, {})]
+        with self.assertRaises(ghapi.GitHubError) as cm:
+            ghapi.get("/me")
+        exc = cm.exception
+        text = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
+        self.assertNotIn("fake-token-1", text)
+        self.assertEqual(self.sleeps, [])
+        self.assertEqual(self.fake.seen, [])
 
     def test_connection_error_gives_up(self):
         os.environ["LV_GITHUB_API"] = "http://127.0.0.1:1"  # 닫힌 포트

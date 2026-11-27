@@ -1,9 +1,12 @@
 """GitHub REST 읽기 부품. gh CLI 대신 쓴다. 표준 라이브러리(urllib)만 쓴다.
 
+- 경로는 gh api처럼 앞의 '/'가 있어도 없어도 된다. 쿼리 값은 q()로 인코딩해 넣는다.
+- 실패는 NotFound·RateLimited·GitHubError로만 낸다.
 - 응답 헤더 이름은 소문자 키로 돌려준다.
 - 토큰은 환경 변수 LV_GITHUB_TOKEN에서만 읽고, 어디에도 찍지 않는다.
 - 시험용 환경 변수: LV_GITHUB_API(기본 https://api.github.com), LV_GITHUB_OFFLINE=1(모든 호출을 NotFound로).
 """
+import http.client
 import json
 import math
 import os
@@ -23,7 +26,7 @@ class NotFound(Exception):
 
 
 class GitHubError(Exception):
-    """그 밖의 실패(5xx 재시도 뒤 포함, 연결 오류 재시도 뒤 포함)."""
+    """그 밖의 실패. 5xx·연결 오류(본문을 받는 중 끊김 포함)는 3번 다시 한 뒤, 잘못된 주소·헤더는 바로 낸다."""
 
 
 class RateLimited(Exception):
@@ -40,9 +43,10 @@ def _base():
 
 
 def _url(path):
+    """전체 URL은 그대로 쓴다. 경로는 앞의 '/'가 있어도 없어도 API 주소 뒤에 붙인다(gh api와 같음)."""
     if path.startswith(("http://", "https://")):
         return path
-    return _base() + path
+    return _base() + "/" + path.lstrip("/")
 
 
 def _origin(url):
@@ -77,14 +81,14 @@ def _reset_epoch(headers):
 
 
 def request(path, timeout=30):
-    """path(/로 시작) 또는 전체 URL을 GET해 (본문 JSON, 소문자 헤더 dict)를 돌려준다."""
+    """경로(gh api처럼 'repos/…'·'/repos/…' 둘 다 됨) 또는 전체 URL을 GET해 (본문 JSON, 소문자 헤더 dict)를 돌려준다."""
     if os.environ.get("LV_GITHUB_OFFLINE") == "1":
         raise NotFound("오프라인 시험 모드")
     url = _url(path)
     for attempt in range(RETRY_LIMIT + 1):
-        req = urllib.request.Request(url, headers=_headers(url))
         opener = urllib.request.build_opener(_TokenSafeRedirect)
         try:
+            req = urllib.request.Request(url, headers=_headers(url))
             with opener.open(req, timeout=timeout) as resp:
                 headers = {k.lower(): v for k, v in resp.headers.items()}
                 raw = resp.read()
@@ -102,11 +106,19 @@ def request(path, timeout=30):
                     continue
                 raise GitHubError(f"HTTP {status}, {RETRY_LIMIT}번 다시 시도 뒤 실패") from None
             raise GitHubError(f"HTTP {status}") from None
-        except (urllib.error.URLError, OSError):
+        except http.client.InvalidURL:
+            # 주소가 잘못됨(공백·제어 문자, 숫자가 아닌 포트). 다시 해도 같으므로 바로 실패.
+            raise GitHubError("요청 주소가 잘못됐습니다") from None
+        except (urllib.error.URLError, OSError, http.client.HTTPException):
+            # 연결 오류: 연결 실패·시간 초과, 본문을 받는 중 끊김(IncompleteRead), 깨진 응답(BadStatusLine 등).
             if attempt < RETRY_LIMIT:
                 _sleep(2 ** attempt)
                 continue
             raise GitHubError(f"연결 실패, {RETRY_LIMIT}번 다시 시도 뒤 실패") from None
+        except ValueError as e:
+            # 보내기 전 검사 실패(헤더 값, ASCII가 아닌 주소, scheme 없는 주소). 다시 해도 같다.
+            # 원래 메시지에 토큰이 들어갈 수 있어 예외 종류만 남기고 원래 예외는 잇지 않는다.
+            raise GitHubError(f"요청을 보내지 못했습니다({type(e).__name__})") from None
         try:
             body = json.loads(raw) if raw.strip() else None
         except ValueError:
