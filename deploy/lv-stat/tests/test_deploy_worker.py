@@ -6,6 +6,8 @@
 부르는 명령(/usr/bin/printf 등)은 이 방법으로 보지 못한다.
 가짜 journalctl·systemctl status 는 합성 작업자 로그를 내놓는다. 출력은 공개 CI 로그가 되므로 run_script 는
 그 로그가 출력에 나오지 않는지도 본다.
+가짜 systemctl 은 systemd 처럼 서비스 파일을 daemon-reload 때 읽고, restart 때 current 가 가리키는 판을 켠다.
+그 판에 CRASH_LOOP 표시가 있으면 물을 때마다 active 라고 답하지만 NRestarts 가 는다(확인하는 사이 죽었다가 다시 켜짐).
 """
 import os
 from pathlib import Path
@@ -51,11 +53,16 @@ STUBS = {
     'sudo': '[ "$1" = -n ] && shift\nexec "$@"\n',
     'systemctl': 'flag=no; [ -n "${LV_GITHUB_TOKEN+x}" ] && flag=yes\n'
                  'echo "$* token-env=$flag" >> "$STUB_DIR/systemctl.log"\n'
+                 # NRestarts: systemd 가 서비스를 스스로 다시 켠 횟수
+                 'n=0; [ -f "$STUB_DIR/nrestarts" ] && read -r n < "$STUB_DIR/nrestarts"\n'
                  'case "$1" in\n'
-                 '  is-active) [ "$(cat "$STUB_DIR/active")" = yes ] && exit 0; exit 3 ;;\n'
+                 # 계속 죽는 판: 물을 때마다 active 지만, 지난번 물은 뒤로 죽었다가 한 번 더 다시 켜져 있다
+                 '  is-active) loop=no; [ -f "$STUB_DIR/crash-loop" ] && read -r loop < "$STUB_DIR/crash-loop"\n'
+                 '    [ "$loop" = yes ] && echo $((n + 1)) > "$STUB_DIR/nrestarts"\n'
+                 '    [ "$(cat "$STUB_DIR/active")" = yes ] && exit 0; exit 3 ;;\n'
                  # show -p … --value 은 NRestarts 숫자, 그 밖은 멈춘 서비스의 상태 줄
-                 '  show) case " $* " in *" --value "*) echo 0 ;;\n'
-                 '    *) printf "ActiveState=failed\\nSubState=failed\\nResult=exit-code\\nExecMainStatus=1\\nNRestarts=0\\n" ;; esac ;;\n'
+                 '  show) case " $* " in *" --value "*) echo "$n" ;;\n'
+                 '    *) printf "ActiveState=failed\\nSubState=failed\\nResult=exit-code\\nExecMainStatus=1\\nNRestarts=%s\\n" "$n" ;; esac ;;\n'
                  # 진짜 systemctl status 처럼 -n 0 이 아니면 작업자 로그 끝부분도 보여 준다
                  '  status) case " $* " in *" -n 0 "*|*" -n0 "*|*" --lines=0 "*) ;; *) cat "$STUB_DIR/journal" ;; esac ;;\n'
                  # systemd 처럼: 서비스 파일은 daemon-reload 때 읽고, restart 는 그때 읽어 둔 설정으로 켠다
@@ -63,7 +70,10 @@ STUBS = {
                  '    if [ -f "$u" ]; then while IFS= read -r l; do case "$l" in MemoryMax=*) mm=$l ;; esac; done < "$u"; fi\n'
                  '    echo "$mm" > "$STUB_DIR/loaded" ;;\n'
                  '  restart) mm=none; [ -f "$STUB_DIR/loaded" ] && read -r mm < "$STUB_DIR/loaded"\n'
-                 '    echo "$mm" >> "$STUB_DIR/restarts.log" ;;\n'
+                 '    echo "$mm" >> "$STUB_DIR/restarts.log"\n'
+                 # ExecStart 처럼 current 가 가리키는 판을 켠다. 그 판이 계속 죽는 판(CRASH_LOOP)인지 적어 둔다
+                 '    loop=no; [ -f "$HOME/lv-stat/staging/current/service/CRASH_LOOP" ] && loop=yes\n'
+                 '    echo "$loop" > "$STUB_DIR/crash-loop" ;;\n'
                  'esac\nexit 0\n',
     'journalctl': 'cat "$STUB_DIR/journal"\n',
     'sleep': 'exit 0\n',
@@ -127,13 +137,15 @@ class DeployWorkerTest(unittest.TestCase):
     def tearDown(self):
         self.temp.cleanup()
 
-    def make_source(self, path, fail=False):
+    def make_source(self, path, fail=False, crash_loop=False):
         path.mkdir(parents=True)
         (path / 'worker.py').write_text(FAKE_WORKER, encoding='utf-8')
         (path / '__pycache__').mkdir()
         (path / '__pycache__' / 'junk.pyc').write_bytes(b'x')
         if fail:
             (path / 'FAIL_SELF_CHECK').write_text('1')
+        if crash_loop:   # 자체 점검은 통과하지만, 켜 두면 계속 죽고 systemd 가 다시 켜는 판(가짜 systemctl 이 봄)
+            (path / 'CRASH_LOOP').write_text('1')
         return path
 
     def set_active(self, active):
@@ -178,6 +190,15 @@ class DeployWorkerTest(unittest.TestCase):
     def current(self):
         link = self.base / 'current'
         return Path(os.path.realpath(link)).name if link.is_symlink() else None
+
+    def switch_current(self, commit):
+        """README '되돌리기' 처럼 손으로 current 를 그 판으로 바꾼다(ln -sfn … current.new && mv -Tf current.new current)"""
+        new = self.base / 'current.new'
+        os.symlink(self.base / 'releases' / commit, new)
+        os.replace(new, self.base / 'current')
+
+    def releases(self):
+        return sorted(p.name for p in (self.base / 'releases').iterdir())
 
     def assert_untouched(self, result):
         self.assertEqual(result.returncode, 2, result.stderr)
@@ -270,16 +291,21 @@ class DeployWorkerTest(unittest.TestCase):
 
     def test_same_commit_twice_changes_nothing_but_restarts(self):
         self.assertEqual(self.run_script(sha(1), token=TOKEN).returncode, 0)
+        release = self.base / 'releases' / sha(1)
+        release_inode = release.stat().st_ino
+        os.utime(release / 'service' / 'worker.py', (1, 1))
         os.utime(self.unit, (1, 1))
         os.utime(self.envfile, (1, 1))
         unit_before = self.unit.read_text()
         r = self.run_script(sha(1), token=TOKEN)
         self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(release.stat().st_ino, release_inode)                      # 도는 판의 폴더를 지우고 새로 만들지 않음
+        self.assertEqual((release / 'service' / 'worker.py').stat().st_mtime, 1)    # 판을 다시 복사하지 않음
         self.assertEqual(self.unit.stat().st_mtime, 1)          # 서비스 파일을 다시 쓰지 않음
         self.assertEqual(self.envfile.stat().st_mtime, 1)       # 같은 토큰이면 파일을 다시 쓰지 않음
         self.assertEqual(self.unit.read_text(), unit_before)
         self.assertEqual(self.log().count(f'restart {SVC}'), 2)
-        self.assertEqual(sorted(p.name for p in (self.base / 'releases').iterdir()), [sha(1)])
+        self.assertEqual(self.releases(), [sha(1)])
         self.assertEqual(self.current(), sha(1))
 
     # --- 되돌리기 ---------------------------------------------------------------
@@ -297,6 +323,15 @@ class DeployWorkerTest(unittest.TestCase):
         self.assertEqual(self.envfile.read_text(), f'LV_GITHUB_TOKEN={TOKEN}\n')
         self.assertEqual(stat.S_IMODE(self.envfile.stat().st_mode), 0o600)
         self.assertFalse((self.base / 'lv-worker.env.prev').exists())
+
+    def test_rolls_back_when_new_release_restarts_between_checks(self):
+        """물을 때마다 active 여도, 확인하는 사이 systemd 가 다시 켠 적(NRestarts 증가)이 있으면 실패로 보고 되돌린다."""
+        self.assertEqual(self.run_script(sha(1), token=TOKEN).returncode, 0)   # 다시 켜지지 않는 판은 통과
+        looping = self.make_source(Path(self.temp.name).resolve() / 'looping', crash_loop=True)
+        r = self.run_script(sha(2), src=looping, token=FAILED_TOKEN)
+        self.assertEqual(r.returncode, 1, r.stderr)
+        self.assertEqual(self.current(), sha(1))
+        self.assertEqual(self.envfile.read_text(), f'LV_GITHUB_TOKEN={TOKEN}\n')
 
     def test_rollback_reports_systemd_state_not_worker_log(self):
         """CI 로그는 공개된다. 되돌릴 때는 systemd 가 알려 주는 상태만 남기고 작업자 로그(분석한 계정·레포)는 옮기지 않는다."""
@@ -341,9 +376,30 @@ class DeployWorkerTest(unittest.TestCase):
             self.assertEqual(self.run_script(sha(n)).returncode, 0)
             marker = self.base / 'releases' / sha(n) / '.ready'
             os.utime(marker, (t0 + n, t0 + n))                    # 같은 초에 돌아도 순서가 정해지게
-        left = sorted(p.name for p in (self.base / 'releases').iterdir())
-        self.assertEqual(left, [sha(n) for n in range(3, 8)])
+        self.assertEqual(self.releases(), [sha(n) for n in range(3, 8)])
         self.assertEqual(self.current(), sha(7))
+
+    def test_prune_keeps_previous_release_even_when_it_is_the_oldest(self):
+        """손으로 가장 오래된 판으로 되돌린 뒤 새로 배포해도, 그때까지 돌던 그 판(바로 전 판)은 지우지 않는다."""
+        t0 = time.time() - 10_000
+        for n in range(1, 6):
+            self.assertEqual(self.run_script(sha(n)).returncode, 0)
+            os.utime(self.base / 'releases' / sha(n) / '.ready', (t0 + n, t0 + n))
+        self.switch_current(sha(1))
+        self.assertEqual(self.run_script(sha(6)).returncode, 0)
+        self.assertEqual(self.current(), sha(6))
+        self.assertEqual(self.releases(), [sha(n) for n in range(1, 7)])   # 1판은 최근 순 여섯째(5개 밖)지만 바로 전 판이라 남김
+
+    def test_prune_keeps_current_release_even_when_its_marker_looks_oldest(self):
+        """시계가 뒤로 가 방금 배포한 판의 표시가 가장 오래돼 보여도, 지금 도는 판은 지우지 않는다."""
+        ahead = time.time() + 10_000                                       # 앞서 가던 시계로 배포한 판들
+        for n in range(1, 6):
+            self.assertEqual(self.run_script(sha(n)).returncode, 0)
+            os.utime(self.base / 'releases' / sha(n) / '.ready', (ahead + n, ahead + n))
+        self.assertEqual(self.run_script(sha(6)).returncode, 0)
+        self.assertEqual(self.current(), sha(6))
+        self.assertEqual(self.releases(), [sha(n) for n in range(1, 7)])
+        self.assertTrue((self.base / 'current' / 'service' / 'worker.py').is_file())   # 도는 판의 코드가 남아 있음
 
 
 if __name__ == '__main__':
