@@ -4,11 +4,14 @@
   clone하고 .git/lv-partial을 만든다. 시험 준비에서 clone이 정말 부분 clone인지(원격의 blob이 하나도 없는지) 먼저 본다.
 - 내 커밋은 noreply 이메일이고 LV_GITHUB_OFFLINE=1이다(GitHub API는 빈 목록). gh는 불리면 실패한다(test_s2_port 도구).
 - blob이 있는지는 GIT_NO_LAZY_FETCH=1 git cat-file -e로 본다(확인하는 쪽이 받으러 가지 않게). 기대 blob id는 내용에서 직접 셈한다.
+- git 한 단계의 인자·표준 입력 확인과 실패는 PATH 맨 앞의 시험용 git(spy_git)으로 한다. 정한 인자가 있는 호출만 기록하고
+  (실패시키거나 진짜 git에 넘김), 나머지는 진짜 git이다.
 - 원격·clone은 임시 폴더에만 만든다. 코드 폴더(s2)에는 아무것도 생기지 않아야 한다(부를 때마다 확인). 네트워크는 쓰지 않는다.
 """
 import hashlib
 import json
 import os
+import shlex
 import shutil
 import subprocess
 import sys
@@ -67,7 +70,9 @@ def commit_all(src, env, commits, versions, start):
             elif isinstance(value, tuple) and value[0] == LINK:
                 git_run(["-C", src, "update-index", "--add", "--cacheinfo", "160000,%s,%s" % (value[1], path)], env)
             else:
-                with open(os.path.join(src, path), "w", encoding="utf-8") as f:
+                full = os.path.join(src, path)
+                os.makedirs(os.path.dirname(full), exist_ok=True)
+                with open(full, "w", encoding="utf-8") as f:
                     f.write(value)
                 git_run(["-C", src, "add", "--", path], env)
                 versions.setdefault(path, []).append(value)
@@ -86,6 +91,39 @@ def make_remote(root, commits):
     versions = {}
     commit_all(src, env, commits, versions, 1)
     return src, env, versions
+
+
+def lines10(**changed):
+    """L1~L10 열 줄. changed = {"l2": "바꾼 줄", ...}(l<번호>의 줄을 바꾼다)"""
+    rows = ["L%d" % n for n in range(1, 11)]
+    for key, value in changed.items():
+        rows[int(key[1:]) - 1] = value
+    return "".join(row + "\n" for row in rows)
+
+
+def merge_in(src, env, branch, subject, day):
+    """지금 브랜치에 branch를 --no-ff로 합친다(남이 합침, 충돌 없는 자동 합치기). 날짜는 2026-01-<day>."""
+    when = "2026-01-%02dT10:00:00+09:00" % day
+    git_run(["-C", src, "-c", "commit.gpgsign=false", "merge", "-q", "--no-ff", "-m", subject, branch],
+            dict(env, GIT_AUTHOR_EMAIL=OTHER_EMAIL, GIT_AUTHOR_DATE=when, GIT_COMMITTER_DATE=when))
+
+
+def spy_git(root, flag, fail=False):
+    """PATH 맨 앞에 둘 git. 인자에 flag가 있는 호출은 인자(한 줄에 하나)와 표준 입력을 root/spy-argv·root/spy-stdin에 남긴 뒤,
+    fail이면 아무것도 하지 않고 실패하고(rc 128) 아니면 진짜 git이 같은 입력으로 한다. 나머지 호출은 진짜 git 그대로다.
+    -> (bin 폴더, 인자 파일, 표준 입력 파일)"""
+    q = shlex.quote
+    real = shutil.which("git")
+    bin_dir = os.path.join(root, "gitbin")
+    os.makedirs(bin_dir)
+    argv_file, stdin_file = os.path.join(root, "spy-argv"), os.path.join(root, "spy-stdin")
+    then = 'echo "test: injected failure" >&2; exit 128' if fail else 'exec %s "$@" < %s' % (q(real), q(stdin_file))
+    path = os.path.join(bin_dir, "git")
+    with open(path, "w", encoding="utf-8") as f:
+        f.write('#!/bin/sh\nfor a in "$@"; do\n  if [ "$a" = %s ]; then\n    printf "%%s\\n" "$@" > %s\n    cat > %s\n    %s\n  fi\n'
+                'done\nexec %s "$@"\n' % (q(flag), q(argv_file), q(stdin_file), then, q(real)))
+    os.chmod(path, 0o755)
+    return bin_dir, argv_file, stdin_file
 
 
 class PartialIndexTest(unittest.TestCase):
@@ -117,8 +155,9 @@ class PartialIndexTest(unittest.TestCase):
         src, env, versions = make_remote(self.tmp, commits)
         return src, self.clone_of(src, env, versions), versions
 
-    def run_index(self, clone, repo=None, **env_extra):
-        """people.json(레포 하나)을 쓰고 LV_GITHUB_OFFLINE=1로 s2_index.py P01을 돌린다. -> (person.json, 레포 색인)"""
+    def run_index(self, clone, repo=None, path_front=(), **env_extra):
+        """people.json(레포 하나)을 쓰고 LV_GITHUB_OFFLINE=1로 s2_index.py P01을 돌린다. path_front = PATH 맨 앞에 더할 폴더.
+        -> (person.json, 레포 색인)"""
         os.makedirs(self.home, exist_ok=True)
         r = {"key": "tester__big", "full_name": "tester/big", "dir": clone, "default_branch": "main", "prs": False}
         r.update(repo or {})
@@ -126,7 +165,7 @@ class PartialIndexTest(unittest.TestCase):
             json.dump([{"pid": "P01", "login": "tester", "role": None, "level": None, "repos": [r]}], f)
         bin_dir, gh_mark = fake_gh(self.tmp)
         env = base_env(LV_S2_HOME=self.home, LV_GITHUB_OFFLINE="1", **env_extra)
-        env["PATH"] = bin_dir + os.pathsep + env["PATH"]
+        env["PATH"] = os.pathsep.join([*path_front, bin_dir, env["PATH"]])
         before = code_tree()
         p = subprocess.run([sys.executable, "-I", "-B", os.path.join(CODE, "s2_index.py"), "P01"],
                            env=env, capture_output=True, timeout=300)
@@ -246,15 +285,132 @@ class PartialIndexTest(unittest.TestCase):
                               (OWN_EMAIL, "revert mine", {"a.py": "a1\na2\n"})], versions, 2)
         git_run(["-C", src, "checkout", "-q", "main"], env)
         commit_all(src, env, [(OTHER_EMAIL, "edit b", {"b.py": "b2\n"})], versions, 4)
-        when = "2026-01-05T10:00:00+09:00"
-        git_run(["-C", src, "-c", "commit.gpgsign=false", "merge", "-q", "--no-ff", "-m", "merge side", "side"],
-                dict(env, GIT_AUTHOR_EMAIL=OTHER_EMAIL, GIT_AUTHOR_DATE=when, GIT_COMMITTER_DATE=when))
+        merge_in(src, env, "side", "merge side", 5)
         clone = self.clone_of(src, env, versions)
         _, data = self.run_index(clone)
         files = {c["subject"]: c["files"] for c in data["commits"]}
         self.assertEqual(files, {"mine on side": [numstat("a.py", 1, 0)], "revert mine": [numstat("a.py", 0, 1)],
                                  "edit b": [], "add a b": [numstat("a.py", 2, 0)]})
         self.assertEqual(data["partial"]["paths"], ["a.py"])
+
+    def merged_side_repo(self):
+        """곁가지에서 내가 m.py 2번 줄을, main에서 남이 9번 줄을 고친 뒤 충돌 없이 합쳤다(끝 = 합친 커밋).
+        남만 고친 o.py도 양쪽에서 고쳐 합친 판이 생긴다. 합친 판은 versions 끝에 더한다. -> (clone, versions)"""
+        src, env, versions = make_remote(self.tmp, [(OTHER_EMAIL, "add m o", {"m.py": lines10(), "o.py": "o1\no2\no3\n"})])
+        git_run(["-C", src, "checkout", "-q", "-b", "side"], env)
+        commit_all(src, env, [(OWN_EMAIL, "mine on side", {"m.py": lines10(l2="mine")}),
+                              (OTHER_EMAIL, "other on side", {"o.py": "o1\no2\nside\n"})], versions, 2)
+        git_run(["-C", src, "checkout", "-q", "main"], env)
+        commit_all(src, env, [(OTHER_EMAIL, "other on main", {"m.py": lines10(l9="o9"), "o.py": "main\no2\no3\n"})], versions, 4)
+        merge_in(src, env, "side", "merge side", 5)
+        versions["m.py"].append(lines10(l2="mine", l9="o9"))  # 합친 커밋에서만 생긴 판
+        versions["o.py"].append("main\no2\nside\n")
+        return self.clone_of(src, env, versions), versions
+
+    def test_partial_fetches_version_made_by_merge_at_tip(self):
+        # 양쪽이 고친 파일을 합치면(충돌이 없어도) 합친 커밋에서만 생긴 판이 남는다. 그 판은 머지 아닌 커밋의 raw에 없다.
+        # 그 판(여기서는 끝의 판)이 없으면 blame이 실패하고(my_lines 0) 추출기도 m.py를 읽지 못한다(크기 None).
+        clone, versions = self.merged_side_repo()
+        _, data = self.run_index(clone)
+        got = {f["path"]: (f["my_lines"], f["lines"], f["my_ranges"], f["size"]) for f in data["files"]}
+        self.assertEqual(got["m.py"], (1, 10, [[2, 2]], len(versions["m.py"][-1])))
+        # 내 경로는 합친 판까지 모든 판을 받고, 남의 경로(o.py)는 합친 판도 받지 않는다.
+        self.assertEqual(self.have(clone, versions, ["m.py", "o.py"]), {"m.py": [True] * 4, "o.py": [False] * 4})
+        self.assertEqual(data["partial"]["paths"], ["m.py"])
+        self.assertEqual(data["partial"]["blobs"], 4)
+        self.assertIs(data["partial"]["fetched"], True)
+
+    def test_partial_fetches_versions_made_by_inner_merges(self):
+        # 합친 커밋 두 개가 이어지고, 그 뒤 남이 머지 아닌 커밋으로 고쳤다(끝의 판과 그 옛 판은 머지 아닌 커밋의 raw에 있다).
+        # 첫 합친 커밋의 판은 어느 머지 아닌 커밋의 raw에도 없다. 끝의 판만 더 받아서는 blame이 그 판에서 실패한다.
+        src, env, versions = make_remote(self.tmp, [(OTHER_EMAIL, "add m", {"m.py": lines10()})])
+        git_run(["-C", src, "checkout", "-q", "-b", "side1"], env)
+        commit_all(src, env, [(OWN_EMAIL, "mine on side1", {"m.py": lines10(l2="mine")})], versions, 2)
+        git_run(["-C", src, "checkout", "-q", "main"], env)
+        commit_all(src, env, [(OTHER_EMAIL, "other on main", {"m.py": lines10(l9="o9")})], versions, 3)
+        git_run(["-C", src, "checkout", "-q", "-b", "side2"], env)
+        commit_all(src, env, [(OTHER_EMAIL, "other on side2", {"m.py": lines10(l5="o5", l9="o9")})], versions, 4)
+        git_run(["-C", src, "checkout", "-q", "main"], env)
+        merge_in(src, env, "side1", "merge 1", 5)  # 판: 2·9번 줄(이 합친 커밋에서만 생김)
+        merge_in(src, env, "side2", "merge 2", 6)  # 판: 2·5·9번 줄(다음 커밋의 옛 판)
+        commit_all(src, env, [(OTHER_EMAIL, "other after", {"m.py": lines10(l2="mine", l5="o5", l7="o7", l9="o9")})], versions, 7)
+        versions["m.py"] += [lines10(l2="mine", l9="o9"), lines10(l2="mine", l5="o5", l9="o9")]
+        clone = self.clone_of(src, env, versions)
+        _, data = self.run_index(clone)
+        got = {f["path"]: (f["my_lines"], f["lines"], f["my_ranges"]) for f in data["files"]}
+        self.assertEqual(got["m.py"], (1, 10, [[2, 2]]))
+        self.assertEqual(self.have(clone, versions, ["m.py"]), {"m.py": [True] * 7})
+        self.assertEqual(data["partial"]["blobs"], 7)
+        self.assertIs(data["partial"]["fetched"], True)
+
+    def test_partial_merge_pass_takes_only_my_exact_paths(self):
+        # 내가 고친 파일 tool을 남이 지우고 같은 이름의 폴더(tool/x.py)를 만든 뒤, 양쪽에서 tool/x.py를 고쳐 합쳤다.
+        # git 경로 조건 'tool'은 폴더 아래 파일도 고르므로, 합친 커밋을 읽는 단계는 내 경로와 글자가 같은 항목만 받는다.
+        # (이 모양에서는 내 경로 numstat이 폴더 아래 파일 내용이 없어 실패한다. 이 시험은 받는 범위만 본다.)
+        src, env, versions = make_remote(self.tmp, [(OTHER_EMAIL, "add tool", {"tool": "t1\n"})])
+        commit_all(src, env, [(OWN_EMAIL, "mine tool", {"tool": "t1\nmine\n"}),
+                              (OTHER_EMAIL, "tool becomes a folder", {"tool": None}),
+                              (OTHER_EMAIL, "add tool/x.py", {"tool/x.py": "x1\nx2\nx3\n"})], versions, 2)
+        git_run(["-C", src, "checkout", "-q", "-b", "side"], env)
+        commit_all(src, env, [(OTHER_EMAIL, "other on side", {"tool/x.py": "x1\nx2\nside\n"})], versions, 5)
+        git_run(["-C", src, "checkout", "-q", "main"], env)
+        commit_all(src, env, [(OTHER_EMAIL, "other on main", {"tool/x.py": "main\nx2\nx3\n"})], versions, 6)
+        merge_in(src, env, "side", "merge side", 7)
+        versions["tool/x.py"].append("main\nx2\nside\n")  # 합친 커밋에서만 생긴 판
+        clone = self.clone_of(src, env, versions)
+        _, data = self.run_index(clone)
+        self.assertEqual(data["partial"]["paths"], ["tool"])
+        self.assertEqual(self.have(clone, versions, ["tool", "tool/x.py"]), {"tool": [True] * 2, "tool/x.py": [False] * 4})
+        self.assertEqual(data["partial"]["blobs"], 2)
+
+    def test_partial_no_commits_of_mine_reads_and_fetches_nothing(self):
+        # 이 큰 레포의 분석 브랜치에 내 커밋이 없다. 내 경로가 없으니 합친 커밋을 읽지 않고(경로 없이 부르면 모든 합친 커밋의
+        # 모든 경로를 비교한다) 받지도 않는다.
+        src, env, versions = make_remote(self.tmp, [(OTHER_EMAIL, "add m", {"m.py": lines10()})])
+        git_run(["-C", src, "checkout", "-q", "-b", "side"], env)
+        commit_all(src, env, [(OTHER_EMAIL, "other on side", {"m.py": lines10(l2="side")})], versions, 2)
+        git_run(["-C", src, "checkout", "-q", "main"], env)
+        commit_all(src, env, [(OTHER_EMAIL, "other on main", {"m.py": lines10(l9="o9")})], versions, 3)
+        merge_in(src, env, "side", "merge side", 4)
+        clone = self.clone_of(src, env, versions)
+        trace = os.path.join(self.tmp, "trace2.json")
+        _, data = self.run_index(clone, GIT_TRACE2_EVENT=trace)
+        with open(trace, encoding="utf-8") as f:
+            argvs = [ev["argv"] for ev in map(json.loads, f) if ev.get("event") == "start"]
+        self.assertEqual([a for a in argvs if "--diff-merges=separate" in a or "fetch" in a], [])
+        self.assertEqual(data["partial"], {"paths": [], "blobs": 0, "fetched": True, "numstat_ok": True})
+        self.assertEqual([c["own"] for c in data["commits"]], [False] * 3)
+
+    def test_partial_merge_pass_asks_git_for_my_paths_only(self):
+        # 합친 커밋을 읽는 단계는 git에 내 경로만 준다(표준 입력, 글자 그대로). 경로 없이 불러도 결과는 내 경로와 글자가 같은
+        # 항목만 고르는 거름 때문에 같지만, 모든 합친 커밋의 모든 경로를 부모마다 비교해 큰 레포에서 출력이 커진다.
+        # --full-history는 git 2.55에서는 --diff-merges만으로도 이력을 줄이지 않아 결과로 드러나지 않으므로 인자로 확인한다.
+        clone, _ = self.merged_side_repo()
+        bin_dir, argv_file, stdin_file = spy_git(self.tmp, "--diff-merges=separate")
+        _, data = self.run_index(clone, path_front=[bin_dir])
+        with open(argv_file, encoding="utf-8") as f:
+            argv = f.read().splitlines()
+        with open(stdin_file, encoding="utf-8") as f:
+            self.assertEqual(f.read(), "--\nm.py\n")
+        self.assertEqual([a for a in argv if a in ("--literal-pathspecs", "--merges", "--full-history", "--stdin")],
+                         ["--literal-pathspecs", "--merges", "--full-history", "--stdin"])
+        self.assertIs(data["partial"]["fetched"], True)
+
+    def test_partial_merge_pass_failure_still_fetches_the_rest(self):
+        # 합친 커밋을 읽는 단계가 실패했다(시험용 git이 --diff-merges=separate가 있는 호출만 실패시킨다).
+        # 머지 아닌 커밋에서 찾은 내 경로의 판은 그대로 받고(numstat은 됨), 합친 판을 못 받았으니 fetched는 거짓이다.
+        clone, versions = self.merged_side_repo()
+        bin_dir, argv_file, _ = spy_git(self.tmp, "--diff-merges=separate", fail=True)
+        _, data = self.run_index(clone, path_front=[bin_dir])
+        self.assertTrue(os.path.exists(argv_file))  # 그 단계를 불렀다(그리고 실패했다)
+        self.assertNotIn("error", data)
+        self.assertEqual(data["partial"]["paths"], ["m.py"])
+        self.assertEqual(data["partial"]["blobs"], 3)
+        self.assertIs(data["partial"]["fetched"], False)
+        self.assertEqual(self.have(clone, versions, ["m.py", "o.py"]),
+                         {"m.py": [True, True, True, False], "o.py": [False] * 4})
+        self.assertIs(data["partial"]["numstat_ok"], True)
+        self.assertEqual({c["subject"]: c["files"] for c in data["commits"]}["mine on side"], [numstat("m.py", 1, 1)])
 
     def test_partial_branch_fetch_brings_no_contents(self):
         # develop은 clone에 없어서(--single-branch) ensure_ref가 받아 온다. 표시한 레포는 내용 없이(blob:none) 받고,

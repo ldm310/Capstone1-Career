@@ -6,9 +6,10 @@ usage: python3 -I s2_index.py P01 [P02 ...]
 - 계정 확인: GitHub API 'commits?author=<login>&sha=<분석 브랜치>'가 돌려준 SHA만 내 커밋이다(계정에 연결된 커밋).
   noreply 이메일(<id>+<login>@users.noreply.github.com)도 내 커밋으로 본다. 본인이 알려 준 이메일은 후보에게 받을 수 없어 없다.
 - GitHub는 ghapi로 GET만 부른다(토큰은 LV_GITHUB_TOKEN, API에만 쓴다). 목록은 끝까지 받는다. 받은 코드는 읽기만 한다.
-- 큰 레포(.git/lv-partial 표시, --filter=blob:none으로 받음): 내 경로의 파일 내용만 한 번에 받는다(prefetch_mine, lazy fetch 없음.
-  남의 경로는 blame이 읽는 판만). 커밋 정보는 모든 커밋을 받고, 파일 항목(numstat)은 내 경로만 받는다. 색인 레코드에
-  partial {paths, blobs, fetched, numstat_ok}를 더한다. 표시 없는 레포는 2단계 그대로다(numstat이 실패하면 git_lazy로 받아서 다시).
+- 큰 레포(.git/lv-partial 표시, --filter=blob:none으로 받음): 내 경로의 파일 내용(합친 커밋에서만 생긴 판 포함)만 한 번에 받는다
+  (prefetch_mine, lazy fetch 없음. 「제안」(확인 전) 남의 경로는 blame이 읽는 판만). 커밋 정보는 모든 커밋을 받고, 파일 항목(numstat)은
+  내 경로만 받는다. 색인 레코드에 partial {paths, blobs, fetched, numstat_ok}를 더한다. 표시 없는 레포는 2단계 그대로다
+  (numstat이 실패하면 git_lazy로 받아서 다시).
 """
 import json
 import os
@@ -88,23 +89,13 @@ def noreply_re(login):
     return re.compile(r'^(\d+\+)?' + re.escape(login.lower()) + r'@users\.noreply\.github\.com$')
 
 
-def prefetch_mine(d, refs, own, login):
-    """표시한 레포(큰 레포를 --filter=blob:none으로 받음)에서 내 경로의 파일 내용(blob)만 한 번에 받는다(lazy fetch 없이).
-    1. log --raw 한 번. 트리만 읽는다: 이름 바꿈은 내용이 같은 것만 찾는다(-M100%). 비슷한 내용까지 찾는 -M은 지운 파일과
-       새 파일의 내용을 읽어야 해서, 내용이 없는 이 레포에서는 그런 커밋에서 멈춘다(rc 128). 이 단계가 실패하면 잘린 결과로
-       받지 않고 paths=[], fetched=False로 돌려준다. 내 커밋 = sha in own 또는 noreply 이메일(commits_of와 같음).
-    2. 내 경로 = 내 커밋이 바꾼 경로(이름 바꿈은 양쪽 다). 그다음 어느 작성자의 이름 바꿈이든 새 경로가 내 경로면 옛 경로를
-       더한다. 더 늘지 않을 때까지 한다(blame이 이름 바꾸기 전 판까지 따라가므로).
-    3. 모든 커밋에서 경로(이름 바꿈은 어느 쪽이든)가 내 경로인 항목의 옛·새 blob id. 내 경로를 새로 만든 커밋(상태 A)에서는
-       그 커밋이 없앤 경로(지움, 이름 바꿈의 옛 쪽)의 옛 blob id도 더한다: blame은 그 커밋에서 옛 이름을 찾으려고 없어진 파일의
-       내용을 모두 읽는다. 0만 있는 id, gitlink(모드 160000, 다른 레포의 커밋이라 받을 수 없음)와 중복은 뺀다.
-    4. 한 번에 받는다. 받을 id가 없으면 부르지 않는다(fetched 참). 실패하면 fetched=False로 두고 계속한다.
-    -> {"paths": [정렬], "blobs": n, "fetched": bool}"""
-    rc, out = L.git(d, 'log', '--no-merges', '--raw', '--no-abbrev', '-M100%', '--format=%x1e%H%x1f%ae', *refs, timeout=1200)
-    if rc != 0:
-        return dict(paths=[], blobs=0, fetched=False)
-    noreply = noreply_re(login)
-    commits = []                     # [(내 커밋인가, [(옛 모드, 새 모드, 옛 id, 새 id, 상태, [경로(이름 바꿈은 옛·새)])])]
+RAW = ('--raw', '--no-abbrev', '-M100%', '--format=%x1e%H%x1f%ae')   # prefetch_mine의 두 log가 같이 쓴다(트리만 읽음)
+
+
+def raw_entries(out):
+    """log RAW 출력 -> [(sha, 이메일, [(옛 모드, 새 모드, 옛 id, 새 id, 상태, [경로(이름 바꿈은 옛·새)])])].
+    합친 커밋을 부모마다 비교하면(--diff-merges=separate) 한 커밋이 부모 수만큼 나온다."""
+    res = []
     for rec in out.decode('utf-8', errors='replace').split('\x1e'):
         head, _, body = rec.partition('\n')
         sha, _, email = head.partition('\x1f')
@@ -116,7 +107,39 @@ def prefetch_mine(d, refs, own, login):
             m = meta.lstrip(':').split()
             if line.startswith(':') and len(m) == 5 and paths:
                 entries.append((*m, paths))
-        commits.append((sha.strip() in own or bool(noreply.match(email.strip().lower())), entries))
+        res.append((sha.strip(), email.strip(), entries))
+    return res
+
+
+def blob_ids(om, nm, oid, nid):
+    """raw 항목의 옛·새 blob id. 0만 있는 id(없는 쪽)와 gitlink(모드 160000, 다른 레포의 커밋이라 받을 수 없음)는 뺀다."""
+    return {i for mode, i in ((om, oid), (nm, nid)) if mode != '160000' and i.strip('0')}
+
+
+def prefetch_mine(d, refs, own, login):
+    """표시한 레포(큰 레포를 --filter=blob:none으로 받음)에서 내 경로의 파일 내용(blob)만 한 번에 받는다(lazy fetch 없이).
+    1. 머지 아닌 커밋의 log --raw 한 번. 트리만 읽는다: 이름 바꿈은 내용이 같은 것만 찾는다(-M100%). 비슷한 내용까지 찾는 -M은
+       지운 파일과 새 파일의 내용을 읽어야 해서, 내용이 없는 이 레포에서는 그런 커밋에서 멈춘다(rc 128). 이 단계가 실패하면
+       잘린 결과로 받지 않고 paths=[], fetched=False로 돌려준다. 내 커밋 = sha in own 또는 noreply 이메일(commits_of와 같음).
+    2. 내 경로 = 내 커밋이 바꾼 경로(이름 바꿈은 양쪽 다). 그다음 어느 작성자의 이름 바꿈이든 새 경로가 내 경로면 옛 경로를
+       더한다. 더 늘지 않을 때까지 한다(blame이 이름 바꾸기 전 판까지 따라가므로).
+    3. 1단계의 모든 커밋에서 경로(이름 바꿈은 어느 쪽이든)가 내 경로인 항목의 옛·새 blob id.
+       「제안」(확인 전): 내 경로를 새로 만든 커밋(상태 A)에서는 그 커밋이 없앤 남의 경로(지움, 이름 바꿈의 옛 쪽)의 그 판 blob id도
+       더한다(파일마다 판 하나, 개수 상한 없음). blame이 그 커밋에서 옛 이름을 찾으려고 없어진 파일의 내용을 모두 읽어서, 없으면
+       그 파일의 blame이 실패한다. 사용자 결정(2026-11-26 '내 커밋이 바꾼 파일만 받는다')보다 넓어서 판정을 기다린다.
+    4. 합친 커밋에서만 생긴 내 경로의 판. 양쪽이 고친 파일을 합치면(충돌이 없어도) 생기고 1단계(--no-merges)에는 없다. 없으면 그
+       파일의 blame이 실패하고, 끝의 판이면 추출기도 그 파일을 읽지 못한다. 합친 커밋을 부모마다 비교한 raw(--diff-merges=separate)를
+       내 경로로만(표준 입력, 글자 그대로) 한 번 읽어 그 항목의 옛·새 blob id를 더한다(트리만 읽음). 내 커밋은 1단계로만 정한다.
+       --full-history: 합친 커밋이 한 부모와 같아도 다른 부모 쪽의 커밋까지 본다(git 2.55는 --diff-merges만으로도 이력을 줄이지
+       않지만 그것에 기대지 않는다). 이 단계가 실패하면 1~3단계의 id는 그대로 받고 fetched=False로 둔다(합친 판을 못 받음).
+    5. 한 번에 받는다(중복 id는 한 번). 받을 id가 없으면 부르지 않는다. fetched는 4단계와 받기가 모두 되었을 때만 참이다
+       (받기가 실패해도 색인은 계속한다).
+    -> {"paths": [정렬], "blobs": n, "fetched": bool}"""
+    rc, out = L.git(d, 'log', '--no-merges', *RAW, *refs, timeout=1200)
+    if rc != 0:
+        return dict(paths=[], blobs=0, fetched=False)
+    noreply = noreply_re(login)
+    commits = [(sha in own or bool(noreply.match(email.lower())), entries) for sha, email, entries in raw_entries(out)]
     mine = {p for is_mine, entries in commits if is_mine for *_, paths in entries for p in paths}
     while True:
         more = {paths[0] for _, entries in commits for *_, st, paths in entries
@@ -129,15 +152,23 @@ def prefetch_mine(d, refs, own, login):
         began = any(st == 'A' and paths[0] in mine for *_, st, paths in entries)
         for om, nm, oid, nid, st, paths in entries:
             if any(p in mine for p in paths):
-                blobs.update(i for mode, i in ((om, oid), (nm, nid)) if mode != '160000' and i.strip('0'))
-            elif began and (st == 'D' or st.startswith('R')) and om != '160000':
+                blobs |= blob_ids(om, nm, oid, nid)
+            elif began and (st == 'D' or st.startswith('R')) and om != '160000':   # 「제안」 위 3
                 blobs.add(oid)
-    fetched = True
+    merges_ok = True
+    if mine:                         # 경로 없이 부르면 모든 합친 커밋의 모든 경로를 비교한다
+        rc, out = L.git(d, '--literal-pathspecs', 'log', '--merges', '--full-history', '--diff-merges=separate', *RAW, *refs, '--stdin',
+                        inp=''.join(p + '\n' for p in ['--', *sorted(mine)]).encode(), timeout=1200)
+        merges_ok = rc == 0
+        if merges_ok:
+            blobs |= {i for _, _, entries in raw_entries(out) for om, nm, oid, nid, _, paths in entries
+                      if any(p in mine for p in paths) for i in blob_ids(om, nm, oid, nid)}
+    fetched = merges_ok
     if blobs:
         rc, _ = L.git(d, '-c', 'fetch.negotiationAlgorithm=noop', '-c', 'maintenance.auto=false', '-c', 'gc.auto=0',
                       'fetch', 'origin', '--no-tags', '--no-write-fetch-head', '--recurse-submodules=no', '--filter=blob:none',
                       '--stdin', inp=''.join(i + '\n' for i in sorted(blobs)).encode(), timeout=900)
-        fetched = rc == 0
+        fetched = merges_ok and rc == 0
     return dict(paths=sorted(mine), blobs=len(blobs), fetched=fetched)
 
 

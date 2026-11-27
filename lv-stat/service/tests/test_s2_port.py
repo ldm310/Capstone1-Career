@@ -304,6 +304,15 @@ class S2PortTest(unittest.TestCase):
         self.assertEqual(data["prs"], [])
         lines = {f["path"]: f["my_lines"] for f in data["files"]}
         self.assertEqual(lines, {"app.py": 2, "other.py": 0, "lib/util.py": 2})
+        # 표시(.git/lv-partial) 없는 레포는 2단계 그대로다: partial 칸이 없고, 남의 커밋도 파일 항목을 모두 가진다
+        # (표시한 레포처럼 내 경로의 numstat만 남기지 않음).
+        self.assertNotIn("partial", data)
+        self.assertEqual({c["subject"]: c["files"] for c in data["commits"]}, {
+            "mine 1": [{"path": "app.py", "add": 1, "dele": 0, "binary": False}],
+            "theirs": [{"path": "other.py", "add": 1, "dele": 0, "binary": False}],
+            "mine 2": [{"path": "app.py", "add": 1, "dele": 0, "binary": False}],
+            "mine 3": [{"path": "lib/util.py", "add": 2, "dele": 0, "binary": False}],
+        })
 
     def test_index_commit_query_encodes_branch(self):
         branch = "기능#1"  # 한글과 '#'(인코딩하지 않으면 뒤가 잘린다)
