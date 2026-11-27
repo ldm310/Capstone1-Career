@@ -10,11 +10,16 @@ import {
   stat,
   writeFile,
 } from "node:fs/promises";
+import { createServer, type Server } from "node:http";
 import { registerHooks } from "node:module";
+import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import type * as KeywordsRoute from "@/app/api/jobs/keywords/route";
 import { detectLanguages, scoreKeyword } from "@/lib/lv-stat/score";
+import type * as JobKeywords from "@/lib/server/job-keywords";
 import type * as LvStore from "@/lib/server/lv-stat";
+import examples from "@/mock/reviewed-keyword-examples.json";
 import type {
   LvCategory,
   LvCategoryCode,
@@ -944,5 +949,268 @@ test.describe("store", () => {
     await expect(
       store.createJob(jobRequest("subject-a")),
     ).resolves.toMatchObject({ subjectId: "subject-a", status: "queued" });
+  });
+});
+
+test.describe("job keywords", () => {
+  let jobKeywords: typeof JobKeywords.jobKeywords;
+  let GET: typeof KeywordsRoute.GET;
+  let server: Server;
+  let backend: string;
+  let previousUrl: string | undefined;
+  let requests: string[] = [];
+
+  const failure = {
+    status: 502,
+    body: { error: "공고의 저장된 키워드 분류를 불러오지 못했어요." },
+  };
+  const unavailable = {
+    status: 200,
+    body: { source: "UNAVAILABLE", keywords: [], levelScoringEnabled: false },
+  };
+
+  // Spring /api/postings/{id}/skill-categories 모양(SkillCategoryService.PostingCategories). 문장은 합성이다.
+  const item = (
+    itemId: number,
+    sourceCategory: string,
+    status: string,
+    categoryCodes: string[],
+    flags: { excludedFromCounts?: boolean; needsReview?: boolean } = {},
+  ) => ({
+    itemId,
+    sourceCategory,
+    text: `합성 요건 ${itemId}`,
+    assignment: {
+      status,
+      categoryCodes,
+      excludedFromCounts: flags.excludedFromCounts ?? false,
+      needsReview: flags.needsReview ?? false,
+      relatedGroups: [],
+    },
+  });
+  const saved = {
+    postingId: 9001,
+    version: "synthetic-v1",
+    analysisStatus: "ANALYZED",
+    recruitUnits: [
+      {
+        unitId: 1,
+        name: "합성 단위 1",
+        items: [
+          item(1, "필수", "CLASSIFIED", ["B", "D"]),
+          // 한 가지만 어긋나도 빠진다: 카운트 제외, 검토 대기, 아는 코드 없음, 분류 안 됨
+          item(2, "필수", "CLASSIFIED", ["B"], { excludedFromCounts: true }),
+          item(3, "우대", "CLASSIFIED", ["B"], { needsReview: true }),
+          item(4, "우대", "CLASSIFIED", ["X", "OTHER"]),
+          item(5, "우대", "UNCLASSIFIED", ["B"]),
+          // 모르는 코드만 지운다. Q는 카테고리 10개에 있어 남는다.
+          item(6, "우대", "CLASSIFIED", ["T", "Q", "OTHER"]),
+        ],
+      },
+      {
+        unitId: 2,
+        name: "합성 단위 2",
+        items: [item(7, "필수", "CLASSIFIED", ["L"])],
+      },
+    ],
+  };
+  // 경로 → [상태, 본문]. 없는 경로는 404, hang은 답하지 않는다.
+  const answers: Record<string, [number, string]> = {
+    "/api/postings/9001/skill-categories": [200, JSON.stringify(saved)],
+    "/api/postings/9002/skill-categories": [
+      200,
+      JSON.stringify({ ...saved, recruitUnits: [] }),
+    ],
+    "/api/postings/9003/skill-categories": [200, "not json"],
+    "/api/postings/9004/skill-categories": [
+      200,
+      JSON.stringify({ ...saved, recruitUnits: null }),
+    ],
+    // 본문 모양이 맞아도 2xx가 아니면 실패다.
+    "/api/postings/9005/skill-categories": [500, JSON.stringify(saved)],
+  };
+  const hang = "/api/postings/9006/skill-categories";
+
+  // 아무도 듣지 않는 로컬 포트(연결 거부)
+  async function closedPort() {
+    const probe = createServer();
+    await new Promise<void>((resolve) => probe.listen(0, "127.0.0.1", resolve));
+    const { port } = probe.address() as AddressInfo;
+    await new Promise<void>((resolve) => probe.close(() => resolve()));
+    return `http://127.0.0.1:${port}`;
+  }
+
+  test.beforeAll(async () => {
+    server = createServer((request, response) => {
+      requests.push(request.url!);
+      if (request.url === hang) return;
+      const [status, body] = answers[request.url!] ?? [404, "{}"];
+      response
+        .writeHead(status, { "Content-Type": "application/json" })
+        .end(body);
+    });
+    await new Promise<void>((resolve) =>
+      server.listen(0, "127.0.0.1", resolve),
+    );
+    backend = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+    ({ jobKeywords } = await import("@/lib/server/job-keywords"));
+    ({ GET } = await import("@/app/api/jobs/keywords/route"));
+  });
+
+  test.afterAll(async () => {
+    await new Promise<void>((resolve, reject) =>
+      server.close((error) => (error ? reject(error) : resolve())),
+    );
+  });
+
+  test.beforeEach(() => {
+    previousUrl = process.env.BACKEND_URL;
+    process.env.BACKEND_URL = backend;
+    requests = [];
+  });
+
+  test.afterEach(() => {
+    if (previousUrl === undefined) delete process.env.BACKEND_URL;
+    else process.env.BACKEND_URL = previousUrl;
+  });
+
+  test("be:9001 returns classified keywords only", async () => {
+    expect(await jobKeywords("be:9001")).toEqual({
+      status: 200,
+      body: {
+        source: "SAVED_REVIEW",
+        version: "synthetic-v1",
+        keywords: [
+          {
+            id: "1",
+            text: "합성 요건 1",
+            requirementType: "필수",
+            categoryCodes: ["B", "D"],
+            level: null,
+          },
+          {
+            id: "6",
+            text: "합성 요건 6",
+            requirementType: "우대",
+            categoryCodes: ["Q"],
+            level: null,
+          },
+          {
+            id: "7",
+            text: "합성 요건 7",
+            requirementType: "필수",
+            categoryCodes: ["L"],
+            level: null,
+          },
+        ],
+        levelScoringEnabled: false,
+      },
+    });
+    expect(requests).toEqual(["/api/postings/9001/skill-categories"]);
+    // 분류된 문장이 없는 공고는 오류가 아니라 빈 목록이다.
+    expect(await jobKeywords("be:9002")).toEqual({
+      status: 200,
+      body: {
+        source: "SAVED_REVIEW",
+        version: "synthetic-v1",
+        keywords: [],
+        levelScoringEnabled: false,
+      },
+    });
+  });
+
+  test("backend down → 502", async () => {
+    // 500 응답, 아무도 듣지 않는 포트, 답하지 않는 백엔드(5초 뒤 끊는다)
+    expect(await jobKeywords("be:9005")).toEqual(failure);
+    process.env.BACKEND_URL = await closedPort();
+    expect(await jobKeywords("be:9001")).toEqual(failure);
+    process.env.BACKEND_URL = backend;
+    expect(await jobKeywords("be:9006")).toEqual(failure);
+  });
+
+  test("unreadable backend answer → 502", async () => {
+    // 없는 공고(404), JSON이 아닌 본문, recruitUnits가 null
+    for (const id of ["be:9999", "be:9003", "be:9004"])
+      expect(await jobKeywords(id), id).toEqual(failure);
+  });
+
+  test("no BACKEND_URL → 503", async () => {
+    delete process.env.BACKEND_URL;
+    expect(await jobKeywords("be:9001")).toEqual({
+      status: 503,
+      body: { error: "키워드 분류 서버가 연결되지 않았어요." },
+    });
+    // 예시 공고와 백엔드 공고가 아닌 id는 BACKEND_URL을 보기 전에 답한다.
+    expect(await jobKeywords("study-demo-backend")).toMatchObject({
+      status: 200,
+      body: { source: "EXAMPLE" },
+    });
+    expect(await jobKeywords("kr:1")).toEqual(unavailable);
+  });
+
+  test("bad id → 400", async () => {
+    const bad = { status: 400, body: { error: "공고를 확인해 주세요." } };
+    // 빈 id와 200자를 넘는 id. 백엔드 공고 모양이어도 백엔드에 묻지 않는다.
+    for (const id of ["", "x".repeat(201), `be:${"1".repeat(198)}`])
+      expect(await jobKeywords(id), id).toEqual(bad);
+    expect(requests).toEqual([]);
+    // 200자까지는 id로 받는다.
+    expect(await jobKeywords("x".repeat(200))).toEqual(unavailable);
+  });
+
+  test("example jobs return the saved examples", async () => {
+    // 더미 공고와 화면 시험 공고는 저장된 분류 예시를 그대로 준다(LV 없음).
+    for (const id of ["dummy:backend-platform", "study-demo-backend"])
+      expect(await jobKeywords(id), id).toEqual({
+        status: 200,
+        body: {
+          source: "EXAMPLE",
+          version: examples.version,
+          keywords: examples.examples,
+          levelScoringEnabled: false,
+        },
+      });
+    expect(requests).toEqual([]);
+  });
+
+  test("other ids are unavailable", async () => {
+    for (const id of ["kr:1", "be:0", "be:01", "be:1.5", "BE:1", "be:1 "])
+      expect(await jobKeywords(id), id).toEqual(unavailable);
+    expect(requests).toEqual([]);
+  });
+
+  test("route GET matches jobKeywords", async () => {
+    const down = await closedPort();
+    // [jobId(null이면 쿼리 없음), BACKEND_URL(undefined면 없음)]
+    const rows: [string | null, string | undefined][] = [
+      [null, backend],
+      ["", backend],
+      ["x".repeat(201), backend],
+      ["dummy:backend-platform", backend],
+      ["kr:1", backend],
+      ["be:9001", backend],
+      ["be:9002", backend],
+      ["be:9003", backend],
+      ["be:9004", backend],
+      ["be:9005", backend],
+      ["be:9999", backend],
+      ["be:9001", undefined],
+      ["be:9001", down],
+    ];
+    for (const [jobId, url] of rows) {
+      if (url === undefined) delete process.env.BACKEND_URL;
+      else process.env.BACKEND_URL = url;
+      const label = `${jobId} @ ${url}`;
+      const result = await jobKeywords(jobId ?? "");
+      const query = jobId === null ? "" : `?jobId=${encodeURIComponent(jobId)}`;
+      const response = await GET(
+        new Request(`http://local/api/jobs/keywords${query}`),
+      );
+      expect(response.status, label).toBe(result.status);
+      expect([...response.headers], label).toEqual([
+        ["content-type", "application/json"],
+      ]);
+      expect(await response.text(), label).toBe(JSON.stringify(result.body));
+    }
   });
 });
