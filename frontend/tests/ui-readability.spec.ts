@@ -29,7 +29,7 @@ test("home entry cards have no icons and keep space between headings, text and l
   const cards = page.locator(".home-panel");
   await expect(cards).toHaveCount(2);
   await expect(cards.locator("svg")).toHaveCount(0);
-  await expect(cards.locator("h2")).toHaveText(["자료 분석", "채용공고"]);
+  await expect(cards.locator("h2")).toHaveText(["자료 분석", "채용 공고"]);
   for (const width of [1440, 768, 390, 320]) {
     await page.setViewportSize({ width, height: 1000 });
     for (const card of await cards.all()) {

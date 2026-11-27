@@ -9,7 +9,7 @@ import {
   rateLimit,
 } from "@/lib/server/store";
 import { memberRole } from "@/lib/server/notices";
-import { accountById, updateAccount } from "@/lib/server/accounts";
+import { accountById, changeAccountPassword } from "@/lib/server/accounts";
 export const runtime = "nodejs";
 export async function POST(request: Request) {
   try {
@@ -49,10 +49,6 @@ export async function POST(request: Request) {
         )
         .run(Date.now(), hash, Date.now());
       if (!updated.changes) throw new Error("Invitation used");
-      d.prepare("UPDATE users SET password=? WHERE id=?").run(
-        password,
-        invite.user_id,
-      );
       d.prepare("DELETE FROM sessions WHERE user_id=?").run(invite.user_id);
       d.exec("COMMIT");
     } catch (error) {
@@ -61,8 +57,8 @@ export async function POST(request: Request) {
     }
     const account = await accountById(invite.user_id);
     if (!account) throw new Error("Administrator account not provisioned");
-    await updateAccount({ ...account, password });
-    await session(invite.user_id);
+    await changeAccountPassword(account, password);
+    await session(invite.user_id, password);
     return Response.json(
       { ok: true },
       { headers: { "Cache-Control": "no-store" } },

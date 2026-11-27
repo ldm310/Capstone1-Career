@@ -12,15 +12,43 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
+import java.time.LocalDate;
+import java.time.ZoneId;
 
 @Service
 @Transactional(readOnly = true)
 public class PostingQueryService {
 
     private static final Set<String> STATUSES = Set.of(Posting.OPEN, Posting.CLOSED);
+
+    @Value("${CAREER_PROFILE_NAMESPACE:local-review}")
+    private String visibilityNamespace = "local-review";
+
+    private Specification<Posting> extractedAndVisible() {
+        return (root, query, cb) -> {
+            var extracted = query.subquery(Long.class);
+            var run = extracted.from(ExtractionRun.class);
+            var unit = extracted.from(RecruitUnit.class);
+            var item = extracted.from(UnitItem.class);
+            extracted.select(run.get("postingId")).where(
+                cb.equal(run.get("postingId"), root.get("id")), cb.isTrue(run.get("current")),
+                cb.equal(unit.get("runId"), run.get("id")), cb.isTrue(unit.get("it")),
+                unit.get("job").in("백엔드", "데이터 엔지니어"),
+                cb.equal(item.get("unitId"), unit.get("id")),
+                item.get("category").in("업무", "필수", "우대", "기타"),
+                cb.greaterThan(cb.length(cb.trim(item.get("text"))), 0));
+            var hidden = query.subquery(Long.class);
+            var visibility = hidden.from(PostingVisibility.class);
+            hidden.select(visibility.get("postingId")).where(
+                cb.equal(visibility.get("postingId"), root.get("id")),
+                cb.equal(visibility.get("namespace"), visibilityNamespace), cb.isTrue(visibility.get("hidden")));
+            return cb.and(cb.exists(extracted), cb.not(cb.exists(hidden)));
+        };
+    }
 
     private final PostingRepository postingRepository;
     private final PostingImageRepository postingImageRepository;
@@ -51,11 +79,19 @@ public class PostingQueryService {
             );
         }
 
-        Specification<Posting> spec = (root, query, cb) -> cb.conjunction();
+        Specification<Posting> spec = extractedAndVisible();
 
-        if (status != null) {
-            spec = spec.and((root, query, cb) ->
-                    cb.equal(root.get("status"), status));
+        LocalDate today = LocalDate.now(ZoneId.of("Asia/Seoul"));
+        if (Posting.CLOSED.equals(status)) {
+            spec = spec.and((root, query, cb) -> cb.or(cb.equal(root.get("status"), Posting.CLOSED), cb.lessThan(root.get("deadline"), today)));
+        } else {
+            spec = spec.and((root, query, cb) -> cb.and(cb.equal(root.get("status"), Posting.OPEN), cb.or(cb.isNull(root.get("deadline")), cb.greaterThanOrEqualTo(root.get("deadline"), today))));
+            spec = spec.and((root, query, cb) -> {
+                var excluded = query.subquery(Long.class);
+                var run = excluded.from(ExtractionRun.class);
+                excluded.select(run.get("postingId")).where(cb.equal(run.get("postingId"),root.get("id")), cb.isTrue(run.get("current")), cb.equal(run.get("reviewResult"),"제외"));
+                return cb.not(cb.exists(excluded));
+            });
         }
 
         if (keyword != null && !keyword.isBlank()) {
@@ -113,7 +149,8 @@ public class PostingQueryService {
                 posting.getCollectedAt(),
                 posting.getLastCheckedAt(),
                 images,
-                analysis
+                analysis,
+                posting.getSkillCategories()
         );
     }
 
@@ -127,7 +164,7 @@ public class PostingQueryService {
 
         List<UnitFitResponse> units = tree
                 .map(t -> t.units().stream()
-                        .filter(RecruitUnit::isIt)
+                        .filter(RecruitUnit::isWebTarget)
                         .map(unit -> toUnitFit(t, unit, userScores))
                         .toList())
                 .orElse(List.of());
@@ -143,7 +180,10 @@ public class PostingQueryService {
     }
 
     private Posting findPosting(Long postingId) {
-        return postingRepository.findById(postingId)
+        return postingRepository.findOne(extractedAndVisible().and((root, query, cb) -> cb.equal(root.get("id"), postingId)))
+                .filter(posting -> Posting.OPEN.equals(posting.getStatus()))
+                .filter(posting -> posting.getDeadline() == null || !posting.getDeadline().isBefore(LocalDate.now(ZoneId.of("Asia/Seoul"))))
+                .filter(posting -> !extractionTreeLoader.isExcluded(postingId))
                 .orElseThrow(() ->
                         new NotFoundException("채용공고를 찾을 수 없습니다.")
                 );
@@ -151,11 +191,13 @@ public class PostingQueryService {
 
     private static PostingAnalysisResponse toAnalysis(ExtractionTree tree) {
         List<RecruitUnitResponse> units = tree.units().stream()
+                .filter(RecruitUnit::isWebTarget)
                 .map(unit -> new RecruitUnitResponse(
                         unit.getId(),
                         unit.getSeq(),
                         unit.getName(),
                         unit.isIt(),
+                        unit.getJob(),
                         unit.getCareer(),
                         unit.getYearsText(),
                         unit.getMinYears(),

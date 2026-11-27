@@ -1,0 +1,33 @@
+.sign-in-panel input[readonly] {
+  background: #f1f5f8;
+  color: #456078;
+}
+.auth-secondary-link {
+  display: inline-block;
+  margin-top: 18px;
+  color: #315a7b;
+  text-underline-offset: 4px;
+}
+.auth-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  margin-top: 24px;
+  color: #315a7b;
+}
+.auth-links a {
+  text-underline-offset: 4px;
+}
+.auth-success {
+  padding: 18px 20px;
+  border-radius: 10px;
+  background: #edf6f1;
+  color: #285c43;
+  line-height: 1.7;
+}
+.auth-success p {
+  margin: 0;
+}
+.recovery-panel > p {
+  margin-bottom: 24px;
+}

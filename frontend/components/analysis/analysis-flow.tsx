@@ -47,9 +47,9 @@ export function AnalysisFlow() {
   const heading = useRef<HTMLHeadingElement>(null);
   const done = sources.filter((source) => source.state === "done").length;
 
-  function addGithub() {
+  function addGithub(value = url) {
     try {
-      const parsed = new URL(url.trim());
+      const parsed = new URL(value.trim());
       if (
         parsed.protocol !== "https:" ||
         parsed.hostname !== "github.com" ||
@@ -226,12 +226,12 @@ export function AnalysisFlow() {
         <h2 ref={heading} tabIndex={-1}>
           분석 완료
         </h2>
-        <p>분석 결과는 각 채용공고의 역량 비교에서 확인할 수 있습니다.</p>
+        <p>분석 결과는 각 채용 공고의 역량 비교에서 확인할 수 있습니다.</p>
         <div className="analysis-complete-summary">
           <span>자료 {done}개 분석 완료</span>
         </div>
         <Link className="analysis-primary" href="/jobs">
-          채용공고에서 내 역량 확인하기
+          채용 공고에서 내 역량 확인하기
         </Link>
         <button
           className="analysis-text-button"
@@ -264,7 +264,8 @@ export function AnalysisFlow() {
       </ol>
       <h2 id="analysis-start-title">{busy ? "자료 분석 중" : "분석 자료"}</h2>
       <p className="analysis-intro">
-        GitHub 링크 또는 PDF 이력서를 1개 이상 등록하세요.
+        GitHub 링크와 PDF 이력서를 합쳐 1개 이상 등록하세요. GitHub만 또는 PDF만
+        등록해도 됩니다.
       </p>
       <aside
         className="analysis-template"
@@ -293,7 +294,7 @@ export function AnalysisFlow() {
         <aside className="analysis-login-note">
           <h3>회원 전용 분석</h3>
           <p>
-            채용공고는 로그인 없이 볼 수 있어요. 내 자료를 분석하려면 로그인해
+            채용 공고는 로그인 없이 볼 수 있어요. 내 자료를 분석하려면 로그인해
             주세요.
           </p>
           <Link href="/sign-in">로그인, 회원가입</Link>
@@ -337,8 +338,8 @@ export function AnalysisFlow() {
             <button
               type="button"
               onClick={() => {
-                setUrl("https://github.com/career-demo/order-service");
                 setPreview(true);
+                addGithub("https://github.com/career-demo/order-service");
               }}
             >
               예시 링크 사용
@@ -357,7 +358,10 @@ export function AnalysisFlow() {
           <div className="analysis-source-heading">
             <div>
               <h3>PDF 이력서</h3>
-              <p>PDF만 등록할 수 있습니다. 파일당 최대 10MB입니다.</p>
+              <p>
+                GitHub 링크가 있으면 PDF는 선택입니다. PDF 파일당 최대
+                10MB입니다.
+              </p>
             </div>
           </div>
           <label className="analysis-file-picker">
@@ -380,7 +384,7 @@ export function AnalysisFlow() {
         <h3>
           추가한 자료 <span>{sources.length}</span>
         </h3>
-        <span>1개 이상이면 시작할 수 있어요</span>
+        <span>GitHub, PDF 합계 1개 이상</span>
       </div>
       {sources.length ? (
         <ul className="analysis-source-list">
@@ -464,7 +468,7 @@ export function AnalysisFlow() {
       <p className="analysis-bottom-note">
         {url.trim()
           ? "입력한 링크를 추가하거나 지운 뒤 시작해 주세요."
-          : "분석한 역량은 각 채용공고의 비교 화면에서 확인해요."}
+          : "분석한 역량은 각 채용 공고의 비교 화면에서 확인해요."}
       </p>
     </section>
   );

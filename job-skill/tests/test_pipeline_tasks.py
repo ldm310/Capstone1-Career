@@ -150,7 +150,8 @@ def test_fetch_images_skips_existing_image(monkeypatch, tmp_path):
 # ── ② 수정 확인 태스크 ────────────────────────────────────────────────────
 def test_detect_touches_unchanged_only(monkeypatch, tmp_path):
     import pipeline_tasks
-    (tmp_path / "check.json").write_text(json.dumps([{"rec_idx": n, **ROW, "raw_hash": "h"} for n in "ABCD"]),
+    (tmp_path / "check.json").write_text(json.dumps([{"rec_idx": n, **ROW, "raw_hash": "h", "reason": why}
+                                                     for n, why in zip("ABCD", ["수정", "수정", "목록에 없음", "목록에 없음"])]),
                                          encoding="utf-8")
     touched = []
     monkeypatch.setattr(pipeline_tasks, "connect", lambda: contextlib.nullcontext(object()))
@@ -166,7 +167,8 @@ def test_detect_touches_unchanged_only(monkeypatch, tmp_path):
     import datetime as dt
     assert stamps[0] is not None and stamps[0] <= dt.datetime.now(dt.timezone.utc)   # 본문을 받기 시작한 시각으로
     assert sent == [] and alerts(tmp_path)["확인 못 한 공고"] == [["D", "오류"]]   # 오류(D)는 결과 알림에 링크와 함께
-    assert res == {"확인": 4, "바뀜": 1, "그대로": 1, "오류": 1}
+    assert res == {"수정": {"바뀜": 1, "그대로": 1, "마감": 0, "오류": 0},          # 다시 확인한 이유(무리)마다 따로 센다
+                   "목록에 없음": {"바뀜": 0, "그대로": 0, "마감": 1, "오류": 1}}
 
 
 def test_close_marks_closed(monkeypatch, tmp_path):
@@ -296,7 +298,39 @@ def test_daily_collect_writes_targets_check_and_excluded(daily, tmp_path):
     assert json.loads((tmp_path / "excluded.json").read_text(encoding="utf-8")) == [["X9", "교육생"]]
     check = json.loads((tmp_path / "check.json").read_text(encoding="utf-8"))
     assert [(r["rec_idx"], r["reason"]) for r in check] == [("O1", "수정"), ("O2", "목록에 없음")]
-    assert res == {"new": 2, "pending": 1, "excluded": 1, "진행": 2, "수정": 1, "목록에 없음": 1, "마감일 바뀜": 2}
+    assert res == {"new": 2, "pending": 1, "다시": 0, "excluded": 1, "진행": 2, "수정": 1, "목록에 없음": 1, "마감일 바뀜": 2}
+
+
+def test_daily_collect_writes_feedback(daily, monkeypatch, tmp_path):
+    """사람이 '다시'로 돌려보낸 공고의 피드백은 feedback.json 으로 LLM 추출까지 간다(작업 목록 TSV 에는 안 넣음 — 줄바꿈)."""
+    monkeypatch.setattr(daily.db_queries, "pending_postings", lambda conn: [
+        {"rec_idx": "P1", **ROW, "feedback": "자리를 하나로\n경력 3년 이상"}, {"rec_idx": "P2", **ROW, "feedback": ""}])
+    res = daily.step_collect(str(tmp_path), include_pending=True)
+    assert json.loads((tmp_path / "feedback.json").read_text(encoding="utf-8")) == {"P1": "자리를 하나로\n경력 3년 이상"}
+    assert [r["rec_idx"] for r in daily.collect.read_targets(str(tmp_path))][:2] == ["P1", "P2"]
+    assert res["다시"] == 1
+
+
+def test_daily_collect_gives_pending_the_list_deadline(daily, monkeypatch, tmp_path):
+    """밀린 공고(검토 '다시' 포함)도 오늘 목록에서 읽은 마감일로 싣는다 — DB 의 옛 마감일을 실어 보내면
+    저장(load) 때 같은 날 목록에서 고친 마감일이 옛 날짜로 되돌아간다. 목록에 없으면 DB 마감일 그대로."""
+    monkeypatch.setattr(daily.db_queries, "pending_postings", lambda conn: [
+        {"rec_idx": "P1", **ROW, "deadline": "2026-11-30", "feedback": "자리를 하나로"},
+        {"rec_idx": "P2", **ROW, "deadline": "2026-11-30", "feedback": ""}])
+    monkeypatch.setattr(daily.collect, "scan_lists", lambda **k: {"P1": item("P1", deadline_text="~12.10(목)")})
+    daily.step_collect(str(tmp_path), include_pending=True)
+    rows = {r["rec_idx"]: r["deadline"] for r in daily.collect.read_targets(str(tmp_path))}
+    assert rows == {"P1": "2026-12-10", "P2": "2026-11-30"}
+
+
+def test_daily_report_counts_sent_back(tmp_path):
+    """결과 알림 수집 줄: 밀린 공고 가운데 검토 '다시'가 있으면 그 수를 함께, 없으면 예전 그대로."""
+    import pipeline_tasks
+    _report_run(tmp_path)
+    msg = pipeline_tasks.daily_report(str(tmp_path), {"new": 2, "pending": 3, "다시": 1}, {}, 0.0)
+    assert "• 수집: 새 공고 2 · 밀린 공고 3 (검토 다시 1)" in msg.splitlines()
+    msg = pipeline_tasks.daily_report(str(tmp_path), {"new": 2, "pending": 3, "다시": 0}, {}, 0.0)
+    assert "• 수집: 새 공고 2 · 밀린 공고 3" in msg.splitlines()
 
 
 def test_daily_collect_updates_deadlines_from_list(daily, tmp_path):
@@ -318,7 +352,8 @@ def test_detect_and_close_without_check_file(monkeypatch, tmp_path):
     """③ 처럼 check.json·changes.json 이 없으면 아무것도 안 한다."""
     import pipeline_tasks
     monkeypatch.setattr(pipeline_tasks, "connect", lambda: pytest.fail("DB 를 열면 안 됨"))
-    assert pipeline_tasks.step_detect(str(tmp_path)) == {"확인": 0, "바뀜": 0, "그대로": 0, "오류": 0}
+    zero = {"바뀜": 0, "그대로": 0, "마감": 0, "오류": 0}
+    assert pipeline_tasks.step_detect(str(tmp_path)) == {"수정": zero, "목록에 없음": zero}
     assert pipeline_tasks.step_close(str(tmp_path)) == 0
 
 
@@ -405,13 +440,15 @@ def test_daily_report_is_one_message(tmp_path):
     import pipeline_tasks
     _report_run(tmp_path)
     got = {"new": 3, "pending": 1, "수정": 14, "목록에 없음": 55, "마감일 바뀜": 12}
-    msg = pipeline_tasks.daily_report(str(tmp_path), got, {"바뀜": 2, "오류": 1}, closed=55, today_cost=0.73)
+    seen = {"수정": {"바뀜": 2, "그대로": 11, "마감": 0, "오류": 1}, "목록에 없음": {"바뀜": 0, "그대로": 0, "마감": 55, "오류": 0}}
+    msg = pipeline_tasks.daily_report(str(tmp_path), got, seen, today_cost=0.73)
     url = "https://www.saramin.co.kr/zf_user/jobs/relay/view?view_type=list&rec_idx="
-    assert msg.splitlines() == [
+    assert msg.splitlines() == [   # 다시 확인한 무리마다 어떻게 나왔는지(더하면 그 무리 수) — 사용자 요청 2026-11-03
         "✅ 매일 수집 완료",
         "• 수집: 새 공고 3 · 밀린 공고 1",
-        "• 변경 감지: 수정 14 → 바뀜 2 · 마감일 바뀜 12 · 확인 오류 1",
-        "• 마감: 목록에 없음 55 → 마감 55",
+        "• 변경 감지: 수정 14 → 바뀜 2 · 그대로 11 · 마감 0 · 확인 오류 1",
+        "• 마감 확인: 목록에 없음 55 → 마감 55 · 바뀜 0 · 그대로 0 · 확인 오류 0",
+        "• 마감일: 목록에서 바뀐 공고 12",                           # 목록 전체에서 센다 — 위 두 무리와 따로(본문 밖 값)
         "• 추출: 1/4건 · 확인 필요 1",
         "• 비용: 이번 $0.73 · 오늘 $0.73 (하루 상한 $5)",
         "⚠️ 넘어간 공고 4건 — 다음 실행 때 다시 시도",
@@ -479,3 +516,26 @@ def test_daily_collect_remembers_modified_postings(daily, tmp_path):
     """'수정'으로 고른 공고는 DB 에 '다시 확인할 공고'로 표시해 둔다(확인·저장에 실패하면 다음 날 다시 고르게)."""
     daily.step_collect(str(tmp_path), include_pending=True)
     assert daily._calls["due"] == ["O1"]
+
+
+def test_report_has_category_line(tmp_path):
+    """카테고리 붙이기 결과는 추출 줄 바로 아래 한 줄(2026-11-27). 못 붙인 공고가 있으면 적고, 결과가 없으면 줄도 없다."""
+    import pipeline_tasks
+    _report_run(tmp_path)
+    cat = {"공고": 990, "새 글": 12, "비용": 0.004, "못 붙인 공고": 0, "고침": 3}
+    lines = pipeline_tasks.backfill_report(str(tmp_path), {"new": 4, "excluded": 7}, cat).splitlines()
+    assert lines[2:5] == ["• 추출: 1/4건 · 확인 필요 1", "• 카테고리: 공고 3개 고침 · 새 글 12개 LLM $0.00",
+                          "• 비용: $0.73 (상한 $10)"]
+    msg = pipeline_tasks.daily_report(str(tmp_path), {}, {}, 0.73, {**cat, "못 붙인 공고": 2})
+    assert "• 카테고리: 공고 3개 고침 · 새 글 12개 LLM $0.00 · 못 붙인 공고 2(다음에 다시)" in msg.splitlines()
+    assert "카테고리" not in pipeline_tasks.daily_report(str(tmp_path), {}, {}, 0.73)
+
+
+def test_step_categories_writes_posting_table(monkeypatch):
+    """카테고리 태스크는 공고 표에 쓰는 한 번 돌리기(team_categories.update(apply=True))를 그대로 부른다."""
+    import pipeline_tasks
+    import team_categories
+    seen = []
+    monkeypatch.setattr(team_categories, "update", lambda **k: seen.append(k) or {"고침": 1})
+    assert pipeline_tasks.step_categories() == {"고침": 1}
+    assert seen == [{"apply": True}]

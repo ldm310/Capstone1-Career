@@ -2,6 +2,8 @@ import type { SupportedRole as RoleId } from "@/lib/roles";
 export interface PublicJob {
   id: string;
   skills?: string[];
+  // Pipeline posting categories, independent of user LV. Preserve null vs [].
+  skillCategories?: string[] | null;
   company: string;
   title: string;
   category: RoleId;

@@ -3,8 +3,12 @@ import { useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { LiveJobsSection } from "@/components/landing/live-jobs-section";
 import { JobDetail } from "@/components/jobs/job-detail";
-import { ExampleJobs } from "@/components/jobs/example-jobs";
 import { studyTier } from "@/lib/study-prototype";
+import {
+  catalogState,
+  catalogUrl,
+  type CatalogState,
+} from "@/lib/catalog-navigation";
 export default function Jobs() {
   const params = useSearchParams();
   const router = useRouter();
@@ -16,7 +20,14 @@ export default function Jobs() {
   const job = params.get("job");
   const tier = studyTier(params.get("demo"));
   if (job) return <JobDetail key={`${job}:${tier}`} id={job} />;
-  if (tier) return <ExampleJobs tier={tier} />;
   if (savedTab) return null;
-  return <LiveJobsSection mode="catalog" />;
+  const state = catalogState(new URLSearchParams(params.toString()));
+  function update(patch: Partial<CatalogState>) {
+    const next = {
+      ...catalogState(new URLSearchParams(window.location.search)),
+      ...patch,
+    };
+    window.history.replaceState(null, "", catalogUrl(next));
+  }
+  return <LiveJobsSection mode="catalog" catalog={{ state, update }} />;
 }

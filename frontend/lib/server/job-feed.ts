@@ -7,7 +7,24 @@ interface Feed {
   unavailableSources: string[];
   stale?: boolean;
 }
-export async function collectedJobs(): Promise<Feed> {
+export function cachedJobFeed(): Feed | null {
+  const connection = db();
+  connection.exec(
+    "CREATE TABLE IF NOT EXISTS job_feed(id INTEGER PRIMARY KEY,data TEXT NOT NULL)",
+  );
+  const row = connection
+    .prepare("SELECT data FROM job_feed WHERE id=1")
+    .get() as { data: string } | undefined;
+  return row ? JSON.parse(row.data) : null;
+}
+let pending: Promise<Feed> | null = null;
+export function collectedJobs(): Promise<Feed> {
+  pending ??= refreshCollectedJobs().finally(() => {
+    pending = null;
+  });
+  return pending;
+}
+async function refreshCollectedJobs(): Promise<Feed> {
   const d = db();
   d.exec(
     "CREATE TABLE IF NOT EXISTS job_feed(id INTEGER PRIMARY KEY,data TEXT NOT NULL)",

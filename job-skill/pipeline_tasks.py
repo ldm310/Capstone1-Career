@@ -32,6 +32,8 @@ DAILY_LIMIT = 5.0      # 하루(KST) ① 매일 수집
 BACKFILL_LIMIT = 10.0  # ③ 한 번 실행
 LLM_WORKERS = 8        # 공고 몇 건을 동시에 LLM 에 보낼지 — 계정 한도(분당 5,000번·200만 토큰)의 약 15%, 1,514건이 약 9시간 → 약 1시간
 DAILY_DAGS = ("daily_collect",)  # 하루 상한을 쓰는 DAG(② 수정 확인은 ① 에 합침)
+CHECK_REASONS = ("수정", "목록에 없음")   # 변경 감지에서 다시 확인하는 이유(무리)
+OUTCOMES = {"changed": "바뀜", "unchanged": "그대로", "closed": "마감", "error": "오류"}   # recheck 결과 → 알림 낱말
 
 
 def _abs(run_dir: str) -> str:
@@ -63,7 +65,8 @@ def _has_images(run_dir: str) -> bool:
 def step_collect(run_dir: str, include_pending: bool, max_new: int | None = None) -> dict:
     """공고 목록 수집. 두 직무 목록을 경력 필터를 켜고 끝까지 본다(연속 멈춤 없음).
     새 공고 = 목록 − 아는 번호(DB 에 있는 공고) → targets.tsv. 버린 공고(교육생 등)는 excluded.json 에만 남긴다.
-    ①(include_pending): 밀린 공고(추출 결과가 없는 진행 공고)를 targets 맨 위에 두고, 같은 목록으로
+    ①(include_pending): 밀린 공고(추출 결과가 없거나 사람이 검토에서 '다시'로 돌려보낸 진행 공고)를 targets 맨 위에 두고
+      (돌려보낸 공고의 피드백은 feedback.json → LLM 입력 끝), 같은 목록으로
       - '수정'된 진행 공고와 목록에서 사라진 진행 공고를 골라 check.json(다음 태스크 변경 감지)
       - 목록에 보이는 공고의 마감일을 DB 에 반영(마감일은 본문 밖이라 지문으로는 안 잡힘)
     ③: 새 공고만."""
@@ -80,13 +83,19 @@ def step_collect(run_dir: str, include_pending: bool, max_new: int | None = None
         json.dump(excluded, f, ensure_ascii=False)
     first = {r["rec_idx"] for r in pending}
     new = [r for r in targets if r["rec_idx"] not in first]
+    deadlines = {no: dl for no, it in listed.items() if (dl := collect.parse_deadline(it.get("deadline_text", ""), today))}
+    # 밀린 공고는 DB 에서 읽은 줄이라 마감일이 어제 것 — 목록에 보이면 오늘 마감일로 싣는다(저장 때 옛 날짜로 되돌리지 않게)
+    pending = [{**r, "deadline": deadlines[r["rec_idx"]].isoformat()} if r["rec_idx"] in deadlines else r for r in pending]
     collect.write_targets(d, pending + new)
     out = {"new": len(new), "pending": len(pending), "excluded": len(excluded)}
     if include_pending:
+        sent_back = {r["rec_idx"]: r["feedback"] for r in pending if r.get("feedback")}
+        with open(os.path.join(d, "feedback.json"), "w", encoding="utf-8") as f:   # 줄바꿈이 있을 수 있어 targets.tsv 와 따로
+            json.dump(sent_back, f, ensure_ascii=False)
+        out["다시"] = len(sent_back)
         check, counts = recheck.select_recheck(listed, rows, today)
         with open(os.path.join(d, "check.json"), "w", encoding="utf-8") as f:
             json.dump(check, f, ensure_ascii=False, default=str)
-        deadlines = {no: dl for no, it in listed.items() if (dl := collect.parse_deadline(it.get("deadline_text", ""), today))}
         with connect() as conn:
             counts["마감일 바뀜"] = db_queries.update_deadlines(conn, deadlines)
             # 확인·다시 저장에 실패해도 다음 날 다시 고르게(사람인 '수정' 표시는 하루 뒤 사라짐)
@@ -98,11 +107,12 @@ def step_collect(run_dir: str, include_pending: bool, max_new: int | None = None
 def step_detect(run_dir: str) -> dict:
     """변경 감지(①): 고른 공고만 확인 — 목록에서 사라진 공고는 전체 페이지의 마감 표시, 수정된 공고는 본문 지문.
     바뀐 공고는 targets.tsv 뒤에 붙고(다시 추출), 결과는 changes.json. check.json 이 없으면(③) 아무것도 안 한다.
-    그대로인 공고만 확인 시각을 지금으로 바꾼다. 바뀐 공고는 다시 추출해 DB 저장에 성공할 때 바뀐다(실패하면 다음 날 다시)."""
+    그대로인 공고만 확인 시각을 지금으로 바꾼다. 바뀐 공고는 다시 추출해 DB 저장에 성공할 때 바뀐다(실패하면 다음 날 다시).
+    돌려주는 값: 다시 확인한 이유('수정' / '목록에 없음')마다 {바뀜, 그대로, 마감, 오류} — 결과 알림에서 무리마다 더하면 그 수."""
     d = _abs(run_dir)
     path = os.path.join(d, "check.json")
     if not os.path.exists(path):
-        return {"확인": 0, "바뀜": 0, "그대로": 0, "오류": 0}
+        return {why: dict.fromkeys(OUTCOMES.values(), 0) for why in CHECK_REASONS}
     rows = json.load(open(path, encoding="utf-8"))
     started = dt.datetime.now(dt.timezone.utc)  # 본문을 받기 시작한 시각 — 마지막 확인은 저장 시각이 아니라 받은 시각(이르게 잡음)
     res = recheck.detect_changes(d, rows)
@@ -110,7 +120,11 @@ def step_detect(run_dir: str) -> dict:
         db_queries.touch_checked(conn, res["unchanged"], at=started)
     # 확인 못 한 공고는 마감으로 치지 않고 다음 날 다시 확인 — 결과 알림에 공고번호·원인·링크
     _note(d, "확인 못 한 공고", [(no, res.get("why", {}).get(no, "오류")) for no in res["error"]])
-    return {"확인": len(rows), "바뀜": len(res["changed"]), "그대로": len(res["unchanged"]), "오류": len(res["error"])}
+    outcome = {no: OUTCOMES[k] for k in OUTCOMES for no in res[k]}
+    counts = {why: dict.fromkeys(OUTCOMES.values(), 0) for why in CHECK_REASONS}
+    for r in rows:
+        counts[r.get("reason", "수정")][outcome[r["rec_idx"]]] += 1
+    return counts
 
 
 def step_close(run_dir: str) -> int:
@@ -242,6 +256,23 @@ def step_load(run_dir: str) -> dict:
     return total
 
 
+def step_categories() -> dict:
+    """공고 카테고리 붙이기(팀원 7개판, 2026-11-27 사용자 결정) — DB 저장 뒤 현재 결과의 필수·우대 줄로 posting.skill_categories 를 맞춘다.
+    이번 실행 공고만이 아니라 전부 다시 맞춘다(지난번에 못 붙인 공고도 이어서). 새 글만 LLM, 값이 바뀐 공고만 쓴다."""
+    import team_categories
+    return team_categories.update(apply=True)
+
+
+def _category_row(cat: dict | None) -> list[tuple[str, str]]:
+    """결과 알림의 카테고리 줄. 태스크가 없던 옛 실행·값이 없으면 줄을 넣지 않는다."""
+    if not cat:
+        return []
+    text = f"공고 {cat.get('고침', 0)}개 고침 · 새 글 {cat.get('새 글', 0)}개 LLM ${cat.get('비용', 0):.2f}"
+    if cat.get("못 붙인 공고"):
+        text += f" · 못 붙인 공고 {cat['못 붙인 공고']}(다음에 다시)"
+    return [("카테고리", text)]
+
+
 def summary(run_dir: str) -> dict:
     """결과 알림용 숫자: 처리한 공고 수, 추출 결과 수, 확인 필요 수, 이번 실행 LLM 비용."""
     results = []
@@ -275,22 +306,29 @@ def run_alerts(run_dir: str) -> tuple[dict[str, list], dict | None, list[str]]:
     return {k: v for k, v in found.items() if v}, budget, data.get("사전 확인 필요") or []
 
 
-def daily_report(run_dir: str, got: dict, seen: dict, closed: int, today_cost: float) -> str:
-    """① 결과 알림 한 통. got = 목록 수집 결과, seen = 변경 감지 결과, closed = 마감 처리한 수."""
+def daily_report(run_dir: str, got: dict, seen: dict, today_cost: float, cat: dict | None = None) -> str:
+    """① 결과 알림 한 통. got = 목록 수집 결과, seen = 변경 감지 결과(다시 확인한 이유마다 바뀜·그대로·마감·오류), cat = 카테고리 붙이기 결과.
+    무리마다 더하면 그 무리 수(사용자 요청 2026-11-03). 마감일은 목록 전체에서 따로 센다(본문 밖 값)."""
     s = summary(run_dir)
-    rows = [("수집", f"새 공고 {got.get('new', 0)} · 밀린 공고 {got.get('pending', 0)}"),
-            ("변경 감지", f"수정 {got.get('수정', 0)} → 바뀜 {seen.get('바뀜', 0)} · 마감일 바뀜 {got.get('마감일 바뀜', 0)} · "
-                      f"확인 오류 {seen.get('오류', 0)}"),
-            ("마감", f"목록에 없음 {got.get('목록에 없음', 0)} → 마감 {closed}"),
+    def out(why: str, order: tuple[str, ...]) -> str:
+        return " · ".join(f"{'확인 오류' if k == '오류' else k} {seen.get(why, {}).get(k, 0)}" for k in order)
+
+    rows = [("수집", f"새 공고 {got.get('new', 0)} · 밀린 공고 {got.get('pending', 0)}"
+                    + (f" (검토 다시 {got['다시']})" if got.get("다시") else "")),
+            ("변경 감지", f"수정 {got.get('수정', 0)} → {out('수정', ('바뀜', '그대로', '마감', '오류'))}"),
+            ("마감 확인", f"목록에 없음 {got.get('목록에 없음', 0)} → {out('목록에 없음', ('마감', '바뀜', '그대로', '오류'))}"),
+            ("마감일", f"목록에서 바뀐 공고 {got.get('마감일 바뀜', 0)}"),
             ("추출", f"{s['추출']}/{s['대상']}건 · 확인 필요 {s['확인 필요']}"),
+            *_category_row(cat),
             ("비용", f"이번 ${s['비용']:.2f} · 오늘 ${today_cost:.2f} (하루 상한 ${DAILY_LIMIT:g})")]
     return notify.msg_report("매일 수집", rows, *run_alerts(run_dir))
 
 
-def backfill_report(run_dir: str, got: dict) -> str:
-    """③ 결과 알림 한 통. got = 목록 수집 결과."""
+def backfill_report(run_dir: str, got: dict, cat: dict | None = None) -> str:
+    """③ 결과 알림 한 통. got = 목록 수집 결과, cat = 카테고리 붙이기 결과."""
     s = summary(run_dir)
     rows = [("수집", f"대상 공고 {got.get('new', s['대상'])} · 제외 {got.get('excluded', 0)}"),
             ("추출", f"{s['추출']}/{s['대상']}건 · 확인 필요 {s['확인 필요']}"),
+            *_category_row(cat),
             ("비용", f"${s['비용']:.2f} (상한 ${BACKFILL_LIMIT:g})")]
     return notify.msg_report("전체 수집", rows, *run_alerts(run_dir))

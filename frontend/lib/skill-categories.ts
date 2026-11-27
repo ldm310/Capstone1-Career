@@ -64,6 +64,20 @@ export const skillCategories = [
 ] as const;
 
 export type SkillCategoryCode = (typeof skillCategories)[number]["code"];
+// Presentation only: keep the complete taxonomy and saved evaluations intact.
+export const hiddenAnalysisCategoryCodes: ReadonlySet<string> = new Set([
+  "Q",
+  "S",
+  "H",
+]);
+export const visibleSkillCategories = skillCategories.filter(
+  (category) => !hiddenAnalysisCategoryCodes.has(category.code),
+);
+export function hasVisibleSkillCategory(codes: readonly string[]) {
+  return visibleSkillCategories.some((category) =>
+    codes.includes(category.code),
+  );
+}
 export const categoryKeywords = skillCategories.flatMap((category) => [
   ...category.keywords,
 ]);

@@ -50,6 +50,12 @@ try {
   await client.connect();
   await client.query(
     readFileSync(
+      path.join(root, "db/migrations/11-posting-visibility.sql"),
+      "utf8",
+    ),
+  );
+  await client.query(
+    readFileSync(
       path.join(root, "db/migrations/06-user-posting-levels.sql"),
       "utf8",
     ),
@@ -82,6 +88,12 @@ try {
     );
   await client.query(
     readFileSync(path.join(root, "db/migrations/08-user-accounts.sql"), "utf8"),
+  );
+  await client.query(
+    readFileSync(
+      path.join(root, "db/migrations/09-kakao-password-setup.sql"),
+      "utf8",
+    ),
   );
   const report = { migrationApplied: true, starterNotices: 2 };
   const sourceNamespace = option("--seed-demo-from");
@@ -138,6 +150,9 @@ try {
         env.CAREER_DATA_DIR || ".career-data",
         "career.sqlite",
       ),
+    );
+    await client.query(
+      readFileSync(path.join(root, "db/migrations/10-naver-login.sql"), "utf8"),
     );
     d.exec(
       `PRAGMA foreign_keys=ON; CREATE TABLE IF NOT EXISTS admin_invitations(token_hash TEXT PRIMARY KEY,user_id TEXT NOT NULL REFERENCES users(id),expires INTEGER NOT NULL,used_at INTEGER);`,

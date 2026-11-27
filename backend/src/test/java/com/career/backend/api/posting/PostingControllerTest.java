@@ -27,6 +27,9 @@ class PostingControllerTest {
     @Autowired
     private JdbcTemplate jdbc;
 
+    @Autowired
+    private jakarta.persistence.EntityManager entityManager;
+
     private MockMvc mockMvc;
 
     @BeforeEach
@@ -39,8 +42,8 @@ class PostingControllerTest {
     void 공고_목록을_검색어와_상태로_거른다() throws Exception {
         mockMvc.perform(get("/api/postings"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.totalElements").value(2))
-                .andExpect(jsonPath("$.content[0].postingId").value(2));
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.content[0].postingId").value(1));
 
         mockMvc.perform(get("/api/postings")
                         .param("keyword", "백엔드")
@@ -50,7 +53,31 @@ class PostingControllerTest {
                 .andExpect(jsonPath("$.content[0].companyName").value("커리어컴퍼니"));
 
         mockMvc.perform(get("/api/postings").param("keyword", "커리어"))
-                .andExpect(jsonPath("$.totalElements").value(2));
+                .andExpect(jsonPath("$.totalElements").value(1));
+    }
+
+    @Test
+    void 마감일_경과와_원문_마감을_같은_기준으로_분리하고_당일은_유지한다() throws Exception {
+        var today = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Seoul"));
+        jdbc.update("update public.posting set deadline=? where id=1", today.minusDays(1));
+        mockMvc.perform(get("/api/postings")).andExpect(jsonPath("$.totalElements").value(0));
+        mockMvc.perform(get("/api/postings").param("status","마감")).andExpect(jsonPath("$.totalElements").value(1));
+        mockMvc.perform(get("/api/postings/1")).andExpect(status().isNotFound());
+        jdbc.update("update public.posting set deadline=? where id=1",today);
+        entityManager.clear();
+        mockMvc.perform(get("/api/postings")).andExpect(jsonPath("$.totalElements").value(1));
+        mockMvc.perform(get("/api/postings/1")).andExpect(status().isOk());
+    }
+
+    @Test
+    void 넘긴_공고는_목록과_상세에서_빠지고_정상_등록하면_복원된다() throws Exception {
+        jdbc.update("update public.extraction_run set review_result='제외' where id=1");
+        mockMvc.perform(get("/api/postings")).andExpect(jsonPath("$.totalElements").value(0));
+        mockMvc.perform(get("/api/postings/1")).andExpect(status().isNotFound());
+        jdbc.update("update public.extraction_run set review_result='정상' where id=1");
+        entityManager.clear();
+        mockMvc.perform(get("/api/postings")).andExpect(jsonPath("$.totalElements").value(1));
+        mockMvc.perform(get("/api/postings/1")).andExpect(status().isOk());
     }
 
     @Test
@@ -69,18 +96,56 @@ class PostingControllerTest {
                 .andExpect(jsonPath("$.images[0].seq").value(1))
                 .andExpect(jsonPath("$.images[0].url").value("https://img.example/1.png"))
                 .andExpect(jsonPath("$.analysis.extractionRunId").value(1))
-                .andExpect(jsonPath("$.analysis.recruitUnits", hasSize(2)))
+                .andExpect(jsonPath("$.analysis.recruitUnits", hasSize(1)))
                 .andExpect(jsonPath("$.analysis.recruitUnits[0].items", hasSize(3)))
                 .andExpect(jsonPath("$.analysis.recruitUnits[0].items[0].requirements[0].capabilityName").value("관계형 DB"))
                 .andExpect(jsonPath("$.analysis.recruitUnits[0].items[0].requirements[0].techs[0].techName").value("MySQL"));
     }
 
     @Test
-    void 추출되지_않은_공고는_analysis가_null이다() throws Exception {
+    void 추출되지_않은_공고는_웹_상세에서_제외한다() throws Exception {
+        jdbc.update("update public.posting set status='진행' where id=2");
         mockMvc.perform(get("/api/postings/2"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.images", hasSize(0)))
-                .andExpect(jsonPath("$.analysis").value(nullValue()));
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void 직무_필터와_본문_누락은_목록과_상세에서_함께_제외한다() throws Exception {
+        jdbc.update("update public.recruit_unit set job='그 외' where id=1");
+        mockMvc.perform(get("/api/postings")).andExpect(jsonPath("$.totalElements").value(0));
+        mockMvc.perform(get("/api/postings/1")).andExpect(status().isNotFound());
+        jdbc.update("update public.recruit_unit set job='백엔드' where id=1");
+        jdbc.update("update public.recruit_unit set is_it=false where id=1");
+        mockMvc.perform(get("/api/postings")).andExpect(jsonPath("$.totalElements").value(0));
+        mockMvc.perform(get("/api/postings/1")).andExpect(status().isNotFound());
+        jdbc.update("update public.recruit_unit set is_it=true where id=1");
+        jdbc.update("update public.unit_item set text=' ' where unit_id=1");
+        entityManager.clear();
+        mockMvc.perform(get("/api/postings")).andExpect(jsonPath("$.totalElements").value(0));
+        mockMvc.perform(get("/api/postings/1")).andExpect(status().isNotFound());
+    }
+
+    @Test
+    void 파이프라인의_공고_카테고리를_목록과_상세에_그대로_전달한다() throws Exception {
+        jdbc.update("update public.posting set skill_categories=ARRAY['L','B'] where id=1");
+        mockMvc.perform(get("/api/postings")).andExpect(jsonPath("$.content[0].skillCategories",hasSize(2)));
+        mockMvc.perform(get("/api/postings/1"))
+                .andExpect(jsonPath("$.skillCategories[0]").value("L"))
+                .andExpect(jsonPath("$.skillCategories[1]").value("B"))
+                .andExpect(jsonPath("$.analysis.recruitUnits[0].job").value("백엔드"));
+    }
+
+    @Test
+    void 숨김_복원은_동일한_환경에서만_목록과_상세에_반영한다() throws Exception {
+        jdbc.update("insert into public.career_posting_visibility (posting_id,namespace,hidden) values (1,'staging',true)");
+        mockMvc.perform(get("/api/postings")).andExpect(jsonPath("$.totalElements").value(1));
+        jdbc.update("insert into public.career_posting_visibility (posting_id,namespace,hidden) values (1,'local-review',true)");
+        mockMvc.perform(get("/api/postings")).andExpect(jsonPath("$.totalElements").value(0));
+        mockMvc.perform(get("/api/postings/1")).andExpect(status().isNotFound());
+        jdbc.update("update public.career_posting_visibility set hidden=false where namespace='local-review'");
+        entityManager.clear();
+        mockMvc.perform(get("/api/postings")).andExpect(jsonPath("$.totalElements").value(1));
+        mockMvc.perform(get("/api/postings/1")).andExpect(status().isOk());
     }
 
     @Test

@@ -210,6 +210,7 @@ CREATE TABLE posting (
     collected_at      timestamptz NOT NULL DEFAULT now(),
     last_checked_at   timestamptz NOT NULL DEFAULT now(),
     recheck_due       boolean     NOT NULL DEFAULT false,
+    skill_categories  text[]      CHECK (skill_categories <@ ARRAY['L', 'B', 'D', 'E', 'O', 'F', 'A']::text[]),
     UNIQUE (site, site_posting_no)
 );
 COMMENT ON TABLE  posting                   IS '공고';
@@ -230,6 +231,7 @@ COMMENT ON COLUMN posting.raw_hash          IS '원본 해시 (보이는 글에�
 COMMENT ON COLUMN posting.collected_at      IS '수집 시각';
 COMMENT ON COLUMN posting.last_checked_at   IS '마지막 확인 시각 (3일마다 수정 확인)';
 COMMENT ON COLUMN posting.recheck_due       IS '다시 확인할 공고 (''수정''으로 골랐는데 아직 확인·다시 저장을 못 함 — 사람인 수정 표시가 하루 뒤 사라져도 다음 날 다시 고른다)';
+COMMENT ON COLUMN posting.skill_categories  IS '기술 카테고리 (팀원 7개판 코드 목록: L 프로그래밍·CS 기초/B 백엔드 개발/D 데이터베이스/E 데이터 엔지니어링·분석/O 인프라·배포·운영/F 프론트엔드·앱 개발/A AI 기술 — 현재 추출 결과의 필수·우대 줄에서 모음, 비면(NULL) 안 붙임(그 외 자리만 있는 공고·아직 처리 전), {}면 백엔드·데이터 공고인데 붙일 기술 없음)';
 
 CREATE TABLE posting_image (
     id          bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -261,12 +263,16 @@ CREATE TABLE extraction_run (
     cost_usd         numeric(10,6) NOT NULL CHECK (cost_usd >= 0),
     retried          boolean       NOT NULL DEFAULT false,
     review_reasons   jsonb         NOT NULL DEFAULT '[]' CHECK (jsonb_typeof(review_reasons) = 'array'),
-    review_result    text          CHECK (review_result IN ('문제없음', '고침')),
+    review_result    text          CONSTRAINT extraction_run_review_result_check CHECK (review_result IN ('정상', '제외', '다시')),
+    review_feedback  text,
     reviewed_at      timestamptz,
     llm_output_raw   jsonb,
     is_current       boolean       NOT NULL DEFAULT false,
     run_at           timestamptz   NOT NULL DEFAULT now(),
-    CHECK ((review_result IS NULL) = (reviewed_at IS NULL))
+    CHECK ((review_result IS NULL) = (reviewed_at IS NULL)),
+    CONSTRAINT extraction_run_review_feedback_check
+        CHECK (review_result IS DISTINCT FROM '다시'   -- 공백·탭·줄바꿈·전각/줄바꿈 없는 공백만 있으면 빈 피드백
+               OR btrim(coalesce(review_feedback, ''), E' \t\r\n 　') <> '')
 );
 COMMENT ON TABLE  extraction_run                IS '추출 실행';
 COMMENT ON COLUMN extraction_run.id             IS '실행ID';
@@ -280,7 +286,8 @@ COMMENT ON COLUMN extraction_run.output_tokens  IS '출력 토큰 (다시 부름
 COMMENT ON COLUMN extraction_run.cost_usd       IS '비용 (달러, 실행 당시 가격)';
 COMMENT ON COLUMN extraction_run.retried        IS '다시 부름 (모집 단위 검사에 걸려 한 번 더 불렀나)';
 COMMENT ON COLUMN extraction_run.review_reasons IS '확인 필요 사유 (예: [{"검사":1,"내용":"..."}], 비면 확인 불필요)';
-COMMENT ON COLUMN extraction_run.review_result  IS '확인 결과 (문제없음/고침, 확인 전이면 비움)';
+COMMENT ON COLUMN extraction_run.review_result  IS '검토 결과 (정상: 결과 맞음 / 제외: 앞으로 자동 처리·웹에서 뺌 / 다시: 피드백을 붙여 다음 ① 때 다시 추출, 안 봤으면 비움)';
+COMMENT ON COLUMN extraction_run.review_feedback IS '검토 피드백 (다시일 때 꼭, 다시 추출할 때 LLM 입력 끝에 붙인다)';
 COMMENT ON COLUMN extraction_run.reviewed_at    IS '확인 시각';
 COMMENT ON COLUMN extraction_run.llm_output_raw IS '표준화 전 답 (LLM 이 준 JSON 그대로, 2026-10-27 이전 결과는 비어 있음)';
 COMMENT ON COLUMN extraction_run.is_current     IS '현재 사용 (공고마다 최대 하나)';
@@ -292,6 +299,7 @@ CREATE TABLE recruit_unit (
     seq         smallint NOT NULL CHECK (seq >= 1),
     name        text     NOT NULL,
     is_it       boolean  NOT NULL,
+    job         text     CHECK (job IN ('백엔드', '데이터 엔지니어', '그 외')),
     career      text     NOT NULL CHECK (career IN ('신입', '경력', '신입·경력', '언급없음')),
     years_text  text     NOT NULL DEFAULT '',
     min_years   smallint CHECK (min_years BETWEEN 0 AND 50),
@@ -305,6 +313,7 @@ COMMENT ON COLUMN recruit_unit.run_id     IS '실행ID';
 COMMENT ON COLUMN recruit_unit.seq        IS '순서 (LLM 답의 순서)';
 COMMENT ON COLUMN recruit_unit.name       IS '이름 (예: 서버 개발자 (경력))';
 COMMENT ON COLUMN recruit_unit.is_it      IS 'IT 직무 (false 면 이름·경력만, 항목 없음)';
+COMMENT ON COLUMN recruit_unit.job        IS '직무 (백엔드/데이터 엔지니어/그 외 — 그 외는 이름·경력만, 항목 없음. 업무 내용으로 판단. 2026-11-12 전에 추출한 자리는 fill_unit_job.py 로 채움, 비면 아직 모름)';
 COMMENT ON COLUMN recruit_unit.career     IS '경력 구분 (신입/경력/신입·경력/언급없음)';
 COMMENT ON COLUMN recruit_unit.years_text IS '연수 (공고에 적힌 글 그대로, 예: 3년 이상)';
 COMMENT ON COLUMN recruit_unit.min_years  IS '최소 연수 (매칭용 숫자, 없으면 비움)';
@@ -379,5 +388,14 @@ CREATE INDEX ON capability (parent_id);
 CREATE INDEX ON tech (parent_id);
 CREATE INDEX ON capability USING gin (aliases);                -- 별칭으로 찾기
 CREATE INDEX ON tech USING gin (aliases);
+
+-- 팀원(웹 관리자 페이지)은 파이프라인 표를 읽기만 하되, 추출 실행의 검토 칸 세 개만 쓸 수 있다(2026-11-24 사용자 결정).
+-- team 역할이 없는 DB(노트북·CI)에서는 건너뛴다.
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'team') THEN
+        GRANT UPDATE (review_result, review_feedback, reviewed_at) ON extraction_run TO team;
+    END IF;
+END $$;
 
 COMMIT;

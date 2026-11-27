@@ -33,6 +33,20 @@ export function db() {
  CREATE TABLE IF NOT EXISTS profiles(user_id TEXT PRIMARY KEY,data TEXT);
  CREATE TABLE IF NOT EXISTS saved_jobs(user_id TEXT,job_id TEXT,data TEXT,saved_at INTEGER,PRIMARY KEY(user_id,job_id));`,
   );
+  const sessionColumns = globals.careerDb
+    .prepare("PRAGMA table_info(sessions)")
+    .all() as { name: string }[];
+  if (!sessionColumns.some((column) => column.name === "credential_stamp"))
+    globals.careerDb.exec(
+      "ALTER TABLE sessions ADD COLUMN credential_stamp TEXT",
+    );
+  const oauthColumns = globals.careerDb
+    .prepare("PRAGMA table_info(oauth_accounts)")
+    .all() as { name: string }[];
+  if (!oauthColumns.some((column) => column.name === "password_set_at"))
+    globals.careerDb.exec(
+      "ALTER TABLE oauth_accounts ADD COLUMN password_set_at INTEGER",
+    );
   return globals.careerDb;
 }
 export function isGuest(id: string) {
@@ -46,23 +60,36 @@ export function passwordHash(
 }
 export function passwordMatches(password: string, stored: string) {
   const [salt, hash] = stored.split(":");
+  if (!salt || !/^[a-f0-9]{128}$/i.test(hash || "")) return false;
   return timingSafeEqual(
     Buffer.from(hash, "hex"),
     Buffer.from(passwordHash(password, salt).split(":")[1], "hex"),
   );
 }
 const hash = (s: string) => createHash("sha256").update(s).digest("hex");
+export const credentialStamp = hash;
 export async function user() {
   const token = (await cookies()).get("career_session")?.value;
   if (!token) return null;
   const local = db()
     .prepare(
-      "SELECT users.id,users.email,users.name FROM sessions JOIN users ON users.id=sessions.user_id WHERE token=? AND expires>?",
+      "SELECT users.id,users.email,users.name,users.password,sessions.credential_stamp FROM sessions JOIN users ON users.id=sessions.user_id WHERE token=? AND expires>?",
     )
     .get(hash(token), Date.now()) as
-    { id: string; email: string; name: string } | undefined;
-  if (!local || isGuest(local.id)) return local;
-  if (process.env.CAREER_ACCOUNT_STORE !== "rds") return local;
+    | {
+        id: string;
+        email: string;
+        name: string;
+        password: string;
+        credential_stamp: string | null;
+      }
+    | undefined;
+  if (!local) return null;
+  const publicUser = { id: local.id, email: local.email, name: local.name };
+  if (isGuest(local.id) || process.env.CAREER_ACCOUNT_STORE !== "rds") {
+    if (local.credential_stamp !== credentialStamp(local.password)) return null;
+    return publicUser;
+  }
   const { profilePool } = await import("./posting-levels");
   const pool = profilePool();
   if (!pool) throw new Error("회원 데이터베이스 연결 설정이 필요합니다.");
@@ -70,23 +97,40 @@ export async function user() {
     id: string;
     email: string;
     name: string;
+    password_hash: string;
   }>(
-    `SELECT subject_id AS id,email,name FROM public.career_account WHERE namespace=$1 AND subject_id=$2`,
+    `SELECT subject_id AS id,email,name,password_hash FROM public.career_account WHERE namespace=$1 AND subject_id=$2`,
     [process.env.CAREER_PROFILE_NAMESPACE || "local-review", local.id],
   );
-  return rows[0];
+  const account = rows[0];
+  if (
+    !account ||
+    local.credential_stamp !== credentialStamp(account.password_hash)
+  )
+    return null;
+  return { id: account.id, email: account.email, name: account.name };
 }
 export async function requireUser() {
   const u = await user();
   if (!u) throw new Error("로그인이 필요합니다.");
   return u;
 }
-export async function session(id: string) {
+export async function session(id: string, authenticatedPasswordHash?: string) {
+  const account = authenticatedPasswordHash
+    ? null
+    : isGuest(id)
+      ? (db().prepare("SELECT password FROM users WHERE id=?").get(id) as
+          { password: string } | undefined)
+      : await (await import("./accounts")).accountById(id);
+  const password = authenticatedPasswordHash ?? account?.password;
+  if (!password) throw new Error("회원 정보를 찾을 수 없습니다.");
   db().prepare("DELETE FROM sessions WHERE expires < ?").run(Date.now());
   const token = randomBytes(32).toString("hex");
   db()
-    .prepare("INSERT INTO sessions VALUES(?,?,?)")
-    .run(hash(token), id, Date.now() + 604800000);
+    .prepare(
+      "INSERT INTO sessions(token,user_id,expires,credential_stamp) VALUES(?,?,?,?)",
+    )
+    .run(hash(token), id, Date.now() + 604800000, credentialStamp(password));
   (await cookies()).set("career_session", token, {
     httpOnly: true,
     sameSite: "lax",
@@ -94,6 +138,9 @@ export async function session(id: string) {
     path: "/",
     maxAge: 604800,
   });
+}
+export function revokeSessions(id: string) {
+  db().prepare("DELETE FROM sessions WHERE user_id=?").run(id);
 }
 export async function logout() {
   const jar = await cookies();

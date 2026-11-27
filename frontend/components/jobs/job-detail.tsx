@@ -11,10 +11,12 @@ import {
 import { unknownLocation, type PublicJob } from "@/types/public-job";
 import { JobPosting } from "./job-posting";
 import { LoadingSpinner } from "@/components/shared/loading-spinner";
+import { LinkLoadingIndicator } from "@/components/shared/link-loading-indicator";
 import { JobExtras, JobSummary } from "./job-summary";
 import { PersonalJobComparison } from "./personal-job-comparison";
 import { SavedLevelRadar } from "./saved-level-radar";
 import { experienceJob, experienceLevels } from "@/mock/posting-experience";
+import { catalogBackUrl } from "@/lib/catalog-navigation";
 
 export function JobDetail({
   id,
@@ -65,7 +67,15 @@ export function JobDetail({
         {error && (
           <button onClick={() => setRetry((v) => v + 1)}>다시 시도</button>
         )}
-        <Link href={tier ? `/jobs?demo=${tier}` : "/jobs"}>공고 목록</Link>
+        <Link
+          href={
+            tier
+              ? `/jobs?demo=${tier}`
+              : catalogBackUrl(new URLSearchParams(params.toString()))
+          }
+        >
+          공고 목록
+        </Link>
       </div>
     );
   function href(nextView: "stats" | "posting") {
@@ -92,7 +102,14 @@ export function JobDetail({
   }
   return (
     <div className="job-detail-page">
-      <Link className="study-back" href={tier ? `/jobs?demo=${tier}` : "/jobs"}>
+      <Link
+        className="study-back"
+        href={
+          tier
+            ? `/jobs?demo=${tier}`
+            : catalogBackUrl(new URLSearchParams(params.toString()))
+        }
+      >
         <ArrowLeft size={16} />
         공고 목록
       </Link>
@@ -130,6 +147,7 @@ export function JobDetail({
           aria-current={view === "stats" ? "page" : undefined}
         >
           역량 분석
+          <LinkLoadingIndicator />
         </Link>
       </nav>
       <section

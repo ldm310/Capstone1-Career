@@ -4,7 +4,7 @@ Spring의 등록 작업 20개. Swagger `/swagger-ui/index.html`, OpenAPI `/v3/ap
 
 | 메서드 | 경로 | 기능 |
 | --- | --- | --- |
-| GET | `/api/health` | 서버 상태 |
+| GET | `/api/system/status` | 배포용 백엔드 실행 상태 확인 (DB 조회는 별도 점검) |
 | GET | `/api/capabilities` | 기존 평가용 역량 사전·ID |
 | GET | `/api/skill-categories` | 신규: 기술 10개·기타 묶음·저장 집계 |
 | GET | `/api/postings` | 채용공고 목록·검색·진행/마감·페이지 |

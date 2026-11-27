@@ -1,7 +1,5 @@
 import "server-only";
-import { randomBytes, randomUUID } from "node:crypto";
-import { passwordHash } from "./store";
-import { accountByEmail, kakaoAccount, createKakaoAccount } from "./accounts";
+import { accountByEmail, kakaoAccount } from "./accounts";
 
 export class KakaoServiceError extends Error {
   constructor(
@@ -105,7 +103,19 @@ export async function kakaoIdentity(code: string) {
   const subject = String(data.id),
     account = data.kakao_account || {};
   const existing = await kakaoAccount(subject);
-  if (existing) return existing.id;
+  if (existing)
+    return existing.passwordSet
+      ? { type: "login" as const, id: existing.id, password: existing.password }
+      : {
+          type: "registration" as const,
+          identity: {
+            subject,
+            email: existing.email,
+            name: existing.name,
+            accountId: existing.id,
+            password: existing.password,
+          },
+        };
   // Never attach a provider to an existing password/admin account based on email alone.
   if (
     !account.is_email_valid ||
@@ -117,17 +127,12 @@ export async function kakaoIdentity(code: string) {
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 200)
     throw new Error("Invalid email");
   if (await accountByEmail(email)) throw new Error("ACCOUNT_LINK_REQUIRED");
-  const id = randomUUID(),
-    name = String(account.profile?.nickname || "사용자").slice(0, 60);
-  return (
-    await createKakaoAccount(
-      {
-        id,
-        email,
-        name,
-        password: passwordHash(randomBytes(32).toString("hex")),
-      },
+  return {
+    type: "registration" as const,
+    identity: {
       subject,
-    )
-  ).id;
+      email,
+      name: String(account.profile?.nickname || "사용자").slice(0, 60),
+    },
+  };
 }

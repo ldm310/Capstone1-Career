@@ -15,12 +15,16 @@ import {
 } from "@/lib/server/store";
 import { demoAccount, ensureDemoAccount } from "@/lib/server/demo-account";
 import { profile, profileSchema, saveProfile } from "@/lib/server/user-data";
+import { memberRole } from "@/lib/server/notices";
 import {
   accountByEmail,
   accountById,
   createAccount,
   updateAccount as persistAccount,
+  changeAccountPassword,
+  accountPasswordConfigured,
 } from "@/lib/server/accounts";
+import { finishKakaoRegistration } from "@/lib/server/kakao-registration";
 export const runtime = "nodejs";
 export async function GET() {
   const current = (await user()) || null;
@@ -31,6 +35,9 @@ export async function GET() {
     {
       user: current,
       guest,
+      passwordConfigured:
+        current && !guest ? await accountPasswordConfigured(current.id) : null,
+      role: current && !guest ? await memberRole(current.id) : null,
       profile: currentProfile
         ? {
             ...currentProfile,
@@ -65,16 +72,49 @@ export async function POST(req: Request) {
     const input = z
       .object({
         action: z.enum(["login", "register"]),
-        email: z.email().max(200),
-        password: z.string().min(10).max(128),
+        email: z
+          .string()
+          .trim()
+          .pipe(z.email("이메일 형식을 확인해 주세요.").max(200)),
+        password: z.string().min(1, "비밀번호를 입력해 주세요.").max(128),
         name: z.string().trim().min(1).max(60).optional(),
         age: z.number().int().min(0).max(120).nullable().optional(),
         school: z.string().trim().max(60).optional(),
         major: z.string().trim().max(60).optional(),
+        kakao: z.boolean().optional(),
+        confirmation: z.string().max(128).optional(),
       })
       .parse(body);
     const email = input.email.toLowerCase();
+    if (input.action === "register")
+      z.string()
+        .min(10, "비밀번호는 10자 이상 입력해 주세요.")
+        .parse(input.password);
     rateLimit("auth:" + email);
+    if (
+      input.action === "register" &&
+      input.confirmation !== undefined &&
+      input.confirmation !== input.password
+    )
+      throw new Error("비밀번호 확인이 일치하지 않습니다.");
+    if (input.action === "register" && input.kakao) {
+      if (!input.name) throw new Error("이름을 입력해 주세요.");
+      if (input.confirmation !== input.password)
+        throw new Error("비밀번호 확인이 일치하지 않습니다.");
+      const account = await finishKakaoRegistration({
+        ...input,
+        email,
+        name: input.name,
+      });
+      saveProfile(account.id, {
+        ...profile(account.id),
+        age: account.age ?? profile(account.id).age,
+        school: account.school ?? profile(account.id).school,
+        major: account.major ?? profile(account.id).major,
+      });
+      await session(account.id, account.password);
+      return Response.json({ user: await user() });
+    }
     if (email === demoAccount.email) ensureDemoAccount();
     let found = await accountByEmail(email);
     if (!found && email === demoAccount.email) {
@@ -95,7 +135,7 @@ export async function POST(req: Request) {
         );
       const id = randomUUID();
       if (!input.name) throw new Error("이름을 입력해 주세요.");
-      await createAccount({
+      const account = await createAccount({
         id,
         email,
         name: input.name,
@@ -110,14 +150,19 @@ export async function POST(req: Request) {
         school: input.school || "",
         major: input.major || "",
       });
-      await session(id);
+      await session(id, account.password);
     } else {
       if (!found || !passwordMatches(input.password, found.password))
         throw new Error("이메일 또는 비밀번호를 확인하세요.");
-      await session(found.id);
+      await session(found.id, found.password);
     }
     return Response.json({ user: await user() });
   } catch (e) {
+    if (e instanceof z.ZodError)
+      return Response.json(
+        { error: e.issues[0]?.message || "입력 내용을 확인해 주세요." },
+        { status: 400 },
+      );
     return failure(e);
   }
 }
@@ -144,7 +189,8 @@ async function updateAccount(body: Record<string, unknown>) {
     if (!row) throw new Error("회원 정보를 찾을 수 없습니다.");
     if (!passwordMatches(input.current, row.password))
       throw new Error("현재 비밀번호가 맞지 않아요.");
-    await persistAccount({ ...row, password: passwordHash(input.next) });
+    const updated = await changeAccountPassword(row, passwordHash(input.next));
+    await session(updated.id, updated.password);
     return Response.json({ ok: true });
   }
   const input = z

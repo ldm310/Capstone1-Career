@@ -1,6 +1,7 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { ListPagination } from "@/components/shared/list-pagination";
 
 interface Notice {
   id: string;
@@ -21,6 +22,7 @@ async function readNotices(offset = 0, signal?: AbortSignal) {
   return data as {
     notices: Notice[];
     canManage: boolean;
+    total: number;
     nextOffset: number | null;
   };
 }
@@ -32,24 +34,35 @@ export function NoticeBoard() {
   const [selected, setSelected] = useState<Notice | null>(null),
     [editing, setEditing] = useState(false),
     [busy, setBusy] = useState(false),
-    [next, setNext] = useState<number | null>(null);
+    [offset, setOffset] = useState(0),
+    [total, setTotal] = useState(0);
+  const controller = useRef<AbortController | null>(null);
   const [title, setTitle] = useState(""),
     [content, setContent] = useState(""),
     [pinned, setPinned] = useState(false),
     [remove, setRemove] = useState(false);
   async function load(offset = 0) {
+    controller.current?.abort();
+    const current = new AbortController();
+    controller.current = current;
+    setLoading(true);
     try {
-      const data = await readNotices(offset);
-      setNotices((items) =>
-        offset ? [...items, ...data.notices] : data.notices,
-      );
+      const data = await readNotices(offset, current.signal);
+      if (current.signal.aborted) return;
+      const lastOffset = Math.max(0, (Math.ceil(data.total / 20) - 1) * 20);
+      if (offset > lastOffset) return await load(lastOffset);
+      setNotices(data.notices);
+      setOffset(offset);
+      setTotal(data.total);
       setCanManage(data.canManage);
-      setNext(data.nextOffset);
       setError("");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "공지를 불러오지 못했습니다.");
+      if (!current.signal.aborted)
+        setError(
+          e instanceof Error ? e.message : "공지를 불러오지 못했습니다.",
+        );
     } finally {
-      setLoading(false);
+      if (!current.signal.aborted) setLoading(false);
     }
   }
   useEffect(() => {
@@ -59,7 +72,7 @@ export function NoticeBoard() {
         if (!controller.signal.aborted) {
           setNotices(data.notices);
           setCanManage(data.canManage);
-          setNext(data.nextOffset);
+          setTotal(data.total);
         }
       })
       .catch((error) => {
@@ -75,6 +88,7 @@ export function NoticeBoard() {
       });
     return () => controller.abort();
   }, []);
+  useEffect(() => () => controller.current?.abort(), []);
   function edit(notice: Notice | null) {
     setSelected(notice);
     setTitle(notice?.title || "");
@@ -233,10 +247,19 @@ export function NoticeBoard() {
               ))}
             </ul>
           )}
-          {next !== null && (
-            <button className="notice-more" onClick={() => void load(next)}>
-              더 보기
-            </button>
+          {!loading && !error && (
+            <ListPagination
+              total={total}
+              offset={offset}
+              pageSize={20}
+              label="공지사항 페이지"
+              onChange={(next) => {
+                void load(next);
+                document
+                  .querySelector(".notice-toolbar")
+                  ?.scrollIntoView({ block: "start" });
+              }}
+            />
           )}
           {!canManage && (
             <p className="notice-meta">

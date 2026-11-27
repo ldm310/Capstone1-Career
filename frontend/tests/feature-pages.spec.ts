@@ -5,8 +5,8 @@ import { mockPublicJobs } from "./public-jobs-fixture";
 test("each header menu opens its independent section", async ({ page }) => {
   await mockPublicJobs(page);
   const sections = [
-    ["채용공고", "/jobs", "채용공고", []],
-    ["분석", "/analysis", "분석", []],
+    ["채용 공고", "/jobs", "채용 공고", []],
+    ["역량 비교", "/comparison", "역량 비교", []],
   ] as const;
   for (const [action, url, title, tabs] of sections) {
     await page.setViewportSize({ width: 1440, height: 1000 });

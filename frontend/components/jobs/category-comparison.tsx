@@ -4,7 +4,7 @@ import { Info, UsersRound } from "lucide-react";
 import {
   categoryKeywords,
   categoryLevels,
-  skillCategories,
+  visibleSkillCategories as skillCategories,
   type SkillCategoryCode,
 } from "@/lib/skill-categories";
 import { demoMyProfile, meanKeywordLevels } from "@/mock/hiring-cohort";
@@ -14,7 +14,7 @@ import type { JobBenchmark } from "@/lib/job-benchmark";
 type Levels = Record<SkillCategoryCode, number>;
 const center = { x: 230, y: 176 };
 function point(index: number, radius: number) {
-  const angle = ((index * 36 - 90) * Math.PI) / 180;
+  const angle = (index * 2 * Math.PI) / skillCategories.length - Math.PI / 2;
   return {
     x: center.x + Math.cos(angle) * radius,
     y: center.y + Math.sin(angle) * radius,
@@ -78,7 +78,7 @@ function ComparisonRadar({
         {[20, 40, 60, 80, 100].map((tick) => (
           <polygon
             key={tick}
-            points={polygon(Array(10).fill(tick))}
+            points={polygon(Array(skillCategories.length).fill(tick))}
             fill="none"
             stroke="#e0e8ee"
             strokeWidth="1"

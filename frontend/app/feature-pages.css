@@ -153,6 +153,49 @@
   font-size: 14px;
 }
 .jobs-catalog .public-jobs-toolbar {
+  justify-content: flex-start;
+}
+.jobs-catalog .public-job-filters {
+  flex: 1;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.jobs-catalog .public-job-filters > label {
+  flex: 1 1 220px;
+  max-width: 420px;
+  min-width: 0;
+}
+.jobs-catalog .public-job-filters input {
+  width: 100%;
+}
+.catalog-pagination {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid #dce5ed;
+}
+.catalog-page-size {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  font-size: 13px;
+  color: #456078;
+}
+.catalog-page-size select {
+  padding: 8px 12px;
+  border: 1px solid #c5d4df;
+  border-radius: 7px;
+  background: #fff;
+  color: inherit;
+  font: inherit;
+}
+.catalog-pagination > .list-pagination {
+  margin-top: 14px;
+  padding-top: 0;
+  border-top: 0;
+}
+.jobs-catalog .public-jobs-toolbar {
   padding-bottom: 16px;
   margin-bottom: 16px;
 }

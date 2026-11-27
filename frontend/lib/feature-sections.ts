@@ -1,8 +1,26 @@
 export const featureSections = {
+  comparison: {
+    path: "/comparison",
+    title: "역량 비교",
+    description: "내 경험과 채용 공고의 역량 비교",
+    tabs: [["start", "역량 비교"]],
+  },
+  admin: {
+    path: "/admin",
+    title: "관리자",
+    description: "공고 추출 검토 및 공지사항 관리",
+    tabs: [
+      ["failures", "추출 검토"],
+      ["skipped", "넘긴 공고"],
+      ["closed", "마감 공고"],
+      ["postings", "공고 노출 관리"],
+      ["notices", "공지사항 관리"],
+    ],
+  },
   experience: {
     path: "/experience",
     title: "역량 체험",
-    description: "채용공고 예시의 역량 분석",
+    description: "채용 공고 예시의 역량 분석",
     tabs: [["example", "공고 예시"]],
   },
   notices: {
@@ -19,8 +37,8 @@ export const featureSections = {
   },
   jobs: {
     path: "/jobs",
-    title: "채용공고",
-    description: "채용공고 검색 및 자격요건, 역량 비교",
+    title: "채용 공고",
+    description: "채용 공고 검색 및 자격요건, 역량 비교",
     tabs: [["browse", "전체 공고"]],
   },
   skills: {

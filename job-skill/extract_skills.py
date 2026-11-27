@@ -32,15 +32,32 @@ import numpy as np
 from PIL import Image
 
 from capdict import CapDict, check_dictionary, load_dictionary
-from common import IMG_DIR, OUT_DIR, PAGE_DIR, images_by_posting, load_targets
+from common import DATA, IMG_DIR, OUT_DIR, PAGE_DIR, images_by_posting, load_targets
 from html_text import BODY, html_text
 from table_layout import table_text
 
 PF = os.path.join(OUT_DIR, "page_filter")
 EX = os.path.join(OUT_DIR, "extract")
+FEEDBACK = os.path.join(DATA, "feedback.json")  # ① 목록 수집이 쓴 검토 '다시' 피드백(공고번호 → 글). ③ 에는 없다
 # 답 길이 상한(생각하는 몫 포함). 8,000 이면 모집 부문이 많은 긴 공고의 답이 중간에 잘렸다(③ 1,494건 중 7건)
 MAX_OUTPUT_TOKENS = 16000
 PRICES = {"gpt-5.6-terra": (2.00, 12.00), "gpt-5.6-luna": (0.20, 1.20), "gpt-5.6-sol": (4.00, 20.00)}  # USD/1M, 2026-10-02 확인
+
+# 직무: 백엔드·데이터 엔지니어 자리만 필수·우대·업무를 정리한다(2026-11-12 사용자 결정 — 그 외 직무는 버리는 데이터).
+# 자리 이름에 직무가 분명히 적히지 않은 경우가 많아(IT 자리의 82%) 이름이 아니라 업무 내용으로 판단한다.
+JOBS = ["백엔드", "데이터 엔지니어", "그 외"]
+TARGET_JOBS = ("백엔드", "데이터 엔지니어")
+JOB_RULE = """- job: 단위의 직무(백엔드 / 데이터 엔지니어 / 그 외). 자리 이름만 보지 말고 담당업무·자격요건·쓰는 기술을 보고 고른다.
+  이름에 직무가 분명히 적히지 않은 경우가 많다(예: '웹 개발자', '소프트웨어 개발자', '솔루션 개발', '전산팀').
+  백엔드 = 업무에 서버·API·DB 연동 개발이 들어가는 자리(Spring·Node.js·Django·FastAPI 등, 업무 시스템·웹 서비스의 서버 쪽 개발).
+    화면·데이터 같은 다른 일과 섞여 있어도 서버·API 개발이 들어가면 백엔드다(화면과 서버를 함께 하는 풀스택 포함).
+    단, AI 자리는 백엔드가 아니다(아래 그 외).
+  데이터 엔지니어 = 업무의 중심이 데이터 수집·적재·파이프라인·ETL·DW·데이터 플랫폼 구축인 자리(Spark·Airflow·Kafka 등, 크롤링 수집 포함).
+    서버·API 개발과 데이터 파이프라인이 섞여 있으면 더 많은 쪽을 고른다.
+  그 외 = AI 자리: AI 엔지니어·AI 개발자·AI 에이전트 개발·LLM 응용 개발·머신러닝·AI 모델 연구처럼 자리 이름이 AI 직무이거나
+    주 업무가 AI·LLM·에이전트 개발인 자리(서버·API·데이터 일이 섞여 있어도 그 외, 2026-11-12 사용자 결정).
+    그리고 서버·API 개발도 데이터 파이프라인도 하지 않는 직무: 화면만 하는 프론트엔드·퍼블리셔, 모바일 앱만,
+    데이터 분석, 임베디드·펌웨어, 인프라·DevOps·네트워크 운영, DBA, QA, 보안, 기술지원·헬프데스크, 기획, IT 가 아닌 직무."""
 
 INSTRUCTIONS = """너는 채용공고를 읽고, 지원자에게 요구하는 것과 하게 될 업무를 필수·우대·업무·기타로 나눠 개조식으로 정리한다.
 입력은 공고 본문의 글(웹페이지 글)과 공고 이미지를 OCR로 읽은 글이다(둘 중 하나만 있을 수도 있다).
@@ -64,6 +81,8 @@ OCR 글은 오탈자가 있을 수 있고, 같은 높이에 나란한 칸은 ' |
   IT 직무가 아님 = 영업(기술영업 포함), 마케팅, 기획(비IT), 법무, 회계·재경·세무, 인사·총무, 생산·공정·제조, 품질·인허가(비소프트웨어),
   연구(소프트웨어가 아닌 화학·바이오·화장품 등), 디자인(비개발) 등.
   it_job 이 false 인 단위는 name·career·years 만 적고 required·preferred·duties·other 는 빈 배열로 둔다.
+{JOB_RULE}
+  job 이 '그 외'인 단위도 name·career·years 만 적고 required·preferred·duties·other 는 빈 배열로 둔다(it_job 이 false 면 job 은 '그 외').
 
 모집 단위(positions)
 - 공고의 내용을 모집 단위로 나눠 적는다. 아래 경우는 단위를 따로 만든다.
@@ -120,7 +139,14 @@ OCR 글은 오탈자가 있을 수 있고, 같은 높이에 나란한 칸은 ' |
 - 필수·우대 구분이 글에서 분명하지 않으면 notes 에 이유를 짧게 적는다. 없으면 빈 문자열.
 
 능력 목록
-{CAPABILITIES}"""
+{CAPABILITIES}""".replace("{JOB_RULE}", JOB_RULE)
+
+
+def target_job(pos: dict) -> bool:
+    """필수·우대·업무를 정리하는 자리인가(백엔드·데이터 엔지니어). job 칸이 없는 옛 결과는 IT 자리면 그렇다고 본다."""
+    if "job" in pos:
+        return pos["job"] in TARGET_JOBS and pos.get("it_job") is not False
+    return pos.get("it_job", True) is not False
 
 # 표준화 사전(DB 가 원본). import 할 때 읽지 않고, 추출을 시작할 때 prepare_dictionary 로 한 번 읽는다(한 실행 안에서는 같은 사전).
 CD: CapDict | None = None
@@ -134,8 +160,9 @@ REQ = {"type": "object", "additionalProperties": False, "required": ["capability
 ITEM = {"type": "object", "additionalProperties": False, "required": ["text", "reqs", "quote"],
         "properties": {"text": {"type": "string"}, "reqs": {"type": "array", "items": REQ}, "quote": {"type": "string"}}}
 POSITION = {"type": "object", "additionalProperties": False,
-            "required": ["name", "it_job", "career", "years", "required", "preferred", "duties", "other"],
+            "required": ["name", "it_job", "job", "career", "years", "required", "preferred", "duties", "other"],
             "properties": {"name": {"type": "string"}, "it_job": {"type": "boolean"},
+                           "job": {"type": "string", "enum": JOBS},
                            "career": {"type": "string", "enum": ["신입", "경력", "신입·경력", "언급없음"]},
                            "years": {"type": "string"},
                            "required": {"type": "array", "items": ITEM}, "preferred": {"type": "array", "items": ITEM},
@@ -217,6 +244,9 @@ GitHub, Docker
 경력 2년 이상
 React 기반 웹 개발 경험
 TypeScript 능숙
+[플랫폼개발팀 (신입)]
+담당업무: Airflow 기반 데이터 수집·적재 파이프라인 개발
+자격요건: Python·SQL 활용 경험
 [경영지원팀 회계 담당자]
 경력 3년 이상
 재무제표 작성 및 결산 경험
@@ -224,7 +254,7 @@ TypeScript 능숙
 
 출력:
 {"positions":[
-{"name":"서버 개발자 (신입)","it_job":true,"career":"신입","years":"",
+{"name":"서버 개발자 (신입)","it_job":true,"job":"백엔드","career":"신입","years":"",
  "required":[
   {"text":"Java 또는 Kotlin 기반 개발 경험","reqs":[{"capability":"프로그래밍 언어","other_name":"","techs":["Java","Kotlin"],"relation":"택1"}],"quote":"Java 또는 Kotlin 기반 개발 경험"},
   {"text":"자료구조·알고리즘 등 CS 기초 지식","reqs":[],"quote":"자료구조·알고리즘 등 CS 기초 지식"},
@@ -239,7 +269,7 @@ TypeScript 능숙
   {"text":"주문 데이터 정합성 점검 및 장애 대응","reqs":[{"capability":"디버깅·트러블슈팅","other_name":"","techs":[],"relation":"능력만"}],"quote":"주문 데이터 정합성 점검 및 장애 대응"}],
  "other":[
   {"text":"개발 환경: GitHub, Docker","reqs":[{"capability":"버전 관리","other_name":"","techs":["GitHub"],"relation":"모두"},{"capability":"컨테이너","other_name":"","techs":["Docker"],"relation":"모두"}],"quote":"GitHub, Docker"}]},
-{"name":"서버 개발자 (경력)","it_job":true,"career":"경력","years":"3년 이상",
+{"name":"서버 개발자 (경력)","it_job":true,"job":"백엔드","career":"경력","years":"3년 이상",
  "required":[
   {"text":"Spring Boot 기반 REST API 설계·개발 경력","reqs":[{"capability":"백엔드 프레임워크","other_name":"","techs":["Spring Boot"],"relation":"모두"},{"capability":"API 설계","other_name":"","techs":["REST API"],"relation":"모두"}],"quote":"Spring Boot 기반 REST API 설계·개발 경력"},
   {"text":"MySQL 등 관계형 DB 쿼리 튜닝 경험","reqs":[{"capability":"관계형 DB","other_name":"","techs":["MySQL"],"relation":"예시"},{"capability":"DB 설계·튜닝","other_name":"","techs":[],"relation":"능력만"}],"quote":"MySQL 등 관계형 DB 쿼리 튜닝 경험"},
@@ -254,16 +284,16 @@ TypeScript 능숙
   {"text":"주문 데이터 정합성 점검 및 장애 대응","reqs":[{"capability":"디버깅·트러블슈팅","other_name":"","techs":[],"relation":"능력만"}],"quote":"주문 데이터 정합성 점검 및 장애 대응"}],
  "other":[
   {"text":"개발 환경: GitHub, Docker","reqs":[{"capability":"버전 관리","other_name":"","techs":["GitHub"],"relation":"모두"},{"capability":"컨테이너","other_name":"","techs":["Docker"],"relation":"모두"}],"quote":"GitHub, Docker"}]},
-{"name":"프론트엔드 개발자","it_job":true,"career":"경력","years":"2년 이상",
+{"name":"프론트엔드 개발자","it_job":true,"job":"그 외","career":"경력","years":"2년 이상","required":[],"preferred":[],"duties":[],"other":[]},
+{"name":"플랫폼개발팀 (신입)","it_job":true,"job":"데이터 엔지니어","career":"신입","years":"",
  "required":[
-  {"text":"경력 2년 이상","reqs":[],"quote":"경력 2년 이상"},
-  {"text":"React 기반 웹 개발 경험","reqs":[{"capability":"프론트엔드 프레임워크","other_name":"","techs":["React"],"relation":"모두"}],"quote":"React 기반 웹 개발 경험"},
-  {"text":"TypeScript 능숙","reqs":[{"capability":"프로그래밍 언어","other_name":"","techs":["TypeScript"],"relation":"모두"}],"quote":"TypeScript 능숙"}],
+  {"text":"Python·SQL 활용 경험","reqs":[{"capability":"프로그래밍 언어","other_name":"","techs":["Python"],"relation":"모두"},{"capability":"SQL","other_name":"","techs":["SQL"],"relation":"모두"}],"quote":"자격요건: Python·SQL 활용 경험"}],
  "preferred":[],
- "duties":[],
+ "duties":[
+  {"text":"Airflow 기반 데이터 수집·적재 파이프라인 개발","reqs":[{"capability":"데이터 파이프라인","other_name":"","techs":["Airflow"],"relation":"모두"}],"quote":"담당업무: Airflow 기반 데이터 수집·적재 파이프라인 개발"}],
  "other":[
   {"text":"개발 환경: GitHub, Docker","reqs":[{"capability":"버전 관리","other_name":"","techs":["GitHub"],"relation":"모두"},{"capability":"컨테이너","other_name":"","techs":["Docker"],"relation":"모두"}],"quote":"GitHub, Docker"}]},
-{"name":"경영지원팀 회계 담당자","it_job":false,"career":"경력","years":"3년 이상","required":[],"preferred":[],"duties":[],"other":[]}],
+{"name":"경영지원팀 회계 담당자","it_job":false,"job":"그 외","career":"경력","years":"3년 이상","required":[],"preferred":[],"duties":[],"other":[]}],
 "skipped":[],"notes":""}
 
 이 예시에서 볼 점
@@ -271,9 +301,11 @@ TypeScript 능숙
   이렇게 열마다 따로 적힌 단위(신입/경력, A형/B형, 역할별)는 하나도 빠뜨리지 말고 모두 단위로 만든다.
 - 담당업무는 업무(duties)에 줄마다 모두 적는다. '주문 데이터 정합성 점검 및 장애 대응'처럼 기술 이름이 없어도 적고, 맞는 능력이 있으면 능력만으로 붙인다.
   '개발 환경'(GitHub, Docker)처럼 업무도 요건도 아닌 곳의 기술은 기타(other)에 적는다.
-- '서버 개발자 공통 자격요건'·'서버 개발자 담당업무'는 서버 개발자 신입·경력 단위에만, '전 직군 공통' 개발 환경은 모든 단위에 넣는다.
+- '서버 개발자 공통 자격요건'·'서버 개발자 담당업무'는 서버 개발자 신입·경력 단위에만, '전 직군 공통' 개발 환경은 내용을 적는 모든 단위(백엔드·데이터 엔지니어)에 넣는다.
 - 사람인 분류(백엔드)와 다른 부문([프론트엔드 개발자])도 건너뛰지 않고 따로 단위로 만든다. skipped 는 빈 배열.
-- [경영지원팀 회계 담당자]는 IT 직무가 아니므로 it_job=false, 이름·경력만 적고 나머지 칸은 비운다.
+- [프론트엔드 개발자]는 화면만 하는 직무라 job='그 외', 이름·경력만 적고 나머지 칸은 비운다.
+- [플랫폼개발팀 (신입)]은 이름에 직무가 없지만 업무가 데이터 수집·적재 파이프라인이라 job='데이터 엔지니어'다.
+- [경영지원팀 회계 담당자]는 IT 직무가 아니므로 it_job=false, job='그 외', 이름·경력만 적고 나머지 칸은 비운다.
 - '함께 보면 좋은 공고: OO테크 …'는 이 회사가 모집하는 부문이 아니므로 단위로 만들지 않는다.
 - 'AI', '데이터', '튜닝', '대용량 트래픽'처럼 구체적인 제품·도구 이름이 아닌 낱말은 techs 에 넣지 않는다(능력만 이거나 reqs 를 빈 배열로).
 - '컴퓨터공학 계열 학사 이상'은 신입 열에만 있으므로 신입 단위에만 넣는다(경력 단위에 복사하지 않는다).
@@ -330,6 +362,7 @@ def posting_inputs() -> dict[str, dict]:
     sec_path = os.path.join(PF, "sections.json")
     data = json.load(open(sec_path, encoding="utf-8")) if os.path.exists(sec_path) else {"readers": {"paddle": []}}
     by_rid = {p["rec_idx"]: p for p in data["readers"]["paddle"]}
+    feedback = json.load(open(FEEDBACK, encoding="utf-8")) if os.path.exists(FEEDBACK) else {}
     out = {}
     for t in load_targets():
         rid = t["rec_idx"]
@@ -358,7 +391,7 @@ def posting_inputs() -> dict[str, dict]:
                     parts.append(tx)
         if parts:
             out[rid] = {"text": "\n\n".join(parts), "kept": kept, "dropped": dropped, "role": t.get("role", ""), "company": t.get("company", ""),
-                        "career": t.get("career", "")}
+                        "career": t.get("career", ""), "feedback": feedback.get(rid, "")}
     return out
 
 
@@ -408,6 +441,11 @@ def guard(result: dict, text: str) -> dict:
     t = norm(text)
     rejected, excluded, dropped_items = [], [], []
     for pos in result["positions"]:
+        if pos.get("it_job") is False and "job" in pos:
+            pos["job"] = "그 외"
+        if not target_job(pos):  # 백엔드·데이터 엔지니어가 아닌 자리는 이름·경력만(LLM 이 적었어도 비운다)
+            for key in CATS:
+                pos[key] = []
         for key in CATS:
             items = []
             for it in pos[key]:
@@ -475,7 +513,8 @@ def count_line(r: dict) -> str:
         return f"{len(items(k)):>2}줄/기술 {techs:>2}"
     flags = sum(1 for k in CATS for it in items(k) for rq in it["reqs"] for e in rq["techs"] if e.get("flag")) + \
         sum(1 for k in CATS for it in items(k) for rq in it["reqs"] if not rq["cap_ok"])
-    units = ", ".join(f"{pos['name']}({pos['career']}{' ' + pos['years'] if pos['years'] else ''}){'·비IT' if pos.get('it_job') is False else ''}"
+    units = ", ".join(f"{pos['name']}({pos['career']}{' ' + pos['years'] if pos['years'] else ''})"
+                      f"{'·' + pos['job'] if 'job' in pos else '·비IT' if pos.get('it_job') is False else ''}"
                       f"{'·⚠IT확인' if pos.get('it_flag') else ''}" for pos in r["positions"])
     return (f"단위 {len(r['positions'])}개 [{units}] | 필수 {cnt('required')} | 우대 {cnt('preferred')} | 업무 {cnt('duties')} | 기타 {cnt('other')} | "
             f"근거없음 {len(r['rejected'])} 제외 {len(r.get('excluded', []))} 확인필요 {flags}"
@@ -502,7 +541,7 @@ def unit_checks(r: dict, inp: dict) -> list[dict]:
     반환: [{검사, 내용, 힌트}] — 내용은 DB 의 '확인 필요 사유'로, 힌트는 다시 부를 때 LLM 입력 끝에 붙인다.
       1) 신입·경력을 빠짐없이 담았는가: 사람인 경력 조건(예: '신입 · 경력')에 있는 신입/경력이 단위들의 career 에 없음
       2) 모집 직무를 빠짐없이 담았는가: 입력 표의 '■ 모집부문' 칸(행)이 단위 이름 수보다 많음
-      3) IT 직무인데 내용이 비어 있지 않은가: IT 단위인데 필수·우대·업무가 모두 비었음"""
+      3) 내용을 적는 자리인데 비어 있지 않은가: 백엔드·데이터 엔지니어(옛 결과는 IT) 단위인데 필수·우대·업무가 모두 비었음"""
     found, pos = [], r.get("positions", [])
     car = inp.get("career", "")
     want_new = "신입" in car
@@ -521,16 +560,20 @@ def unit_checks(r: dict, inp: dict) -> list[dict]:
         found.append({"검사": 2, "내용": f"모집 직무 칸 {n_head}개 / 만든 자리 이름 {len(names)}개",
                       "힌트": f"입력의 표에 모집부문 칸이 {n_head}개 있다. 모집부문마다 따로 단위를 만들어라."})
     for x in pos:
-        if x.get("it_job", True) and not any(x.get(k) for k in ("required", "preferred", "duties")):
-            found.append({"검사": 3, "내용": f"IT 자리 '{x.get('name')}'의 필수·우대·업무가 비어 있음",
-                          "힌트": f"IT 직무 단위 '{x.get('name')}'의 필수·우대·업무가 비어 있다. 그 단위의 자격요건·우대사항·담당업무를 빠뜨리지 말고 적어라."})
+        if target_job(x) and not any(x.get(k) for k in ("required", "preferred", "duties")):
+            kind = f"{x['job']} 자리" if "job" in x else "IT 자리"
+            found.append({"검사": 3, "내용": f"{kind} '{x.get('name')}'의 필수·우대·업무가 비어 있음",
+                          "힌트": f"{kind} 단위 '{x.get('name')}'의 필수·우대·업무가 비어 있다. 그 단위의 자격요건·우대사항·담당업무를 빠뜨리지 말고 적어라."})
     return found
 
 
 def llm_input(inp: dict, extra: str = "") -> str:
-    """LLM 에 보내는 입력 글(머리 3줄 + 공고 글). extra 는 다시 부를 때 끝에 붙이는 힌트."""
+    """LLM 에 보내는 입력 글(머리 3줄 + 공고 글). 사람이 검토에서 '다시'로 돌려보낸 공고는 그 피드백을 붙인다
+    (피드백이 없으면 예전과 같은 글 — 입력 지문이 바뀌지 않게). extra 는 다시 부를 때 끝에 붙이는 힌트."""
     return (f"사람인 직무 분류: {inp['role'] or '(모름)'} (참고용, 다른 직무 부문도 모두 정리)\n회사: {inp.get('company') or '(모름)'}\n"
             + (f"사람인 목록 경력 조건: {inp['career']}\n" if inp.get("career") else "") + f"\n{inp['text']}"
+            + (f"\n\n[검토 피드백] 사람이 앞선 정리를 보고 남긴 말이다. 반영해서 정리하라.\n{inp['feedback']}"
+               if inp.get("feedback") else "")
             + (f"\n\n[다시 확인] 앞선 정리에서 아래 문제가 보였다. 고쳐서 다시 정리하라.\n{extra}" if extra else ""))
 
 
@@ -727,7 +770,7 @@ tr.done td{background:color-mix(in srgb,var(--panel) 92%,var(--accent))}
 .add select,.add button,.btn{padding:4px 10px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:inherit;font:inherit;cursor:pointer}
 .filtered{font-size:12.5px;color:var(--muted)}.filtered b{color:var(--ink)}
 .pos{border-top:1px dashed var(--line);margin-top:8px;padding-top:6px}.pos:first-of-type{border-top:0;margin-top:2px}
-.posh{font-weight:700;font-size:13.5px;margin-bottom:2px}.tnonit{background:#8a8a85}
+.posh{font-weight:700;font-size:13.5px;margin-bottom:2px}.tnonit{background:#8a8a85}.tjob{background:#3b6e8f}
 tr.poshead td{background:var(--sel);font-weight:700;font-size:13px}
 .roleinfo{margin:6px 0 10px;padding:6px 10px;background:var(--panel);border:1px solid var(--line);border-radius:6px;font-size:13px}
 .blt{display:grid;grid-template-columns:repeat(var(--n),minmax(260px,1fr));gap:10px}
@@ -779,7 +822,7 @@ function bulletsHTML(r, model){
   // 모집 단위(신입/경력, 역할별)마다 한 덩어리
   return "<div class='bcol'><b>" + esc(model.replace("gpt-5.6-", "")) + "</b>" + (r.positions || []).map((pos, i) =>
       "<div class='pos'><div class='posh'>모집 단위 " + (i + 1) + ": " + esc(pos.name) + " <span class='small'>· " + esc(pos.career) + (pos.years ? " " + esc(pos.years) : "") + "</span>" +
-      (pos.it_job === false ? " <span class='tag tnonit'>비IT</span>" : "") + (pos.it_flag ? " <span class='warn' title='" + esc(pos.it_flag) + "'>⚠ IT 확인</span>" : "") + "</div>" +
+      (pos.job ? " <span class='tag " + (pos.job === "그 외" ? "tnonit" : "tjob") + "'>" + esc(pos.job) + "</span>" : pos.it_job === false ? " <span class='tag tnonit'>비IT</span>" : "") + (pos.it_flag ? " <span class='warn' title='" + esc(pos.it_flag) + "'>⚠ IT 확인</span>" : "") + "</div>" +
       sec(pos, "required", "필수", "req") + sec(pos, "preferred", "우대", "pref") + sec(pos, "duties", "업무", "duty") + sec(pos, "other", "기타", "oth") + "</div>").join("") + "</div>";
 }
 const posLabel = pos => pos.name + " · " + pos.career + (pos.years ? " " + pos.years : "");

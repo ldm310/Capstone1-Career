@@ -33,7 +33,7 @@ def main():
                                  'seconds': round((dt.datetime.now(dt.timezone.utc)-started).total_seconds(), 3)})
         return value
 
-    get('/api/health')
+    get('/api/system/status')
     listing = get('/api/postings?size=1')
     if listing:
         report['posting_count'] = listing.get('totalElements')

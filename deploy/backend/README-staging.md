@@ -17,7 +17,7 @@ develop CD는 웹(3001)과 별도 Spring 서비스 `career-backend-staging`을 �
 1. GitHub 호스팅 Ubuntu 22.04 x64에서 Java 21 JAR와 독립 Java 런타임을 묶는다. EC2의 기존 Java·Docker 설치를 변경하지 않는다.
 2. 기존 `career-ec2` 러너가 배포물을 받아 develop 전용 서비스를 기동한다. main 실행은 스크립트 자체에서도 거부한다. 서비스 포트가 다른 용도로 사용 중이면 중단한다.
 3. `docker,rds,staging-readonly` 프로필을 적용한다. Hibernate DDL·SQL 초기화를 끄고 JDBC 연결을 읽기 전용으로 둔다. 스테이징 전용 HTTP 필터는 POST/PUT/PATCH/DELETE를 컨트롤러 전에 405로 거부한다. 일반 프로필의 기존 API는 유지한다.
-4. `/api/health`뿐 아니라 실제 `/api/postings`의 공고 존재와 카테고리 10개 응답을 확인한다. 실패하면 이전 스테이징 백엔드 판·서비스·기존 설정으로 되돌린다.
+4. `/api/system/status`뿐 아니라 실제 `/api/postings`의 공고 존재와 카테고리 10개 응답을 확인한다. 실패하면 이전 스테이징 백엔드 판·서비스·기존 설정으로 되돌린다.
 5. 웹의 연결 주소를 설정하고 웹을 배포·재시작한다. 같은 커밋으로 재실행해도 빌드는 재사용하고 환경설정을 다시 읽는다.
 6. 웹의 `/api/skill-categories`와 `/api/jobs`에서 `be:` 공고가 실제 전달되는지 확인한다. 더미만 6개인 응답을 배포 성공으로 처리하지 않는다.
 

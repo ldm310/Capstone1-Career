@@ -13,7 +13,8 @@ public record PostingSummaryResponse(
         String employmentType,
         String kind,
         String status,
-        LocalDate deadline
+        LocalDate deadline,
+        java.util.List<String> skillCategories
 ) {
 
     public static PostingSummaryResponse from(Posting posting) {
@@ -26,7 +27,8 @@ public record PostingSummaryResponse(
                 posting.getEmploymentType(),
                 posting.getKind(),
                 posting.getStatus(),
-                posting.getDeadline()
+                posting.getDeadline(),
+                posting.getSkillCategories()
         );
     }
 }

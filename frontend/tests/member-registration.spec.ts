@@ -41,15 +41,16 @@ test("registration persists optional fields and credentials in RDS", async ({
       page.getByText("처음 이용하면 카카오 계정으로 가입됩니다."),
     ).toHaveCount(0);
     await expect(
-      page.getByText("이메일 또는 카카오 계정으로 가입할 수 있습니다."),
+      page.getByText("이메일, 카카오 또는 네이버 계정으로 가입할 수 있습니다."),
     ).toHaveCount(0);
     await page.getByRole("button", { name: "회원가입", exact: true }).click();
     await expect(
-      page.getByText("이메일 또는 카카오 계정으로 가입할 수 있습니다."),
+      page.getByText("이메일, 카카오 또는 네이버 계정으로 가입할 수 있습니다."),
     ).toBeVisible();
     await page.getByLabel("이름", { exact: true }).fill("가입 검증");
     await page.getByLabel("이메일", { exact: true }).fill(email);
     await page.getByLabel("비밀번호", { exact: true }).fill(password);
+    await page.getByLabel("비밀번호 확인", { exact: true }).fill(password);
     await page.getByLabel("나이 (선택)", { exact: true }).fill("24");
     await page.getByLabel("학교 (선택)", { exact: true }).fill("검증대학교");
     await page.getByLabel("학과 (선택)", { exact: true }).fill("컴퓨터공학과");

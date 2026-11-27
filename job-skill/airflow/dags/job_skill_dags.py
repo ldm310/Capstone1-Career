@@ -1,7 +1,7 @@
 """
 채용공고 역량 추출 DAG 2개 (사람인 백엔드·데이터 엔지니어, 경력 필터 신입·3년 이하·경력무관).
 
-  ③ backfill_once  수동 1회   — 진행 중인 대상 공고 전부를 수집해 DB 저장까지
+  ③ backfill_once  수동 1회   — 진행 중인 대상 공고 전부를 수집해 DB 저장·카테고리 붙이기까지
   ① daily_collect  매일 00:00 — 목록 전체를 보고 새 공고(+ 밀린 공고) 수집, '수정'된 공고는 본문 지문 비교로 바뀐 것만 다시 추출,
                                 목록에서 사라진 공고는 전체 페이지의 '접수마감'으로 마감, 마감일 반영
 (예전 ② 수정 확인은 ① 에 합침 — 사람인이 '수정' 표시를 약 24시간만 보여 줘서 매일 봐야 함, 사용자 결정)
@@ -43,7 +43,8 @@ def _run_dir() -> str:
 
 
 def _process(limit: float, daily: bool):
-    """공고 원본 수집 → [이미지 처리: 이미지 OCR → 불필요 단락 제거] → LLM 추출 → DB 저장. 글 공고는 원본 수집에서 바로 추출로."""
+    """공고 원본 수집 → [이미지 처리: 이미지 OCR → 불필요 단락 제거] → LLM 추출 → DB 저장 → 카테고리 붙이기.
+    글 공고는 원본 수집에서 바로 추출로."""
 
     @task(task_display_name="공고 원본 수집", pool=SARAMIN)
     def fetch_raw():
@@ -70,13 +71,19 @@ def _process(limit: float, daily: bool):
     def load_db():
         return pt.step_load(_run_dir())
 
+    @task(task_display_name="카테고리 붙이기", pool=LLM)   # LLM 결과 파일에 한 번에 한 태스크만 쓰게
+    def categorize():
+        return pt.step_categories()
+
     raw = fetch_raw()
     extract = extract_llm()
     raw >> image_processing() >> extract
     raw >> extract
     load = load_db()
     extract >> load
-    return raw, load
+    cat = categorize()
+    load >> cat
+    return raw, cat
 
 
 def _today_cost() -> float:
@@ -95,11 +102,13 @@ def backfill_once():
     @task(task_display_name="결과 알림")
     def notify_result():
         """Slack 알림은 이것 한 통(넘어간 공고·비용 상한도 여기에). 태스크가 실패하면 그 태스크의 실패 알림이 따로 온다."""
-        notify.send(pt.backfill_report(_run_dir(), _ctx()["ti"].xcom_pull(task_ids="collect_list") or {}))
+        ti = _ctx()["ti"]
+        notify.send(pt.backfill_report(_run_dir(), ti.xcom_pull(task_ids="collect_list") or {},
+                                       ti.xcom_pull(task_ids="categorize")))
 
-    raw, load = _process(pt.BACKFILL_LIMIT, daily=False)
+    raw, cat = _process(pt.BACKFILL_LIMIT, daily=False)
     collect_list() >> raw
-    load >> notify_result()
+    cat >> notify_result()
 
 
 @dag(dag_id="daily_collect", dag_display_name="① 매일 수집", schedule="0 0 * * *", start_date=START,
@@ -122,15 +131,15 @@ def daily_collect():
         """Slack 알림은 이것 한 통(넘어간 공고·비용 상한도 여기에). 태스크가 실패하면 그 태스크의 실패 알림이 따로 온다."""
         ti = _ctx()["ti"]
         notify.send(pt.daily_report(_run_dir(), ti.xcom_pull(task_ids="collect_list") or {},
-                                    ti.xcom_pull(task_ids="detect_changes") or {},
-                                    ti.xcom_pull(task_ids="close_postings") or 0, _today_cost()))
+                                    ti.xcom_pull(task_ids="detect_changes") or {}, _today_cost(),
+                                    ti.xcom_pull(task_ids="categorize")))
 
     collect, detect = collect_list(), detect_changes()
     close = close_postings()
-    raw, load = _process(pt.DAILY_LIMIT, daily=True)
+    raw, cat = _process(pt.DAILY_LIMIT, daily=True)
     collect >> detect >> [close, raw]
     collect >> raw   # 새·밀린 공고는 목록 수집에서 바로 원본 수집으로(그림에 보이게; 원본 수집은 변경 감지가 끝난 뒤 시작)
-    [load, close] >> notify_result()
+    [cat, close] >> notify_result()
 
 
 backfill_once()

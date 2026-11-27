@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { cookies } from "next/headers";
 import { kakaoConfig } from "@/lib/server/kakao";
+import { loginDestination } from "@/lib/login-destination";
 export const runtime = "nodejs";
 export async function GET(request: Request) {
   let config;
@@ -14,6 +15,17 @@ export async function GET(request: Request) {
     );
   const state = randomBytes(32).toString("hex"),
     jar = await cookies();
+  jar.set(
+    "career_login_next",
+    loginDestination(new URL(request.url).searchParams.get("next")),
+    {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: 600,
+    },
+  );
   jar.set("career_kakao_state", state, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
