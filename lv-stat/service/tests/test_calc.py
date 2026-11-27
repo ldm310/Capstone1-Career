@@ -37,6 +37,14 @@ import calc
 print(json.dumps(calc.calc_person(sys.argv[2]), ensure_ascii=False))
 """
 
+# argv[2] = 수 목록의 목록 → 목록마다 r1(mean_known(목록))을 찍는다.
+PROBE_MEAN = """
+import json, sys
+sys.path.insert(0, sys.argv[1])
+import calc
+print(json.dumps([calc.r1(calc.mean_known(xs)) for xs in json.loads(sys.argv[2])]))
+"""
+
 # argv[2] = {"FIXED": {키: [값...]}, "SPEC": {...}} → 같은 모양으로 단계를 찍는다.
 PROBE_STAGES = """
 import json, sys
@@ -122,6 +130,13 @@ class CalcTest(unittest.TestCase):
         with open(os.path.join(self.out, name), encoding="utf-8") as f:
             return json.load(f)
 
+    def person(self):
+        """s2_final이 읽는 색인의 사람 파일(index/<pid>/person.json, 레포 없음)."""
+        idx = os.path.join(self.home, "index", PID)
+        os.makedirs(idx, exist_ok=True)
+        with open(os.path.join(idx, "person.json"), "w", encoding="utf-8") as f:
+            json.dump({"pid": PID, "login": "tester", "role": None, "level": None, "repo_keys": [], "index_s": 0}, f)
+
     def final(self, key, variables, **extra):
         """마무리된 카테고리 파일(out/<pid>/final-<key>.json)을 쓴다."""
         data = {"category": key, "pid": PID, "variables": variables, "s5_targets": []}
@@ -156,12 +171,31 @@ class CalcTest(unittest.TestCase):
         self.assertEqual(json.loads(out), want)
 
     def test_mean_rounds_half_up(self):
-        # (로그인 2.5 + WAS 2 + API 2 + 로그 2 + DB 깊이 3 + 운영 배포 2.0) / 6 = 2.25 → ROUND_HALF_UP 2.3
-        # (짝수 쪽 반올림이면 2.2). 운영 배포 = (배포 레포 2 → 2단계 + 배포 기간 7일 → 2단계) / 2 = 2.0
-        self.backend(gate=1, login=2.5, was=2.0, api=2.0, log=2.0)
-        self.final("db", {"database.depth": rec(3)})
-        self.final("deploy", {"deploy.repos": rec(2), "deploy.period": rec(7)})
-        self.assertEqual(self.calc()["B"]["lv"], 2.3)
+        # 백엔드 = (로그인 + WAS + API + 로그 + DB 깊이 + 운영 배포) / 6, 소수 첫째 자리 ROUND_HALF_UP.
+        # 정확한 평균이 x.x5면 올린다. 소수 성분을 2진수 float로 더하면 x.x5 바로 아래가 되어 내려가는 일이 있다.
+        cases = [
+            # (2.5 + 2 + 2 + 2 + 3 + 2.0) / 6 = 2.25 → 2.3(짝수 쪽 반올림이면 2.2).
+            # 운영 배포 = (배포 레포 2 → 2단계 + 배포 기간 7일 → 2단계) / 2 = 2.0
+            ("2.25 → 2.3", (2.5, 2.0, 2.0, 2.0), 3, 2, 2.3),
+            # (1.0 + 1.0 + 3.2 + 1.4 + 0 + 1.5) / 6 = 8.1 / 6 = 1.35 → 1.4(float로 더하면 1.3499… → 1.3).
+            # 운영 배포 = (배포 레포 1 → 1단계 + 배포 기간 7일 → 2단계) / 2 = 1.5
+            ("1.35 → 1.4", (1.0, 1.0, 3.2, 1.4), 0, 1, 1.4),
+            # (0.3 + 3.0 + 2.3 + 3.6 + 4 + 1.5) / 6 = 14.7 / 6 = 2.45 → 2.5(float로 더하면 2.4499… → 2.4)
+            ("2.45 → 2.5", (0.3, 3.0, 2.3, 3.6), 4, 1, 2.5),
+        ]
+        for label, (login, was, api, log), depth, repos, want in cases:
+            with self.subTest(label):
+                self.backend(gate=1, login=login, was=was, api=api, log=log)
+                self.final("db", {"database.depth": rec(depth)})
+                self.final("deploy", {"deploy.repos": rec(repos), "deploy.period": rec(7)})
+                self.assertEqual(self.calc()["B"]["lv"], want)
+
+    def test_r1_of_mean_known_is_exact_decimal(self):
+        # 내보내는 함수 r1(mean_known(xs))도 10진수로 정확히 센다(float로 더하면 1.3·2.4).
+        # None은 평균에서 뺀다((1 + 2) / 2 = 1.5, None을 0으로 넣으면 1.0).
+        cases = [[1.0, 1.0, 3.2, 1.4, 0, 1.5], [0.3, 3.0, 2.3, 3.6, 4, 1.5], [None, 1, 2]]
+        out, _ = self.run_py(["-c", PROBE_MEAN, CODE, json.dumps(cases)])
+        self.assertEqual(json.loads(out), [1.4, 2.5, 1.5])
 
     # ---------------- 프로그래밍 활용
     def test_spec_example_programming_33(self):
@@ -305,10 +339,7 @@ class CalcTest(unittest.TestCase):
         # - 진짜 cat_ai: 연동의 대상은 no_trace 하나뿐이라 빠지면 연동은 0(안 씀) 그대로(남기면 대기 → 값 없음).
         #   기능의 흔적 있는 대상은 답이 없어 대기 → 값 없음(모름).
         # - 고장 난 가짜 cat_backend_a: 오류(finalize_error)를 남기고, 그 뒤 카테고리(prog)도 마무리한다.
-        idx = os.path.join(self.home, "index", PID)
-        os.makedirs(idx)
-        with open(os.path.join(idx, "person.json"), "w", encoding="utf-8") as f:
-            json.dump({"pid": PID, "login": "tester", "role": None, "level": None, "repo_keys": [], "index_s": 0}, f)
+        self.person()
         self.write("vars-ai.json", {
             "category": "ai", "pid": PID, "definition_choices": [], "stats": {},
             "variables": {
@@ -352,6 +383,37 @@ class CalcTest(unittest.TestCase):
         prog = self.read("final-prog.json")  # 고장 난 모듈 뒤에도 계속했다
         self.assertEqual(prog["s5_applied"], 0)
         self.assertEqual(prog["s5_policy"]["pending"], 0)
+
+    def test_final_drops_no_trace_rebuilt_by_module(self):
+        # 진짜 cat_backend_a.finalize는 받은 대상 목록을 쓰지 않고 stats.raw로 새로 만든다. 그때 흔적 없는 0(zero_unused)
+        # 항목에 no_trace 대상을 다시 붙인다(_meta.top_files가 있는 레포). 마무리 파일에는 흔적 있는 대상만 남고,
+        # 그 모듈의 대기 수(stats.s5_waiting)·complete도 남은 목록에 맞아야 한다(다른 모듈은 뺀 목록으로 센다).
+        self.person()
+        top = {"_meta": {"top_files": [["app/main.py", 1, 200]]}}
+        sec1_flow = {"state": "value_rule", "score": 0,   # 가입·로그인 흐름이 끊김 → 흔적 있는 대상(sec1_flow)
+                     "s5": [{"template": "sec1_flow", "files": [["app/auth.py", 1, 40]], "rule_result": {"rule": "합성"}}]}
+        sec3_zero = {"state": "zero_unused", "score": 0}  # 역할 검사 흔적 없음 → no_trace 대상(sec3_role)
+        no_trace = target("P01.backend.login.SEC3.1", "backend.login.SEC3", "sec3_role", "no_trace", 9)
+        has_trace = target("P01.backend.login.SEC1.2", "backend.login.SEC1", "sec1_flow", "has_trace", 4)
+        cases = [
+            # (이름, 레포 raw, 추출기 대상, 남을 대상, (안 보낸 no_trace, 대기), complete)
+            ("흔적 있는 대상 1 + 흔적 없는 0 1", dict(top, SEC1=sec1_flow, SEC3=sec3_zero), [has_trace, no_trace],
+             [("backend.login.SEC1", "has_trace")], (1, 1), False),
+            ("흔적 없는 0뿐", dict(top, SEC3=sec3_zero), [no_trace], [], (1, 0), True),
+        ]
+        for label, raw_repo, targets, want, (not_sent, pending), complete in cases:
+            with self.subTest(label):
+                self.write("vars-backend_a.json", {
+                    "category": "backend_a", "pid": PID, "definition_choices": [],
+                    "variables": {"backend.gate": rec(0, "zero_unused", unit="레포")},
+                    "stats": {"raw": {REPO: raw_repo}, "gate_targets": []},
+                    "s5_targets": targets})
+                self.run_py([os.path.join(CODE, "s2_final.py"), PID])
+                fin = self.read("final-backend_a.json")
+                self.assertNotIn("finalize_error", fin)
+                self.assertEqual([(t["var"], t["trace"]) for t in fin["s5_targets"]], want)
+                self.assertEqual((fin["s5_policy"]["no_trace_not_sent"], fin["s5_policy"]["pending"]), (not_sent, pending))
+                self.assertEqual((fin["stats"]["s5_waiting"], fin["stats"]["complete"]), (pending, complete))
 
 
 if __name__ == "__main__":

@@ -2,7 +2,8 @@
 2단계 S6 계산(고정 사다리판 s2_calc)을 스테이징 서비스로 옮김(2026-11-27).
 
 - 단계 시작값은 2026-11-26 사용자가 확정한 고정 사다리(FIXED), AI 기술은 「문서」 lv-calc 값(SPEC).
-- 「문서」 lv-calc 공통 규칙 1·4: 시작값 이상이면 그 단계(0~5). 단계 평균은 소수 첫째 자리 ROUND_HALF_UP.
+- 「문서」 lv-calc 공통 규칙 1·4: 시작값 이상이면 그 단계(0~5). 단계 평균은 소수 첫째 자리 ROUND_HALF_UP
+  (평균은 10진수로 정확히 센다: 백엔드 성분은 소수 한 자리라 float로 더하면 x.x5가 내려가는 일이 있다).
   모름(None)은 평균에서 빼고, 모두 모름이면 null(판정 불가). unknown = 그 카테고리에서 단계가 None인 수.
 - 변수 값은 variables[vid]의 value다. 모듈이 상태를 비운 채 값을 두었으면 규칙 값으로 쓴다.
 - 데이터베이스 깊이는 근거 1곳이면 그 단계다(사용자 결정 2026-11-26): database.depth 값을 그대로 단계로 쓴다.
@@ -46,16 +47,22 @@ def stage(v, starts):
     return s
 
 
+def dec(x):
+    """수 → 10진수. float는 짧은 표기(str) 그대로 읽는다(3.2 → Decimal('3.2'))."""
+    return x if isinstance(x, decimal.Decimal) else decimal.Decimal(str(x))
+
+
 def r1(x):
-    """소수 첫째 자리 ROUND_HALF_UP(2.25 → 2.3). None은 None."""
+    """소수 첫째 자리 ROUND_HALF_UP(2.25 → 2.3, 1.35 → 1.4). None은 None."""
     if x is None:
         return None
-    return float(decimal.Decimal(str(x)).quantize(decimal.Decimal('0.1'), rounding=decimal.ROUND_HALF_UP))
+    return float(dec(x).quantize(decimal.Decimal('0.1'), rounding=decimal.ROUND_HALF_UP))
 
 
 def mean_known(xs):
-    """None을 뺀 평균. 모두 None이면 None."""
-    k = [x for x in xs if x is not None]
+    """None을 뺀 평균(Decimal). 10진수로 더하고 나눠 정확한 x.x5가 r1에서 올라간다
+    (8.1 / 6 = 1.35 → 1.4. float로 더하면 1.3499… → 1.3). 모두 None이면 None."""
+    k = [dec(x) for x in xs if x is not None]
     return sum(k) / len(k) if k else None
 
 

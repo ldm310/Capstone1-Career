@@ -6,7 +6,8 @@ usage: python3 -I s2_final.py P01 [P02 ...]  → out/<pid>/final-<cat>.json (var
 - 모듈마다 finalize(person, data, {})를 부른다(답 없음). 흔적 있는 대상은 답이 없으니 모듈이 '대기'로 둔다.
   모듈이 그 변수 값을 비우면 계산에서 모름이 되고, 규칙 값을 남기면 그 값을 쓴다(모듈마다 다름).
 - 흔적 없는 0(trace == 'no_trace') 대상은 LLM에 보내지 않으므로(사용자 결정 2026-11-26) 목록에서 뺀다.
-  그래야 모듈이 대기로 두지 않고 0(안 씀)으로 남긴다.
+  그래야 모듈이 대기로 두지 않고 0(안 씀)으로 남긴다. 목록을 새로 만드는 모듈(cat_backend_a)이 되살린
+  no_trace 대상은 마무리 뒤에 다시 뺀다(drop_no_trace). 마무리 파일에는 흔적 있는 대상만 남는다.
 - 모듈이 실패하면 규칙 값(vars) 그대로에 finalize_error를 붙여 쓰고 다음 카테고리로 간다.
 - 결과마다 s5_policy(LLM 보충 끔, 뺀 no_trace 대상 수, 대기로 남은 대상 수)를 남긴다.
 """
@@ -34,6 +35,23 @@ def load_vars(pid):
     return res
 
 
+def drop_no_trace(fin):
+    """모듈 결과에서 no_trace 대상을 다시 뺀다.
+    cat_backend_a.finalize는 받은 목록을 쓰지 않고 stats.raw로 대상을 새로 만들며 no_trace 대상을 되살린다
+    (그 대상은 항목과 이어지지 않아 값은 바뀌지 않는다). 그 모듈은 답 없는 대상을 모두 대기로 세므로
+    stats.s5_waiting·complete도 뺀 만큼 맞춘다. 받은 목록으로 세는 다른 모듈은 뺄 것이 없다."""
+    ts = fin.get('s5_targets') or []
+    keep = [t for t in ts if t.get('trace') != 'no_trace']
+    gone = len(ts) - len(keep)
+    if gone:
+        fin['s5_targets'] = keep
+        st = fin.get('stats')
+        if isinstance(st, dict) and isinstance(st.get('s5_waiting'), int):
+            st['s5_waiting'] = max(0, st['s5_waiting'] - gone)
+            if 'complete' in st:
+                st['complete'] = st['s5_waiting'] == 0
+
+
 def final(pid):
     """카테고리마다 final-<cat>.json을 쓴다. -> 마무리하지 못한(finalize_error) 카테고리 목록"""
     person = L.load_person(pid)
@@ -47,6 +65,7 @@ def final(pid):
             mod = importlib.import_module(MODULE_OF[key])
             # 사본을 넘긴다: 모듈이 고치다가 실패해도 data는 규칙 값 그대로 남는다
             fin = mod.finalize(person, json.loads(json.dumps(data)), {})
+            drop_no_trace(fin)
             fin['s5_policy'] = policy
             text = json.dumps(fin, ensure_ascii=False, indent=1)
         except Exception as e:      # 모듈 하나가 실패해도 나머지 카테고리는 마무리한다
