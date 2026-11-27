@@ -13,7 +13,7 @@
 ## Global Constraints
 
 - 시험 먼저(superpowers:test-driven-development): 실패하는 시험을 쓰고, 실패를 확인하고, 그다음에 코드를 쓴다.
-- 분석 규칙은 `lv-stat/service/s2/`의 2단계 코드(cat_*·backend_gate·s2lib·s2_index 사본)를 그대로 쓴다. 고치는 곳은 Task 2에 적은 것뿐이다. 화면 표시 '2단계 규칙'.
+- 분석 규칙은 `lv-stat/service/s2/`의 2단계 코드(cat_*·backend_gate·s2lib·s2_index 사본)를 그대로 쓴다. 고치는 곳은 Task 2·2b에 적은 것뿐이다. 화면 표시 '2단계 규칙'.
 - LLM 보충 끔. 확인 못 한 항목은 '모름 n개'.
 - 임계치(1~5단계 시작값): 커밋 1/7/30/180/365 · 바꾼 줄 1/200/1000/5000/25000 · 기간(일) 1/7/30/150/300 · 배포 레포 1/2/3/5/8 · 배포 기간 1/7/50/150/250 · DAG 1/2/5/10/20 · 데이터 엔지니어 기간 1/7/30/100/250 · 설계 테이블 1/3/8/20/50 · DB 기간 1/7/30/120/250 · API 연동 1/3/10/30/100 · 데이터 송수신 1/3/10/30/100 · 이벤트 1/10/30/100/300. AI: 연동 1/2/4/8/15 · 기능 1/2/3/5/8 · 기법 LLM 1/2/3/5/7 · 기법 ML 1/2/3/4/6(따로 단계로 바꿔 높은 쪽).
 - 단계 평균은 소수 첫째 자리 ROUND_HALF_UP, 모름(None)은 평균에서 뺀다. DB 깊이는 근거 1곳이면 그 단계. 가점 없음.
@@ -78,6 +78,40 @@
 - [ ] **Step 4:** PASS(3.10 포함)
 - [ ] **Step 5:** commit `feat(lv-stat): 2단계 코드를 작업 폴더·토큰 규칙에 맞춤`
 
+### Task 2b: 큰 레포 부분 받기와 Linguist 자료(추가, 2026-11-28)
+
+Task 2 검토에서 나온 두 가지를 고친다. ① Linguist 자료(`lv-stat/service/s2/data/linguist/`)가 `lv-stat/.gitignore`의 `data/`에 걸려 git에 없다. 그래서 CI와 배포된 작업자에서는 모든 색인이 실패한다. ② Task 2의 `lv-allow-lazy` 표시는 그 레포의 모든 git 호출에 lazy fetch를 켠다. 그래서 큰 레포를 색인하면 모든 작성자의 내용을 커밋마다 받으러 간다. 사용자 결정(2026-11-26: 400MB 넘는 레포는 빼지 않고 blob:none으로 받은 뒤 내 커밋이 바꾼 파일만 받는다)과 설계 7.2(내 커밋이 바꾼 경로의 blob, 분석 끝의 판과 그 경로의 이력만)에 맞춘다.
+
+**Files:**
+- Modify: `lv-stat/.gitignore`(`data/` 바로 다음 줄에 `!service/s2/data/`), `lv-stat/service/s2/s2lib.py`(표시), `lv-stat/service/s2/s2_index.py`(표시한 레포)
+- git에 더함(내용은 그대로): `lv-stat/service/s2/data/linguist/`의 파일 5개(languages.yml·vendor.yml·documentation.yml·LICENSE·README.md)
+- Test: `lv-stat/service/tests/test_s2_partial.py`(새 파일), `lv-stat/service/tests/test_s2_port.py`(`test_lazy_marker_per_repo`를 아래 `test_marker_never_enables_lazy`로 바꿈)
+
+**Interfaces:**
+- Produces (s2lib): `PARTIAL_MARK = 'lv-partial'`(`LAZY_MARK`를 대신함), `is_partial(d) -> bool`(`<d>/.git/lv-partial`이 있으면 참). `git()`은 표시와 관계없이 늘 `GENV`(`GIT_NO_LAZY_FETCH=1`)를 쓴다. git()이 lazy fetch를 켜는 길은 없다.
+- Produces (s2_index), 표시한 레포에서만(표시 없는 레포는 지금 동작 그대로):
+  - `prefetch_mine(d, refs, own, login) -> dict`: `{"paths": [...정렬], "blobs": n, "fetched": bool}`.
+    1. `git log --no-merges --raw --no-abbrev -M --format=%x1e%H%x1f%ae <refs>` 한 번(트리만 읽고 내용은 읽지 않음). 내 커밋 = `sha in own` 또는 commits_of와 같은 noreply 정규식.
+    2. 내 경로 = 내 커밋이 바꾼 경로(이름 바꿈은 양쪽 다). 그다음, 어느 작성자의 이름 바꿈이든 새 경로가 내 경로면 옛 경로를 더한다. 더 늘지 않을 때까지 한다(blame이 이름 바꾸기 전 판까지 따라가므로).
+    3. 모든 커밋에서 경로(이름 바꿈은 어느 쪽이든)가 내 경로인 항목의 옛·새 blob id를 모은다(0만 있는 id와 중복은 뺌).
+    4. 한 번에 받는다: `git -c fetch.negotiationAlgorithm=noop -c maintenance.auto=false -c gc.auto=0 fetch origin --no-tags --no-write-fetch-head --recurse-submodules=no --filter=blob:none --stdin`(표준 입력에 id 한 줄씩, 환경 GENV, timeout 900). 받을 id가 없으면 부르지 않는다(fetched 참). 실패하면 `fetched: false`로 두고 계속한다.
+  - `commits_of`(표시한 레포): 커밋 정보는 `git log --no-merges --format=<지금과 같은 형식> <refs>`(diff 없이)로 모든 커밋을 받는다. 파일 항목은 `git --literal-pathspecs log --no-merges --numstat --format=%x1e%H <refs> --stdin`에 표준 입력 `--` 줄과 내 경로(한 줄에 하나)를 줘서 내 경로만 받는다. 내 경로를 건드리지 않은 커밋은 `files == []`다. 이 numstat이 실패하면 모든 커밋의 files를 []로 두고 `partial.numstat_ok = false`. `git_lazy`는 부르지 않는다. PR 번호 찾기는 지금과 같다.
+  - `ensure_ref`(표시한 레포): 받기 필터를 `--filter=blob:none`으로 쓴다.
+  - 색인 레코드에 `partial: {paths, blobs, fetched, numstat_ok}`를 더한다(표시 없는 레포에는 이 칸이 없음).
+- Consumed by Task 4: 400MB 넘는 레포의 clone은 `--filter=blob:none`으로 받은 뒤 `.git/lv-partial`을 만든다.
+
+- [ ] **Step 1: 실패하는 시험** — 합성 원격(`uploadpack.allowFilter=true`, `uploadpack.allowAnySHA1InWant=true`)을 `file://`로 `--filter=blob:none --no-checkout` clone하고 `.git/lv-partial`을 만든다(시험 준비에서 clone이 정말 부분 clone인지, 즉 남의 blob이 없는지 먼저 확인). 내 커밋은 noreply 이메일, `LV_GITHUB_OFFLINE=1`. 원격에는 내가 두 번 고친 `a.py`, 남이 만들고 남만 고친 `b.py`(판 3개)·`c.txt`, 남이 만든 `x.py`를 남이 `y.py`로 이름 바꾸고 그 뒤 내가 고친 경로를 둔다.
+  - `test_partial_fetches_only_my_paths`: 색인 뒤 `a.py`·`x.py`·`y.py`의 모든 판 blob은 있고, `b.py`·`c.txt`의 blob은 없다(`GIT_NO_LAZY_FETCH=1 git cat-file -e`). `partial.paths == ['a.py', 'x.py', 'y.py']`, `fetched` 참.
+  - `test_partial_numstat_mine_exact`: 내 커밋의 add/dele가 합성 내용대로이고, `b.py`·`c.txt`만 건드린 남의 커밋은 `files == []`, 모든 커밋(남의 것 포함)이 commits에 있다.
+  - `test_partial_blame_my_lines`: `a.py`의 `my_lines`가 합성 내용대로.
+  - `test_partial_one_fetch_no_lazy`: `GIT_TRACE2_EVENT`로 모은 git 실행 중 `cmd_name`이 fetch인 것은 1번뿐이다(lazy fetch 없음).
+  - `test_partial_fetch_failure_continues`: clone 뒤 원격 폴더를 지우면 색인 파일과 `person.json`이 생기고 `partial.fetched` 거짓, 모든 커밋 정보는 있음.
+  - `test_marker_never_enables_lazy`: 표시가 있는 레포도 git()이 받은 환경에 `GIT_NO_LAZY_FETCH=1`이 있고, `is_partial`은 표시한 레포에서만 참.
+- [ ] **Step 2:** 실행 → FAIL
+- [ ] **Step 3:** 구현. `.gitignore`를 고치고 Linguist 파일 5개를 git에 더한다(내용은 바꾸지 않음). 표시 없는 레포의 동작과 2단계 추출 규칙은 바꾸지 않는다. 두 파일의 머리 설명(lazy 설명)을 새 규칙에 맞춘다.
+- [ ] **Step 4:** PASS(3.10 포함). 그다음 `git archive HEAD lv-stat/service`를 scratch에 풀어 거기서 같은 시험을 3.10으로 돌려 PASS(자료가 git에 들어갔는지 확인).
+- [ ] **Step 5:** commit `fix(lv-stat): 큰 레포는 내 경로만 받고 Linguist 자료를 git에 넣음`
+
 ### Task 3: LLM 없는 마무리와 계산
 
 **Files:**
@@ -112,7 +146,10 @@
 - Produces: `METHOD = 'lv-stat-s2-20261127'`, `LABELS = ['2단계 규칙', 'LLM 보충 끔', '제안 기준', '본인 확인 안 됨']`, `EXTRACTORS = ['cat_prog_deploy', 'cat_backend_a', 'cat_backend_b', 'cat_db', 'cat_de', 'cat_fe', 'cat_ai']`, `class UserError(RuntimeError)`, `now_iso() -> str`, `discover(login, notes) -> (str, list[dict])`, `clone(full_name, dest, big, timeout) -> bool`, `run_step(script, home, timeout) -> (bool, str)`, `analyze(job, work_root, deadline, progress, clone_fn=clone) -> dict`(프로필, CONTRACT.md). `progress(stage: str, done: int|None, total: int|None)`.
 - discover: `users/{login}`이 없으면 `UserError('GitHub 계정을 찾을 수 없습니다. 주소를 확인해 주세요.')`, `type != 'User'`면 `UserError('개인 GitHub 계정 주소를 넣어 주세요(조직 계정은 분석하지 않습니다).')`. 정식 login은 응답의 `login`. 본인 소유(`users/{login}/repos?type=owner&sort=pushed&per_page=100`, 3쪽)에서 private·fork 뺌(포크 수는 notes에), 커밋 검색(`search/commits?q=author:{login}&sort=committer-date&order=desc&per_page=100`, 3쪽; 한도에 걸리면 notes에 남기고 계속)으로 찾은 남의 공개·포크 아닌 레포는 `repos/{full}`로 정보를 받음. `pushed_at` 최근 순, 40개 넘으면 자르고 notes. 본인 소유 레포는 `commits?author={login}&per_page=1&sha={기본 브랜치}`가 비면 뺌.
 - analyze: 단계 이름 `레포 찾기 → 레포 받기(done/total) → 색인(done/total) → 규칙 적용(done/7) → 계산`. 레포가 없으면 `UserError('공개 레포에서 이 계정의 커밋을 찾지 못했습니다.')`, 하나도 못 받으면 `UserError('레포를 받지 못했습니다. 잠시 뒤 다시 시도해 주세요.')`. 남은 시간이 60초 아래면 더 받지 않고 notes `시간 상한에 닿아 레포 n개는 받지 못함`. 추출기 실패는 notes에 이름을 남기고 계속. 작업 폴더 `<work_root>/<job id>`는 끝나면(실패해도) 지운다. 프로필 `repos = {found, analyzed, failed, notes}`.
-- clone: `git -c core.hooksPath=/dev/null -c protocol.file.allow=never clone --no-checkout --no-tags --quiet --filter=blob:limit=1m`(400MB 넘으면 `--filter=blob:none` + `.git/lv-allow-lazy`), 주소 `https://github.com/{full}.git`, 환경은 `s2lib.GENV`.
+- clone: `git -c core.hooksPath=/dev/null -c protocol.file.allow=never clone --no-checkout --no-tags --quiet --filter=blob:limit=1m`(400MB 넘으면 `--filter=blob:none` + `.git/lv-partial`, Task 2b), 주소 `https://github.com/{full}.git`, 환경은 `s2lib.GENV`.
+- people.json의 `prs`는 본인 소유·포크 아님·400MB 이하 레포만 참이다(2단계 범위). 남의 레포는 PR 목록을 받지 않는다(s2_index가 레포 전체 PR을 끝까지 받기 때문).
+- 색인 결과 읽기: s2_index는 레포마다 실패를 `error`(repr)로 남기고 0으로 끝난다. 그래서 색인 뒤 `<home>/index/<pid>/*.json`을 읽는다. `error`가 `RateLimited(`로 시작하면 그 안의 메시지(`GitHub 호출 한도에 걸렸습니다(N분 뒤 다시 시도)`)로 `UserError`를 낸다. 그 밖의 error가 있는 레포는 `repos.failed`에 세고 notes `레포 n개는 색인하지 못함`을 남긴다. 표시한 레포의 `partial.fetched`가 거짓이면 notes `큰 레포 n개는 파일을 받지 못함`.
+- run_step: 자식 프로세스를 새 세션(`start_new_session=True`)으로 띄우고, 시간을 넘기면 프로세스 묶음 전체를 끝낸다(`os.killpg`). 색인 단계가 시간을 넘기면 색인 파일이 있는 레포만으로 `person.json`(s2_index와 같은 칸: pid, login, role, level, repo_keys, index_s)을 쓰고 notes `시간 상한에 닿아 레포 n개는 색인하지 못함`을 남긴 뒤 계속한다.
 
 - [ ] **Step 1: 실패하는 시험** — 가짜 API(Task 1과 같은 방식) + `clone_fn`은 합성 로컬 레포를 복사하는 함수:
   - `test_discover_filters_and_orders`: 소유 레포 3개(하나 fork, 하나 private), 검색 결과에 남의 레포 1개 + 포크 1개 → 결과 2개, pushed_at 최근 순, notes에 포크 1개.
@@ -121,6 +158,11 @@
   - `test_analyze_end_to_end_synthetic`: 합성 Python 레포 1개 → 프로필 `schema == 'lv-stat-profile/1'`, `labels == LABELS`, categories 키 7개, L languages에 Python, L lv > 0, 모든 lv는 None 또는 0~5, 작업 폴더가 지워짐, progress가 다섯 단계 이름을 차례로 받음.
   - `test_deadline_stops_cloning_with_note`: deadline이 이미 지남 → 받지 않고 `UserError` 또는 notes에 '시간 상한'(레포 0이면 UserError).
   - `test_no_repos_user_error`.
+  - `test_index_rate_limit_fails`: 가짜 API가 커밋 목록에 403 + `X-RateLimit-Remaining: 0` → `UserError`, 메시지가 `GitHub 호출 한도에 걸렸습니다(`로 시작.
+  - `test_index_error_counted_as_failed`: 색인 error가 있는 레포 → `repos.failed == 1`, notes에 `색인하지 못함`.
+  - `test_prs_only_owned_small`: people.json에서 남의 레포·400MB 넘는 레포의 `prs`가 거짓, 본인 소유 작은 레포는 참.
+  - `test_big_repo_uses_partial`: 400MB 넘는 레포(`size > 400*1024`, KB)는 clone 인자에 `--filter=blob:none`이 있고 `.git/lv-partial`이 생긴다.
+  - `test_index_timeout_keeps_indexed`: 색인 단계가 시간을 넘기면 색인된 레포만으로 계산하고 notes에 `시간 상한`.
 - [ ] **Step 2:** FAIL → **Step 3:** 구현 → **Step 4:** PASS(3.10 포함)
 - [ ] **Step 5:** commit `feat(lv-stat): GitHub 계정 하나 분석`
 
@@ -132,7 +174,7 @@
 
 **Interfaces:**
 - Consumes: Task 4 `analyze`, `UserError`, `now_iso`; Task 1 `RateLimited`.
-- Produces: CLI `python3 -I worker.py --data-dir <dir> [--once] [--max-minutes 20] [--poll 5] [--self-check]`(배포 스크립트가 이미 이 모양을 쓴다). 함수 `profile_key(namespace, subject_id) -> str`(sha256 앞 32자), `write_json(path, data)`(같은 폴더 임시 파일 + `os.replace`), `read_json(path)`, `class Dirs(root)`(jobs·profiles·work 만듦), `valid_job(job)`, `list_jobs(dirs)`(파일 이름이 uuid v4 `.json`인 것만), `next_job(dirs)`(queued 중 createdAt 가장 이른 것), `recover(dirs)`(running → failed `작업자가 다시 시작되어 중단됐습니다. 다시 요청해 주세요.`, work 비움), `process(dirs, name, job, max_minutes, analyze_fn=None)`, `self_check(root) -> int`(Python ≥3.10, git, 데이터 폴더 쓰기, Linguist 자료, 모든 .py 문법을 메모리에서 compile; 문제 없으면 `OK` 출력·0). 시작 로그에 토큰 유무만(`token yes/no`). login 규칙 `^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$`.
+- Produces: CLI `python3 -I worker.py --data-dir <dir> [--once] [--max-minutes 20] [--poll 5] [--self-check]`(배포 스크립트가 이미 이 모양을 쓴다). 함수 `profile_key(namespace, subject_id) -> str`(sha256 앞 32자), `write_json(path, data)`(같은 폴더 임시 파일 + `os.replace`), `read_json(path)`, `class Dirs(root)`(jobs·profiles·work 만듦), `valid_job(job)`, `list_jobs(dirs)`(파일 이름이 uuid v4 `.json`인 것만), `next_job(dirs)`(queued 중 createdAt 가장 이른 것), `recover(dirs)`(running → failed `작업자가 다시 시작되어 중단됐습니다. 다시 요청해 주세요.`, work 비움), `process(dirs, name, job, max_minutes, analyze_fn=None)`, `self_check(root) -> int`(Python ≥3.10, git, 데이터 폴더 쓰기, Linguist 자료(languages.yml·vendor.yml·documentation.yml이 있고 비어 있지 않음), 모든 .py 문법을 메모리에서 compile; 문제 없으면 `OK` 출력·0). 시작 로그에 토큰 유무만(`token yes/no`). login 규칙 `^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$`.
 - 상태 전이: queued → running(`stage`, `progress`, `startedAt`) → done(`profileKey`, `finishedAt`) | failed(`error`): UserError·RateLimited는 그 메시지, 그 밖은 `분석 중 오류가 났습니다. 잠시 뒤 다시 시도해 주세요.`(자세한 것은 로그에만).
 
 - [ ] **Step 1: 실패하는 시험** — 가짜 `analyze_fn` 사용:
