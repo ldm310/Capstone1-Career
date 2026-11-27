@@ -2,6 +2,9 @@ export interface SavedPostingLevel {
   keywordId: string;
   text: string;
   categoryCodes: string[];
+  // LV_STAT만 준다: 점수를 낸 카테고리(scoreKeyword의 used). 재지 않는 코드(Q·S·H)와 LV가 없는(판정 불가)
+  // 카테고리는 빠진다. categoryCodes는 화면이 문장과 맞추는 키라 문장 그대로 둔다.
+  usedCodes?: string[];
   score: number;
   referenceScore: number | null;
   referenceKind:

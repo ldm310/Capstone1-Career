@@ -1,6 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { createHash } from "node:crypto";
 import {
+  chmod,
   mkdir,
   mkdtemp,
   readFile,
@@ -18,6 +19,7 @@ import path from "node:path";
 import type * as KeywordsRoute from "@/app/api/jobs/keywords/route";
 import type * as MyLevelsRoute from "@/app/api/jobs/my-levels/route";
 import { detectLanguages, scoreKeyword } from "@/lib/lv-stat/score";
+import type * as DemoAccount from "@/lib/server/demo-account";
 import type * as JobKeywords from "@/lib/server/job-keywords";
 import type * as LvStore from "@/lib/server/lv-stat";
 import type * as ProfileLevels from "@/lib/server/profile-levels";
@@ -1295,6 +1297,7 @@ test.describe("profile levels", () => {
   let profilePostingLevels: typeof ProfileLevels.profilePostingLevels;
   let jobKeywords: typeof JobKeywords.jobKeywords;
   let GET: typeof MyLevelsRoute.GET;
+  let demoAccount: typeof DemoAccount.demoAccount;
   let server: Server;
   let backend: string;
   let loginHook: ReturnType<typeof registerHooks> | undefined;
@@ -1385,6 +1388,10 @@ test.describe("profile levels", () => {
       ]),
     ],
     "/api/postings/9106/skill-categories": [500, posting(briefItems)],
+    "/api/postings/9107/skill-categories": [
+      200,
+      posting([item(31, "Java 기반 합성 서버 개발", ["B", "L"])]),
+    ],
   };
 
   // 합성 분석 결과(CONTRACT 모양): B 2.0, D 3.0, O 1.5, E 0.0, F 판정 불가(null), A 0.0.
@@ -1407,28 +1414,32 @@ test.describe("profile levels", () => {
   }
 
   // 작업자처럼 profiles/<profileKey>.json에 결과를 둔다.
-  async function store(p: LvProfile) {
-    const file = path.join(
+  const profileFile = (p: LvProfile) =>
+    path.join(
       dataDir,
       "lv-stat",
       "profiles",
       `${contractKey(p.namespace, p.subjectId)}.json`,
     );
+  async function store(p: LvProfile) {
+    const file = profileFile(p);
     await mkdir(path.dirname(file), { recursive: true });
     await writeFile(file, JSON.stringify(p));
   }
 
-  // 화면 행 하나. 비교 값 없음, 확정, 분석 시각(profile.analyzedAt)이다.
+  // 화면 행 하나. usedCodes는 점수를 낸 카테고리다. 비교 값 없음, 확정, 분석 시각(profile.analyzedAt)이다.
   const row = (
     keywordId: string,
     text: string,
     categoryCodes: string[],
+    usedCodes: string[],
     score: number,
     evaluatedAt = "2026-11-28T00:00:00+09:00",
   ) => ({
     keywordId,
     text,
     categoryCodes,
+    usedCodes,
     score,
     referenceScore: null,
     referenceKind: null,
@@ -1436,8 +1447,8 @@ test.describe("profile levels", () => {
     evaluatedAt,
   });
   const briefRows = [
-    row("1", "합성 서버 개발 경험", ["B"], 40),
-    row("2", "Java 기반 합성 서비스 개발", ["L"], 50),
+    row("1", "합성 서버 개발 경험", ["B"], ["B"], 40),
+    row("2", "Java 기반 합성 서비스 개발", ["L"], ["L"], 50),
   ];
 
   // my-levels route의 로그인 확인(store.ts의 user·isGuest)은 Next 요청 안에서만 쿠키를 읽는다. 그래서 이 시험에서는
@@ -1474,9 +1485,15 @@ test.describe("profile levels", () => {
   };
 
   // RDS(저장된 LV)를 켜되 연결이 거부되는 곳을 준다. route가 RDS를 읽으면 오류(502)가 나서, 읽었는지 갈린다.
+  // 돌려주는 값은 그 DB 주소(호스트:포트)다. 연결 오류의 글(message)에 들어간다.
   async function savedLevelsDown() {
-    process.env.CAREER_PROFILE_DATABASE_URL = `${(await closedPort()).replace("http://", "postgres://lv-test@")}/lv_test`;
+    const url = `${(await closedPort()).replace("http://", "postgres://lv-test@")}/lv_test`;
+    process.env.CAREER_PROFILE_DATABASE_URL = url;
+    return new URL(url).host;
   }
+  // my-levels route가 남긴 서버 기록. jobKeywords가 남기는 기록은 'job keywords' 시험이 본다.
+  const routeLogs = () =>
+    errors.calls.filter(([message]) => message === "My levels lookup failed");
 
   test.beforeAll(async () => {
     server = createServer((request, response) => {
@@ -1513,6 +1530,7 @@ test.describe("profile levels", () => {
     ({ jobKeywords } = await import("@/lib/server/job-keywords"));
     ({ profilePostingLevels } = await import("@/lib/server/profile-levels"));
     ({ GET } = await import("@/app/api/jobs/my-levels/route"));
+    ({ demoAccount } = await import("@/lib/server/demo-account"));
   });
 
   test.afterAll(async () => {
@@ -1562,11 +1580,12 @@ test.describe("profile levels", () => {
   test("rows match page matching rule", async () => {
     await store(analyzed());
     const result = await profilePostingLevels(subject, "be:9102", version);
-    // 같은 코드 두 번과 재지 않는 Q·S·H도 문장 그대로 둔다. 0점도 점수다. F(판정 불가)·H만 있는 문장은 행이 없다.
+    // 같은 코드 두 번과 재지 않는 Q·S·H도 문장 그대로 둔다. 점수를 낸 카테고리(usedCodes)는 한 번씩이고 재는 것만이다.
+    // 0점도 점수다. F(판정 불가)·H만 있는 문장은 행이 없다.
     expect(result?.levels).toEqual([
-      row("11", "합성 데이터 모델링과 품질 관리", ["D", "Q", "D"], 60),
-      row("12", "합성 보안 점검과 배포 운영", ["S", "O"], 30),
-      row("13", "합성 데이터 파이프라인 운영", ["E"], 0),
+      row("11", "합성 데이터 모델링과 품질 관리", ["D", "Q", "D"], ["D"], 60),
+      row("12", "합성 보안 점검과 배포 운영", ["S", "O"], ["O"], 30),
+      row("13", "합성 데이터 파이프라인 운영", ["E"], ["E"], 0),
     ]);
     // 공고 화면(components/jobs/personal-job-comparison.tsx)은 /api/jobs/keywords로 받은 문장에
     // keywordId·text·정렬한 categoryCodes가 모두 같은 행만 쓴다. 행마다 맞는 문장이 하나다.
@@ -1634,10 +1653,18 @@ test.describe("profile levels", () => {
       taxonomyVersion: version,
       source: "LV_STAT",
       levels: [
-        row("1", "합성 서버 개발 경험", ["B"], 40, "2026-11-27T12:34:56.000Z"),
+        row(
+          "1",
+          "합성 서버 개발 경험",
+          ["B"],
+          ["B"],
+          40,
+          "2026-11-27T12:34:56.000Z",
+        ),
         row(
           "2",
           "Java 기반 합성 서비스 개발",
+          ["L"],
           ["L"],
           50,
           "2026-11-27T12:34:56.000Z",
@@ -1676,7 +1703,27 @@ test.describe("profile levels", () => {
     // 문장 글이 없거나(null) 빠진 문장은 화면이 행을 맞출 수 없다.
     expect(
       (await profilePostingLevels(subject, "be:9105", version))?.levels,
-    ).toEqual([row("23", "합성 서버 운영", ["B"], 40)]);
+    ).toEqual([row("23", "합성 서버 운영", ["B"], ["B"], 40)]);
+  });
+
+  test("row names the categories that gave its score", async () => {
+    // [B, L] Java 문장. B가 판정 불가(null)면 점수는 L(Java 2.5 × 20 = 50)에서만 나온다. categoryCodes는 화면이
+    // 문장과 맞추는 키라 문장 그대로이고, 점수를 낸 카테고리는 usedCodes에 따로 있다(레이더가 그 축에만 값을 둔다).
+    const p = analyzed();
+    await store({
+      ...p,
+      categories: { ...p.categories, B: { ...p.categories.B, lv: null } },
+    });
+    expect(
+      (await profilePostingLevels(subject, "be:9107", version))?.levels,
+    ).toEqual([row("31", "Java 기반 합성 서버 개발", ["B", "L"], ["L"], 50)]);
+    // B 2.0이 있으면 두 카테고리가 다 점수를 낸다: (2.0 + 2.5) ÷ 2 × 20 = 45
+    await store(p);
+    expect(
+      (await profilePostingLevels(subject, "be:9107", version))?.levels,
+    ).toEqual([
+      row("31", "Java 기반 합성 서버 개발", ["B", "L"], ["B", "L"], 45),
+    ]);
   });
 
   test("route reads the profile before saved levels", async () => {
@@ -1705,6 +1752,8 @@ test.describe("profile levels", () => {
         methodVersion: "lv-stat-s2-20261127",
       },
     });
+    // 성공하면 서버 기록이 없다.
+    expect(errors.calls).toEqual([]);
   });
 
   test("route falls back to saved levels without a profile", async () => {
@@ -1733,12 +1782,99 @@ test.describe("profile levels", () => {
   test("route answers 502 when the posting cannot be read", async () => {
     member(subject);
     await store(analyzed());
-    // 없는 공고(백엔드 404), 백엔드 오류(500)
+    // 없는 공고(백엔드 404), 백엔드 오류(500), 문장 서버 연결 설정 없음(503)
     for (const jobId of ["be:9999", "be:9106"])
       expect(
         await myLevels(`jobId=${jobId}&version=${version}`),
         jobId,
       ).toEqual(levelsFailure);
+    delete process.env.BACKEND_URL;
+    expect(await myLevels(`jobId=be:9101&version=${version}`)).toEqual(
+      levelsFailure,
+    );
+    // route는 공고 문장 응답의 상태를 남긴다. 백엔드가 실패한 이유는 jobKeywords가 따로 남긴다.
+    expect(routeLogs()).toEqual([
+      [
+        "My levels lookup failed",
+        { jobId: "be:9999", error: "Error: 공고 문장 응답 502" },
+      ],
+      [
+        "My levels lookup failed",
+        { jobId: "be:9106", error: "Error: 공고 문장 응답 502" },
+      ],
+      [
+        "My levels lookup failed",
+        { jobId: "be:9101", error: "Error: 공고 문장 응답 503" },
+      ],
+    ]);
+  });
+
+  test("route logs a profile it cannot read without the file path", async () => {
+    member(subject);
+    const asked = `jobId=be:9101&version=${version}`;
+    const file = profileFile(analyzed());
+    // 결과 파일 자리가 폴더다(EISDIR).
+    await mkdir(file, { recursive: true });
+    expect(await myLevels(asked)).toEqual(levelsFailure);
+    // 결과 파일을 읽을 권한이 없다(EACCES). 이 오류의 글(message)에는 결과 파일 경로가 있다.
+    await rm(file, { recursive: true });
+    await store(analyzed());
+    await chmod(file, 0o000);
+    expect(await myLevels(asked)).toEqual(levelsFailure);
+    // 기록은 오류 이름만 남긴다. 공고 문장은 받지 않았다.
+    expect(errors.calls).toEqual([
+      ["My levels lookup failed", { jobId: "be:9101", error: "Error" }],
+      ["My levels lookup failed", { jobId: "be:9101", error: "Error" }],
+    ]);
+    const logged = JSON.stringify(errors.calls);
+    for (const leak of [
+      dataDir,
+      contractKey("staging", subject),
+      "EISDIR",
+      "EACCES",
+    ])
+      expect(logged, leak).not.toContain(leak);
+    expect(requests).toEqual([]);
+  });
+
+  test("route logs a saved-levels failure without the database address", async () => {
+    member(subject);
+    const database = await savedLevelsDown();
+    expect(await myLevels(`jobId=be:9101&version=${version}`)).toEqual(
+      levelsFailure,
+    );
+    // 연결 오류의 글(message)에는 DB 주소가 있어 이름만 남긴다.
+    expect(errors.calls).toEqual([
+      ["My levels lookup failed", { jobId: "be:9101", error: "Error" }],
+    ]);
+    const logged = JSON.stringify(errors.calls);
+    for (const leak of [database, "lv-test", "ECONNREFUSED"])
+      expect(logged, leak).not.toContain(leak);
+  });
+
+  test("route gives the demo account saved levels even with a profile", async () => {
+    // 데모 계정은 로그인 화면의 '데모 계정으로 로그인'으로 누구나 같이 쓴다. 그 계정의 결과 파일이 있어도 읽지 않고
+    // 지금처럼 저장된 LV(RDS의 DEMO 행)를 읽는다. 분석 결과는 요청한 사람에게만 보인다.
+    await store(analyzed("demo-user"));
+    login({
+      user: {
+        id: "demo-user",
+        email: demoAccount.email,
+        name: demoAccount.name,
+      },
+    });
+    const asked = `jobId=be:9101&version=${version}`;
+    // RDS 설정이 없으면 503, RDS를 읽다 실패하면 502다. 결과 파일로 계산하지 않으니 공고 문장도 받지 않는다.
+    expect(await myLevels(asked)).toEqual(noSavedLevels);
+    await savedLevelsDown();
+    expect(await myLevels(asked)).toEqual(levelsFailure);
+    expect(requests).toEqual([]);
+    // 같은 id라도 데모 이메일이 아닌 회원은 그 결과 파일로 계산한다(읽을 수 있는 결과 파일이다).
+    member("demo-user");
+    expect(await myLevels(asked)).toMatchObject({
+      status: 200,
+      body: { source: "LV_STAT", levels: briefRows },
+    });
   });
 
   test("route checks login and input before reading a profile", async () => {
