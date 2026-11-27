@@ -7,9 +7,11 @@
   Linguist 자료(data/linguist/)는 코드 폴더에서 읽는다.
 - 사람·레포 색인은 <S2>/index/<pid>/<repo_key>.json (s2_index.py가 만든다).
 - git 자식 프로세스에는 토큰을 넘기지 않는다(GENV). GENV는 빠진 파일 내용 받기(lazy fetch)를 막는다(GIT_NO_LAZY_FETCH=1).
-  <레포>/.git/lv-allow-lazy가 있는 레포는 git()의 모든 호출에 lazy fetch를 허용한다. 그래서 빠진 내용이 있으면
-  log --numstat은 커밋마다, cat-file --batch-check는 빠진 파일마다 받으러 간다(내 커밋이 바꾼 파일만 받지 않는다).
-  s2_index의 git_lazy(2단계 코드 그대로)는 표시가 없어도 numstat이 실패하면 lazy fetch를 허용해 다시 부른다.
+  git()은 늘 GENV를 쓴다. git()이 lazy fetch를 켜는 길은 없다.
+- 큰 레포 표시: <레포>/.git/lv-partial(PARTIAL_MARK)은 --filter=blob:none으로 받은 큰 레포다(받는 쪽이 만든다).
+  s2_index는 그 레포에서 내 경로의 파일 내용만 한 번에 받는다(prefetch_mine). 남의 경로는 blame이 읽는 판
+  (내 경로를 만든 커밋이 없앤 파일의 그 판)만 받는다.
+  s2_index의 git_lazy(2단계 코드 그대로)는 표시 없는 레포에서만, numstat이 실패하면 lazy fetch를 허용해 다시 부른다.
 - 카테고리 추출기는 load_person(pid)로 색인을 읽고, Repo.text()로 파일을 읽는다.
 """
 import datetime
@@ -31,15 +33,17 @@ SECRET_ENV = ('LV_GITHUB_TOKEN', 'GH_TOKEN', 'GITHUB_TOKEN', 'GH_ENTERPRISE_TOKE
 GENV = dict({k: v for k, v in os.environ.items() if k not in SECRET_ENV},
             GIT_TERMINAL_PROMPT='0', GIT_LFS_SKIP_SMUDGE='1', GIT_NO_LAZY_FETCH='1',
             GIT_CONFIG_NOSYSTEM='1', HOME=EMPTY_HOME, XDG_CONFIG_HOME=EMPTY_HOME, GIT_ASKPASS='/usr/bin/false')
-LAZY_MARK = 'lv-allow-lazy'      # <레포>/.git/ 아래 표시 파일. 큰 레포를 --filter=blob:none으로 받는 쪽이 만든다
+PARTIAL_MARK = 'lv-partial'      # <레포>/.git/ 아래 표시 파일. 큰 레포를 --filter=blob:none으로 받는 쪽이 만든다
 KST = datetime.timezone(datetime.timedelta(hours=9))
 
 
+def is_partial(d):
+    """큰 레포 표시(<d>/.git/lv-partial)가 있으면 참."""
+    return os.path.exists(os.path.join(d, '.git', PARTIAL_MARK))
+
+
 def git(d, *a, inp=None, timeout=600, check=False):
-    env = GENV
-    if os.path.exists(os.path.join(d, '.git', LAZY_MARK)):       # 표시한 레포만 빠진 파일 내용을 받으러 간다
-        env = {k: v for k, v in GENV.items() if k != 'GIT_NO_LAZY_FETCH'}
-    p = subprocess.run(['git', '-C', d, '-c', 'core.hooksPath=/dev/null', '-c', 'core.quotePath=false', *a], input=inp, capture_output=True, env=env, timeout=timeout)
+    p = subprocess.run(['git', '-C', d, '-c', 'core.hooksPath=/dev/null', '-c', 'core.quotePath=false', *a], input=inp, capture_output=True, env=GENV, timeout=timeout)
     if check and p.returncode != 0:
         raise RuntimeError(f'git {a[:2]} 실패: {p.stderr.decode(errors="replace")[:200]}')
     return p.returncode, p.stdout

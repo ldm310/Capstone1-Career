@@ -69,18 +69,19 @@ print(json.dumps({
 """
 
 # git이 실제로 받은 환경을 본다: 셸 별칭(!env)은 git 프로세스의 환경을 그대로 물려받는다.
-# argv[3:] = 레포 폴더(이 차례로 s2lib.git을 부른다).
+# argv[3:] = 레포 폴더(이 차례로 s2lib.git을 부르고 is_partial을 본다).
 PROBE_GIT_ENV = """
 import json, sys
 sys.path.insert(0, sys.argv[1])
 import s2lib
 names = sys.argv[2].split(',')
-res = {'mark': getattr(s2lib, 'LAZY_MARK', None), 'repos': []}
+is_partial = getattr(s2lib, 'is_partial', lambda d: None)
+res = {'mark': getattr(s2lib, 'PARTIAL_MARK', None), 'repos': []}
 for d in sys.argv[3:]:
     rc, out = s2lib.git(d, '-c', 'alias.lvenv=!env', 'lvenv')
     env = dict(line.split('=', 1) for line in out.decode('utf-8', 'replace').splitlines() if '=' in line)
     res['repos'].append({'rc': rc, 'no_lazy': env.get('GIT_NO_LAZY_FETCH'),
-                         'secrets': sorted(n for n in names if n in env)})
+                         'secrets': sorted(n for n in names if n in env), 'partial': is_partial(d)})
 res['genv_no_lazy_after'] = s2lib.GENV.get('GIT_NO_LAZY_FETCH')
 print(json.dumps(res))
 """
@@ -268,20 +269,21 @@ class S2PortTest(unittest.TestCase):
         self.assertEqual(out["no_lazy"], "1")
         self.assertEqual(out["home"], os.path.join(self.home, ".emptyhome"))
 
-    def test_lazy_marker_per_repo(self):
-        lazy, plain = os.path.join(self.tmp, "lazy"), os.path.join(self.tmp, "plain")
-        for d in (lazy, plain):
+    def test_marker_never_enables_lazy(self):
+        # 큰 레포 표시(.git/lv-partial, Task 4가 만든다)가 있어도 git()은 빠진 파일 내용을 받으러 가지 않는다.
+        # 내 경로의 내용은 s2_index가 한 번에 받는다(test_s2_partial). 옛 표시(lv-allow-lazy)도 아무 일을 하지 않는다.
+        marked, legacy, plain = (os.path.join(self.tmp, n) for n in ("marked", "legacy", "plain"))
+        for d in (marked, legacy, plain):
             git_run(["init", "-q", d], base_env(HOME=self.tmp, GIT_CONFIG_NOSYSTEM="1"))
-        open(os.path.join(lazy, ".git", "lv-allow-lazy"), "w").close()
-        out = self.probe(PROBE_GIT_ENV, CODE, ",".join(FAKE_SECRETS), lazy, plain,
+        open(os.path.join(marked, ".git", "lv-partial"), "w").close()
+        open(os.path.join(legacy, ".git", "lv-allow-lazy"), "w").close()
+        out = self.probe(PROBE_GIT_ENV, CODE, ",".join(FAKE_SECRETS), marked, legacy, plain,
                          env=base_env(LV_S2_HOME=self.home, **FAKE_SECRETS))
-        self.assertEqual(out["mark"], "lv-allow-lazy")
-        lazy_env, plain_env = out["repos"]
-        # 표시한 레포만 빠진 파일 내용을 받으러 갈 수 있다. 어느 쪽이든 토큰은 없다.
-        self.assertEqual(lazy_env, {"rc": 0, "no_lazy": None, "secrets": []})
-        # 앞의 호출이 공통 환경(GENV)을 바꾸지 않았다.
-        self.assertEqual(plain_env, {"rc": 0, "no_lazy": "1", "secrets": []})
-        self.assertEqual(out["genv_no_lazy_after"], "1")
+        self.assertEqual(out["mark"], "lv-partial")
+        # 어느 레포든 GIT_NO_LAZY_FETCH=1이고 토큰은 없다. 표시한 레포만 부분 받기 레포다.
+        want = {"rc": 0, "no_lazy": "1", "secrets": []}
+        self.assertEqual(out["repos"], [dict(want, partial=True), dict(want, partial=False), dict(want, partial=False)])
+        self.assertEqual(out["genv_no_lazy_after"], "1")  # 공통 환경(GENV)도 그대로다
 
     # ---------------- s2_index: gh 대신 ghapi
     def test_index_offline_noreply_is_own(self):
