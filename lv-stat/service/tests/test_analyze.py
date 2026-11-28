@@ -719,7 +719,7 @@ class AnalyzeTest(unittest.TestCase):
             asked.append(path)
             return analyze.DISK_FLOOR + 10 * 1024   # 10KB 레포는 딱 받을 수 있고(같으면 받음), 50KB 레포는 못 받음
 
-        with mock.patch.object(analyze, "_disk_free", disk_free):
+        with mock.patch.object(analyze, "_disk_free", disk_free), self.assertLogs("analyze", "WARNING") as logs:
             p = self.run_analyze(job, clone)
         self.check_profile(p, job)
         self.assertEqual([f for f, _, _ in clone.calls], ["tester/new"])
@@ -728,20 +728,28 @@ class AnalyzeTest(unittest.TestCase):
         self.assertEqual(p["categories"]["L"]["languages"], {"Python": 1.3})
         self.assertTrue(asked)
         self.assertTrue(all(a == self.home(job) or a.startswith(self.home(job) + os.sep) for a in asked), asked)
+        # 작업자 로그(journal)에 경고 한 줄: 수만 남긴다(경로·레포 이름 없음). 남은 공간 2GiB+10KB = 2048MiB,
+        # 50KB 레포를 받으면 2GiB−40KB = 2047MiB, 남길 공간 2048MiB
+        stops = [r.getMessage() for r in logs.records if "디스크" in r.getMessage()]
+        self.assertEqual(stops, ["디스크 여유가 모자라 레포 받기를 멈춤: 레포 2개 중 1개 받음, 1개는 받지 않음"
+                                 "(남은 공간 2048 MiB, 다음 레포를 받으면 2047 MiB < 남길 공간 2048 MiB)"])
+        self.assertNotIn("tester/", stops[0])
+        self.assertNotIn(self.tmp, stops[0])
 
     def test_disk_estimate_is_github_size_or_big_repo_estimate(self):
         # 예상 크기는 400MB 이하 레포면 GitHub size(KB) × 1024, 큰 레포(400MB 넘음, blob 없이 받음)면 BIG_REPO_EST(500MB,
         # 2단계 실측 최대 309MB)다. 남은 공간 − 예상 크기 = DISK_FLOOR면 받고, 1바이트 모자라면 받지 않는다.
         floor, big_est, mib = analyze.DISK_FLOOR, analyze.BIG_REPO_EST, 1024 * 1024
-        rows = [  # (GitHub size KB, 남은 공간, 받는가)
-            (10, floor + 10 * 1024, True),
-            (10, floor + 10 * 1024 - 1, False),
-            (400 * 1024, floor + 400 * mib, True),        # 딱 400MB는 큰 레포가 아님: GitHub size로 잰다
-            (BIG_KB, floor + big_est, True),
-            (BIG_KB, floor + big_est - 1, False),
-            (BIG_KB, floor + 401 * mib, False),            # 큰 레포는 GitHub size가 아니라 500MB로 잰다
+        # 받지 않으면 작업자 로그에 남는 수(MiB, 버림): (남은 공간, 그 레포를 받으면 남을 공간). 남길 공간은 2048MiB
+        rows = [  # (GitHub size KB, 남은 공간, 받는가, 로그의 수)
+            (10, floor + 10 * 1024, True, None),
+            (10, floor + 10 * 1024 - 1, False, (2048, 2047)),
+            (400 * 1024, floor + 400 * mib, True, None),         # 딱 400MB는 큰 레포가 아님: GitHub size로 잰다
+            (BIG_KB, floor + big_est, True, None),
+            (BIG_KB, floor + big_est - 1, False, (2547, 2047)),
+            (BIG_KB, floor + 401 * mib, False, (2449, 1949)),     # 큰 레포는 GitHub size가 아니라 500MB로 잰다
         ]
-        for size, free, cloned in rows:
+        for size, free, cloned, logged in rows:
             with self.subTest(size=size, free=free - floor):
                 home = tempfile.mkdtemp(dir=self.tmp)
                 calls, notes = [], []
@@ -754,14 +762,22 @@ class AnalyzeTest(unittest.TestCase):
                 repo = dict(full_name="tester/r", default_branch="main", size=size, pushed_at=None, owned=True)
                 with mock.patch.object(analyze, "_disk_free", lambda path: free):
                     if cloned:
-                        entries, failed = analyze._clone_all([repo], home, time.time() + 600, Progress(), fake_clone, notes)
+                        with self.assertNoLogs("analyze", "WARNING"):
+                            entries, failed = analyze._clone_all([repo], home, time.time() + 600, Progress(), fake_clone,
+                                                                 notes)
                         self.assertEqual((len(entries), failed, notes), (1, 0, []))
                         self.assertEqual(calls, [("tester/r", size > 400 * 1024)])
                     else:
-                        with self.assertRaises(analyze.UserError) as cm:   # 하나도 못 받았으면 지금처럼 MSG_NO_CLONE
+                        # 하나도 못 받았으면 지금처럼 MSG_NO_CLONE. 첫 레포에서 멈춰도 경고 한 줄을 남긴다(경로·레포 이름 없음)
+                        with self.assertLogs("analyze", "WARNING") as logs, self.assertRaises(analyze.UserError) as cm:
                             analyze._clone_all([repo], home, time.time() + 600, Progress(), fake_clone, notes)
                         self.assertEqual(str(cm.exception), "레포를 받지 못했습니다. 잠시 뒤 다시 시도해 주세요.")
                         self.assertEqual((calls, notes), ([], ["디스크 여유가 모자라 레포 1개는 받지 못함"]))
+                        self.assertEqual([r.getMessage() for r in logs.records],
+                                         ["디스크 여유가 모자라 레포 받기를 멈춤: 레포 1개 중 0개 받음, 1개는 받지 않음"
+                                          "(남은 공간 %d MiB, 다음 레포를 받으면 %d MiB < 남길 공간 2048 MiB)" % logged])
+                        self.assertNotIn("tester/", logs.output[0])
+                        self.assertNotIn(home, logs.output[0])
 
     def test_disk_watchdog_stops_a_running_clone_with_note(self):
         # 받는 중에 남은 공간이 DISK_FLOOR 밑으로 내려가면 시간 초과처럼 그 clone의 프로세스 묶음 전체를 끝낸다(시간 초과와는
