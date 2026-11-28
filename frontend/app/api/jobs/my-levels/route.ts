@@ -1,5 +1,6 @@
 import { isGuest, user } from "@/lib/server/store";
 import { demoAccount } from "@/lib/server/demo-account";
+import { lvStatEnabled } from "@/lib/server/lv-stat";
 import { postingLevels } from "@/lib/server/posting-levels";
 import {
   KeywordsStatusError,
@@ -25,9 +26,10 @@ export async function GET(request: Request) {
     );
   try {
     // 분석 결과 파일(스테이징 LV 서비스)이 있으면 그것으로 계산하고, 없으면 지금처럼 저장된 LV(RDS)를 읽는다.
-    // 데모 계정은 누구나 같이 쓰는 로그인이라 결과 파일을 읽지 않는다(결과는 분석을 요청한 사람에게만 보인다).
+    // 스테이징 스위치가 꺼진 서버(운영)와 데모 계정은 결과 파일을 읽지 않는다. 데모 계정은 누구나 같이 쓰는
+    // 로그인이라서다(결과는 분석을 요청한 사람에게만 보인다).
     const fromProfile =
-      current.email === demoAccount.email
+      !lvStatEnabled() || current.email === demoAccount.email
         ? null
         : await profilePostingLevels(current.id, jobId, version);
     const result =

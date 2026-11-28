@@ -459,6 +459,37 @@ test.describe("analysis screen", () => {
     expect(api.calls.posts).toEqual([]);
   });
 
+  test("the block is not drawn before the first read answers, nor when the API answers 404 (switch off)", async ({
+    page,
+  }) => {
+    // 스테이징 스위치가 꺼진 서버(운영)는 분석 API가 404다. 첫 GET 답을 잡아 두고, 답하기 전에도 404로 답한 뒤에도
+    // 칸이 없는지 본다(운영에서 칸이 잠깐 보였다 사라지지 않게).
+    await account(page, true);
+    let answer: (reply: Reply) => void = () => {};
+    const held = new Promise<Reply>((resolve) => (answer = resolve));
+    let gets = 0;
+    await page.route("**/api/lv-stat/analysis", async (route) => {
+      gets++;
+      await route.fulfill(await held);
+    });
+    await page.clock.install({ time: loaded });
+    await page.goto("/analysis");
+    await expect(page.locator(".analysis-flow")).toBeVisible();
+    await expect.poll(() => gets).toBeGreaterThan(0);
+    await expect(page.locator(".github-lv-analysis")).toHaveCount(0);
+    await expect(page.getByText(title)).toHaveCount(0);
+    answer({ status: 404, json: { error: "GitHub 분석을 쓸 수 없어요." } });
+    await settle(page);
+    await expect(page.locator(".github-lv-analysis")).toHaveCount(0);
+    await expect(page.getByText("GitHub 분석을 쓸 수 없어요.")).toHaveCount(0);
+    await page.clock.pauseAt(paused);
+    const first = gets;
+    await page.clock.runFor(30000);
+    await settle(page);
+    expect(gets).toBe(first);
+    await expect(page.locator(".analysis-flow")).toBeVisible();
+  });
+
   test("a member starts an analysis, sees the stage every 5 seconds, then the summary, and reading stops", async ({
     page,
   }) => {

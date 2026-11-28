@@ -12,6 +12,8 @@ import type {
 
 // GitHub 계정 하나를 분석해 달라고 요청하고(POST /api/lv-stat/analysis), 진행과 결과 요약을 보여 준다.
 // 공고마다의 LV는 공고 상세의 레이더 차트가 이 결과로 그린다. 로그인 여부는 GET의 401로 안다.
+// 스테이징 스위치가 꺼진 서버(운영)는 GET이 404라 칸을 그리지 않는다. 첫 GET이 답하기 전에도 그리지 않는다
+// (운영에서 칸이 잠깐 보였다 사라지지 않게).
 
 const route = "/api/lv-stat/analysis";
 // 요청이 대기·진행 중일 때만 이 간격으로 다시 읽는다.
@@ -22,8 +24,10 @@ const order: LvCategoryCode[] = ["L", "O", "B", "E", "D", "F", "A"];
 const offline = "연결을 확인해 주세요.";
 
 interface State {
-  // null: 아직 모름(첫 GET 전). false: GET·POST가 401로 답함.
+  // null: 아직 모름(첫 GET 전, 칸을 그리지 않음). false: GET·POST가 401로 답함.
   signedIn: boolean | null;
+  // GET이 404로 답함: 스테이징 스위치가 꺼진 서버라 칸을 그리지 않고 다시 읽지 않는다.
+  off: boolean;
   loginNote: string;
   job: LvJob | null;
   profile: LvProfile | null;
@@ -56,6 +60,8 @@ const active = (status: LvJobStatus | undefined) =>
 function received(state: State, reply: Reply | null): State {
   const reads = state.reads + 1;
   if (!reply) return { ...state, reads, signedIn: state.signedIn ?? true };
+  if (reply.status === 404)
+    return { ...state, reads, off: true, job: null, profile: null };
   if (reply.status === 401)
     return {
       ...state,
@@ -94,6 +100,7 @@ export function GithubLvAnalysis() {
   const titleId = useId();
   const [state, setState] = useState<State>({
     signedIn: null,
+    off: false,
     loginNote: "",
     job: null,
     profile: null,
@@ -164,6 +171,7 @@ export function GithubLvAnalysis() {
     }
   }
 
+  if (state.off || state.signedIn === null) return null;
   const { job, profile } = state;
   const failed = job?.status === "failed";
   const problem = sendError || state.readError;
@@ -196,12 +204,7 @@ export function GithubLvAnalysis() {
             placeholder="https://github.com/아이디"
             disabled={sending || running}
           />
-          <button
-            type="submit"
-            disabled={
-              !url.trim() || sending || running || state.signedIn === null
-            }
-          >
+          <button type="submit" disabled={!url.trim() || sending || running}>
             분석 시작
           </button>
         </form>

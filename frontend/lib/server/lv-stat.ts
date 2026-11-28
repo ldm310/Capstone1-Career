@@ -23,6 +23,13 @@ export class LvStatError extends Error {
   }
 }
 
+// 스테이징 스위치: 서버 설정 CAREER_LV_STAT가 정확히 'on'일 때만 켠다. 스테이징 웹 유닛만 on이고 운영(main)은 off다
+// (deploy/web/deploy.sh). 꺼져 있으면 분석 API는 404이고 공고 화면은 분석 결과를 읽지 않는다. 작업자가 없는 운영에서
+// 요청이 '대기'로 영영 남지 않게 한다. 빌드할 때나 불러올 때 굳지 않게 요청 때마다 읽는다.
+export function lvStatEnabled() {
+  return process.env.CAREER_LV_STAT === "on";
+}
+
 // store.ts의 db()와 같은 기준. 시험이 바꿀 수 있게 부를 때마다 환경 변수를 읽는다.
 export function lvDataDir() {
   return path.join(

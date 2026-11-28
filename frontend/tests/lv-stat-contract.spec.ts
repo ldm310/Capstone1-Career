@@ -1323,6 +1323,7 @@ test.describe("profile levels", () => {
     "CAREER_PROFILE_DATABASE_URL",
     "CAREER_PROFILE_CA_FILE",
     "BACKEND_URL",
+    "CAREER_LV_STAT",
   ] as const;
   const savedEnv: Partial<Record<(typeof envKeys)[number], string>> = {};
   // posting-levels.ts가 globalThis에 두는 RDS 연결. 시험이 만든 연결은 시험마다 닫는다.
@@ -1552,6 +1553,8 @@ test.describe("profile levels", () => {
     delete process.env.CAREER_PROFILE_DATABASE_URL;
     delete process.env.CAREER_PROFILE_CA_FILE;
     process.env.BACKEND_URL = backend;
+    // 스테이징 웹처럼 스위치를 켠다. 꺼진 경우(운영)는 따로 시험한다.
+    process.env.CAREER_LV_STAT = "on";
     requests = [];
     errors = captureErrors();
     login(undefined);
@@ -1769,6 +1772,30 @@ test.describe("profile levels", () => {
     expect(requests).toEqual([]);
   });
 
+  test("route takes the saved-levels path when the staging switch is off, even with a profile", async () => {
+    // 스위치가 꺼진 웹(운영)은 결과 파일을 읽지 않고 지금처럼 저장된 LV(RDS)만 읽는다. 정확히 'on'일 때만 켜진다.
+    member(subject);
+    await store(analyzed());
+    const asked = `jobId=be:9101&version=${version}`;
+    for (const value of [undefined, "", "off", "ON", "true"]) {
+      if (value === undefined) delete process.env.CAREER_LV_STAT;
+      else process.env.CAREER_LV_STAT = value;
+      // RDS 설정이 없으면 503이다(결과 파일로 계산했다면 200이다).
+      expect(await myLevels(asked), String(value)).toEqual(noSavedLevels);
+    }
+    // RDS를 읽다 실패하면 502다: 결과 파일 대신 RDS를 읽었다.
+    await savedLevelsDown();
+    expect(await myLevels(asked)).toEqual(levelsFailure);
+    // 결과 파일로 계산하지 않으니 공고 문장도 받지 않는다.
+    expect(requests).toEqual([]);
+    // 켜면 같은 회원·같은 결과 파일로 계산한다(RDS가 연결 거부여도 읽지 않는다).
+    process.env.CAREER_LV_STAT = "on";
+    expect(await myLevels(asked)).toMatchObject({
+      status: 200,
+      body: { source: "LV_STAT", levels: briefRows },
+    });
+  });
+
   test("route reads only the session user's profile", async () => {
     member(subject);
     await store(analyzed("synthetic-other"));
@@ -1932,10 +1959,15 @@ test.describe("analysis api", () => {
   const full = "지금 분석 요청이 많아요. 잠시 뒤 다시 시도해 주세요.";
   const requestFailed = "분석 요청을 처리하지 못했어요.";
   const lookupFailed = "분석 결과를 불러오지 못했어요.";
+  const switchedOff = "GitHub 분석을 쓸 수 없어요.";
   const uuidV4 =
     /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
   // 이 시험이 바꾸는 환경 변수. 시험마다 처음 값으로 되돌린다.
-  const envKeys = ["CAREER_DATA_DIR", "CAREER_PROFILE_NAMESPACE"] as const;
+  const envKeys = [
+    "CAREER_DATA_DIR",
+    "CAREER_PROFILE_NAMESPACE",
+    "CAREER_LV_STAT",
+  ] as const;
   const savedEnv: Partial<Record<(typeof envKeys)[number], string>> = {};
 
   // route의 store(@/lib/server/store)만 시험용으로 바꾼다. store.ts의 user·isGuest는 Next 요청 안에서만 쿠키를
@@ -2125,6 +2157,8 @@ test.describe("analysis api", () => {
     dataDir = await mkdtemp(path.join(tmpdir(), "lv-stat-analysis-"));
     process.env.CAREER_DATA_DIR = dataDir;
     process.env.CAREER_PROFILE_NAMESPACE = namespace;
+    // 스테이징 웹처럼 스위치를 켠다. 꺼진 경우(운영)는 따로 시험한다.
+    process.env.CAREER_LV_STAT = "on";
     double = {
       user: null,
       calls: [],
@@ -2168,6 +2202,41 @@ test.describe("analysis api", () => {
     // rateLimit·본문 읽기 전에 막아 요청 파일이 늘지 않는다.
     expect(await jobFiles()).toEqual(before);
     expect(errors.calls).toEqual([]);
+  });
+
+  test("with the staging switch off, POST and GET are 404 before the session or any file is read", async () => {
+    // 스테이징 웹 유닛만 CAREER_LV_STAT=on이다(deploy/web/deploy.sh). 정확히 'on'이 아니면 모두 꺼짐이다.
+    member("member-a");
+    const input = { url: "https://github.com/synthetic-user" };
+    const offValues = [undefined, "", "off", "ON", "On", "true", "1", " on"];
+    for (const value of offValues) {
+      if (value === undefined) delete process.env.CAREER_LV_STAT;
+      else process.env.CAREER_LV_STAT = value;
+      const label = JSON.stringify(value ?? null);
+      expect(await post(input), label).toEqual(refused(404, switchedOff));
+      expect(await get(), label).toEqual(refused(404, switchedOff));
+      // 출처·로그인·rateLimit·본문을 보지 않고, 데이터 폴더에 아무것도 만들지 않는다.
+      expect(took(), label).toEqual([]);
+      expect(await readdir(dataDir), label).toEqual([]);
+    }
+    // 읽으면 실패하는 요청 파일(권한 없음)과 결과 자리(폴더)가 있어도 404다.
+    process.env.CAREER_LV_STAT = "off";
+    const planted = await finished("member-a");
+    await chmod(jobPath(planted.job.id), 0o000);
+    await rm(profilePath("member-a"));
+    await mkdir(profilePath("member-a"));
+    expect(await get()).toEqual(refused(404, switchedOff));
+    expect(await post(input)).toEqual(refused(404, switchedOff));
+    expect(took()).toEqual([]);
+    expect(await jobFiles()).toEqual([`${planted.job.id}.json`]);
+    expect(errors.calls).toEqual([]);
+    // 켜면 같은 회원의 GET이 그 파일을 읽다가 실패한다(500). 위의 404는 파일을 읽지 않은 것이다.
+    process.env.CAREER_LV_STAT = "on";
+    expect(await get()).toEqual(refused(500, lookupFailed));
+    expect(took()).toEqual([["user"], ["isGuest", "member-a"]]);
+    expect(errors.calls).toEqual([
+      ["LV analysis lookup failed", { error: "Error" }],
+    ]);
   });
 
   test("a POST from another site, without an origin, or with origin null is 403", async () => {

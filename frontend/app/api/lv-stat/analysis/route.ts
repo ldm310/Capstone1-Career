@@ -3,6 +3,7 @@ import {
   createJob,
   latestJob,
   LvStatError,
+  lvStatEnabled,
   parseGithubLogin,
   readProfile,
 } from "@/lib/server/lv-stat";
@@ -18,6 +19,7 @@ import {
 // 스테이징 LV 서비스: 로그인한 회원이 GitHub 계정 주소를 넣으면 분석 요청 파일을 만들고(작업자가 집는다), GET은
 // 그 사람의 마지막 요청과 분석 결과를 준다(lv-stat/service/CONTRACT.md). 요청·결과는 로그인한 본인
 // (profileNamespace() + 회원 id) 것만 다루고, 클라이언트가 준 값으로 파일 경로를 만들지 않는다.
+// 스테이징 스위치가 꺼진 서버(운영, 작업자 없음)에서는 둘 다 404다.
 export const runtime = "nodejs";
 
 const headers = { "Cache-Control": "private, no-store" };
@@ -29,8 +31,11 @@ const signIn = "로그인이 필요합니다.";
 const urlHelp = "GitHub 계정 주소를 넣어 주세요. 예: https://github.com/아이디";
 // store.ts rateLimit이 한도를 넘었을 때 던지는 글. 그 밖의 오류(DB 등)는 500으로 간다.
 const limited = "요청이 많습니다. 15분 후 다시 시도해 주세요.";
+// 스테이징 스위치(lvStatEnabled)가 꺼진 서버(운영)의 답. 세션·요청·결과 파일을 읽기 전에 준다.
+const switchedOff = "GitHub 분석을 쓸 수 없어요.";
 
 export async function GET() {
+  if (!lvStatEnabled()) return refuse(404, switchedOff);
   try {
     const current = await user();
     if (!current || isGuest(current.id)) return refuse(401, signIn);
@@ -53,6 +58,7 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+  if (!lvStatEnabled()) return refuse(404, switchedOff);
   try {
     try {
       originCheck(req);
