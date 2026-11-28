@@ -14,6 +14,8 @@ python3 -I -u worker.py --data-dir <CAREER_DATA_DIR>/lv-stat [--once] [--max-min
   출력은 공개 CI 로그에 남는다). git 판과 2.45보다 옛 판 경고는 작업자 시작 로그(journal)에 남긴다.
 - 요청 하나를 처리하다 예외가 나가면(요청 파일 쓰기 실패 등) 로그에 파일 이름과 예외 종류만 남기고, 그 요청은 이 프로세스가
   도는 동안 다시 집지 않고 --poll 뒤 계속한다(죽으면 systemd가 다시 켜고 같은 요청을 또 집어 대기열 전체가 막힘).
+- SIGTERM(systemctl stop)은 SystemExit(143)으로 끝낸다. 그래서 정리가 돈다: analyze의 자식 프로세스 묶음을 끝내고 요청 작업
+  폴더(work/<id>)를 지운다. 하던 요청은 running으로 남고, 다음에 켤 때 recover가 닫는다.
 - 토큰(LV_GITHUB_TOKEN)은 로그에 'token yes/no'만 남긴다. 값은 analyze가 GitHub API에만 쓴다.
 """
 import argparse
@@ -26,6 +28,7 @@ import os
 import platform
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -346,6 +349,11 @@ def _positive(text):
     return v
 
 
+def _stop(signum, frame):
+    """SIGTERM(systemctl stop) 처리: SystemExit로 끝내 정리가 돌게 한다(머리 설명). 종료 코드 143 = 128 + SIGTERM(15)."""
+    raise SystemExit(143)
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description='lv-stat 스테이징 분석 작업자(CONTRACT.md)')
     ap.add_argument('--data-dir', required=True, help='<CAREER_DATA_DIR>/lv-stat')
@@ -355,6 +363,15 @@ def main(argv=None):
     ap.add_argument('--self-check', action='store_true', help='배포 전 점검(데이터는 고치지 않음)')
     args = ap.parse_args(argv)
     _setup_logging()
+    # 같은 프로세스에서 main을 부른 쪽(시험)에는 끝날 때 원래 SIGTERM 처리를 돌려준다
+    previous = signal.signal(signal.SIGTERM, _stop)
+    try:
+        return _run(args)
+    finally:
+        signal.signal(signal.SIGTERM, previous)
+
+
+def _run(args):
     root = os.path.abspath(args.data_dir)
     if args.self_check:
         return self_check(root)

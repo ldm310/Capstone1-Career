@@ -14,6 +14,7 @@ import logging
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -28,6 +29,7 @@ sys.path.insert(0, SERVICE)
 
 import worker  # noqa: E402
 import ghapi  # noqa: E402  worker가 불러온 analyze가 s2 폴더를 sys.path에 넣는다(같은 RateLimited 클래스)
+from test_analyze import FakeAPI, gone, kill_group, slow_git  # noqa: E402  가짜 GitHub API·가짜 git(SIGTERM 시험)
 
 WORKER = os.path.join(SERVICE, "worker.py")
 RESTART = "작업자가 다시 시작되어 중단됐습니다. 다시 요청해 주세요."
@@ -568,6 +570,75 @@ class MainTest(Base):
         failed = [line for line in logs if stuck_name in line and line.startswith("ERROR:")]
         self.assertTrue(failed, logs)
         self.assertNotIn(self.dirs.jobs, "\n".join(failed))
+
+
+class StopTest(Base):
+    """systemctl stop은 작업자에 SIGTERM을 보낸다. 진짜 작업자 프로세스(python3 -I -u worker.py)에 진짜 SIGTERM을 보낸다.
+    GitHub는 127.0.0.1의 가짜 API, git은 PATH 맨 앞의 가짜 git(clone이면 손주를 띄우고 잠, 아무것도 받지 않음)이다."""
+
+    def test_sigterm_during_clone_cleans_up_and_the_next_start_closes_the_job(self):
+        if shutil.disk_usage(self.tmp).free < worker.A.DISK_FLOOR + 1024 ** 3:
+            self.skipTest("디스크 여유가 모자라 작업자가 레포를 받으러 가지 않는다")
+        api = FakeAPI()
+        self.addCleanup(api.close)
+        repo = {"full_name": "tester/demo", "fork": False, "private": False, "size": 0, "default_branch": "main",
+                "pushed_at": "2026-11-01T00:00:00Z", "owner": {"login": "tester"}}
+        api.routes.update({
+            "/users/tester": (200, {"login": "tester", "type": "User"}, {}),
+            "/users/tester/repos?type=owner&sort=pushed&per_page=100": (200, [repo], {}),
+            "/search/commits?q=author:tester&sort=committer-date&order=desc&per_page=100":
+                (200, {"total_count": 0, "incomplete_results": False, "items": []}, {}),
+            "/repos/tester/demo/commits?author=tester&per_page=1&sha=main": (200, [{"sha": "a" * 40}], {}),
+        })
+        fake_bin, pids = os.path.join(self.tmp, "fake-bin"), os.path.join(self.tmp, "clone.pids")
+        os.makedirs(fake_bin)
+        with open(os.path.join(fake_bin, "git"), "w", encoding="utf-8") as f:   # 작업자 시작 로그의 git --version도 답한다
+            f.write(slow_git(pids).replace("#!/bin/sh\n", '#!/bin/sh\n[ "$1" = --version ] && { echo "git version 2.99.0"; exit 0; }\n', 1))
+        os.chmod(os.path.join(fake_bin, "git"), 0o755)
+        self.addCleanup(kill_group, pids)
+        name = self.put(job := new_job())
+        env = clean_env(PATH=fake_bin + os.pathsep + os.environ.get("PATH", ""), LV_GITHUB_API=api.base)
+        env.pop("LV_GITHUB_OFFLINE", None)
+        cmd = [sys.executable, "-I", "-u", WORKER, "--data-dir", self.root, "--once"]
+        with tempfile.TemporaryFile() as log:
+            p = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=log, stderr=log, env=env)
+            try:
+                end = time.time() + 60
+                while not os.path.exists(pids) and p.poll() is None and time.time() < end:
+                    time.sleep(0.1)
+                time.sleep(0.3)                               # 가짜 git이 번호를 다 쓰고 잠들 틈
+                self.assertTrue(os.path.exists(pids), "레포 받기(가짜 git clone)가 시작되지 않음")
+                self.assertTrue(os.path.isdir(os.path.join(self.dirs.work, job["id"])))
+                p.send_signal(signal.SIGTERM)
+                p.wait(timeout=60)
+            finally:
+                if p.poll() is None:
+                    p.kill()
+                    p.wait()
+            log.seek(0)
+            output = log.read().decode("utf-8", "replace")
+        self.assertEqual(p.returncode, 143, output)            # SystemExit(143) = 128 + SIGTERM(15)
+        with open(pids, encoding="utf-8") as f:
+            for pid in (int(n) for n in f.read().split()):
+                self.assertTrue(gone(pid), "멈출 때 받던 git의 손주까지 끝내야 한다(_spawn의 os.killpg)")
+        self.assertFalse(os.path.exists(os.path.join(self.dirs.work, job["id"])))   # 받던 레포를 지웠다
+        self.assertEqual(self.job_file(name)["status"], "running")                 # 요청은 그대로 진행 중
+        # 다음에 켤 때 recover가 닫는다
+        r = subprocess.run(cmd, stdin=subprocess.DEVNULL, capture_output=True, text=True, env=env, timeout=120)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        done = self.job_file(name)
+        self.assertEqual((done["status"], done["error"]), ("failed", RESTART))
+        self.assertEqual(os.listdir(self.dirs.work), [])
+
+    def test_main_restores_the_previous_sigterm_handler(self):
+        # 시험이 같은 프로세스에서 main을 불러도 SIGTERM 처리가 남지 않는다(작업자 프로세스는 끝나므로 상관없음).
+        before = signal.getsignal(signal.SIGTERM)
+        with mock.patch.object(worker, "_setup_logging"), mock.patch.dict(os.environ, {}, clear=False), \
+                self.assertLogs("worker", "INFO"):
+            for k in SECRET_ENV:
+                os.environ.pop(k, None)
+            self.assertEqual(worker.main(["--data-dir", self.root, "--once"]), 0)
+        self.assertIs(signal.getsignal(signal.SIGTERM), before)
 
 
 class SelfCheckTest(Base):
