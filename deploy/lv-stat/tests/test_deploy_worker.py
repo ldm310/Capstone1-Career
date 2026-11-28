@@ -81,15 +81,19 @@ STUBS = {
            + (f'exec "{GIT}" "$@"\n' if GIT else 'exit 127\n'),
 }
 
-FAKE_WORKER = '''import os, sys
+# 가짜 작업자: 자체 점검이면 진짜처럼 결과(OK·실패 이유)는 stdout에, 로그는 stderr에 쓴다. 로그에 git 판을 넣어
+# 스크립트가 stderr를 CI 로그에 옮기면 test_server_summary_leaves_out_git_version 이 잡게 한다
+SELF_CHECK_LOG = f'INFO worker: 자체 점검(가짜): git version {FAKE_GIT_VERSION}'
+FAKE_WORKER = f'''import os, sys
 here = os.path.dirname(os.path.abspath(__file__))
 if '--self-check' in sys.argv:
     data = sys.argv[sys.argv.index('--data-dir') + 1]
     os.makedirs(data, exist_ok=True)
     with open(os.path.join(data, 'selfcheck-env.txt'), 'w') as f:
         f.write('token-present' if 'LV_GITHUB_TOKEN' in os.environ else 'token-absent')
+    sys.stderr.write({SELF_CHECK_LOG!r} + '\\n')
     if os.path.exists(os.path.join(here, 'FAIL_SELF_CHECK')):
-        print('자체 점검 실패(가짜)'); sys.exit(1)
+        print('자체 점검 실패: 가짜 이유'); sys.exit(1)
     print('OK'); sys.exit(0)
 '''
 
@@ -344,10 +348,27 @@ class DeployWorkerTest(unittest.TestCase):
             self.assertIn(want, r.stderr)
 
     def test_server_summary_leaves_out_git_version(self):
-        """받은 레포를 여는 git 의 판은 공개 CI 로그에 남기지 않는다(그 판에 맞는 약점을 고르기 쉬움)."""
+        """받은 레포를 여는 git 의 판은 공개 CI 로그에 남기지 않는다(그 판에 맞는 약점을 고르기 쉬움).
+        가짜 git 의 판도, 자체 점검이 stderr(로그)에 쓴 git 판도 나오지 않는다. 자체 점검 결과(stdout 의 OK)는 남긴다."""
         r = self.run_script(sha(1))
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertNotIn(FAKE_GIT_VERSION, r.stdout + r.stderr)
+        self.assertIn('OK', r.stdout.splitlines())
+
+    def test_self_check_log_stays_on_server_owner_only(self):
+        """자체 점검의 stderr(로그)는 CI 로그 대신 서버 파일(판 폴더 위, 소유자만 읽음)에 남긴다. 배포마다 새로 쓴다."""
+        log_file = self.base / 'self-check.log'
+        log_file.parent.mkdir(parents=True)
+        log_file.write_text('지난 배포의 로그\n')
+        log_file.chmod(0o644)
+        r = self.run_script(sha(1))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(log_file.read_text(encoding='utf-8'), SELF_CHECK_LOG + '\n')
+        self.assertEqual(stat.S_IMODE(log_file.stat().st_mode), 0o600)
+        log_file.unlink()
+        self.assertEqual(self.run_script(sha(2)).returncode, 0)   # 없던 파일도 소유자만 읽게 만든다
+        self.assertEqual(stat.S_IMODE(log_file.stat().st_mode), 0o600)
+        self.assertEqual(log_file.read_text(encoding='utf-8'), SELF_CHECK_LOG + '\n')
 
     def test_first_deploy_failure_removes_service(self):
         self.set_active(False)
@@ -365,7 +386,9 @@ class DeployWorkerTest(unittest.TestCase):
         bad = self.make_source(Path(self.temp.name).resolve() / 'bad', fail=True)
         r = self.run_script(sha(2), src=bad, token=TOKEN)
         self.assertEqual(r.returncode, 1)
-        self.assertIn('자체 점검 실패', r.stderr)
+        self.assertIn('자체 점검 실패: 가짜 이유', r.stderr.splitlines())   # 실패 이유(stdout)는 CI 로그에
+        self.assertNotIn(FAKE_GIT_VERSION, r.stdout + r.stderr)            # 로그(stderr)는 서버 파일에만
+        self.assertEqual((self.base / 'self-check.log').read_text(encoding='utf-8'), SELF_CHECK_LOG + '\n')
         self.assertEqual(self.current(), sha(1))
         self.assertEqual(self.log(), '')
         self.assertFalse(self.envfile.exists())

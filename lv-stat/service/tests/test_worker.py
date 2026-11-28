@@ -1,7 +1,8 @@
 """worker.py(요청 파일을 하나씩 처리하는 작업자) 시험.
 
 - analyze는 가짜(analyze_fn 자리, main은 worker.A.analyze를 바꿈)만 쓴다. GitHub·git clone·네트워크는 쓰지 않는다.
-  자체 점검만 이 컴퓨터의 `git --version`을 부른다(또는 가짜로 바꾼다).
+  자체 점검과 작업자 시작 로그만 이 컴퓨터의 `git --version`을 부른다(또는 가짜로 바꾼다).
+- main을 끝없이 돌리는 시험은 가짜 sleep이 StopLoop를 던져 멈춘다.
 - 데이터 폴더는 시험마다 새 임시 폴더다. 요청·프로필은 합성 값이고, 토큰은 시험용 가짜 값이다.
 - 자체 점검의 문법 오류·Linguist 자료 시험은 서비스 폴더의 임시 사본을 고친다(진짜 코드 폴더는 건드리지 않는다).
 """
@@ -38,6 +39,17 @@ SECRET_ENV = ("LV_GITHUB_TOKEN", "GH_TOKEN", "GITHUB_TOKEN", "ANTHROPIC_API_KEY"
 # profileKey = sha256("staging:user-1")의 16진수 앞 32자(셸 `printf 'staging:user-1' | shasum -a 256`로 따로 구한 값)
 KEY_USER_1 = "25fe06252fe0c17000ef04955a49a533"
 KEY_KOREAN = "8a55dd4c3b626699afcdcc41d6678601"   # sha256("staging:사용자 1"), UTF-8
+OLD_GIT = "git version 2.39.5 (Apple Git-154)\n"   # GIT_WANT(2.45)보다 옛 판
+NEW_GIT = "git version 2.45.0\n"
+
+
+def git_says(text):
+    """`git --version`이 text를 내놓는 것처럼 subprocess.run 자리에 넣는 가짜 결과."""
+    return subprocess.CompletedProcess(["git", "--version"], 0, stdout=text, stderr="")
+
+
+class StopLoop(Exception):
+    """끝없이 도는 main을 시험에서 멈춘다(가짜 sleep이 던짐)."""
 
 
 def new_job(created="2026-11-28T00:00:00.000Z", status="queued", **extra):
@@ -384,20 +396,34 @@ class ProcessTest(Base):
 
 
 class MainTest(Base):
-    def main(self, *args, env=None):
-        """worker.main을 가짜 analyze로 돌린다. -> (종료 코드, analyze 호출 기록, 로그 줄)"""
+    def main(self, *args, env=None, stop_after_sleeps=None, on_sleep=None):
+        """worker.main을 가짜 analyze로 돌린다. -> (종료 코드, analyze 호출 기록, 로그 줄)
+        sleep은 가짜다(self.sleeps에 기록하고 on_sleep()을 부름). stop_after_sleeps번째 sleep에서 StopLoop로 멈추고,
+        그때 종료 코드는 None."""
         calls = []
+        self.sleeps = []
 
         def fake(request, work_root, deadline, progress):
             calls.append(dict(id=request["id"], deadline=deadline, s2home=os.environ.get("LV_S2_HOME")))
             return fake_profile(request)
 
+        def sleep(seconds):
+            self.sleeps.append(seconds)
+            if on_sleep:
+                on_sleep()
+            if stop_after_sleeps is not None and len(self.sleeps) >= stop_after_sleeps:
+                raise StopLoop
+
         with mock.patch.dict(os.environ, env or {}, clear=False), mock.patch.object(worker, "_setup_logging"), \
-                mock.patch.object(worker.A, "analyze", fake), self.assertLogs("worker", "INFO") as logs:
+                mock.patch.object(worker.A, "analyze", fake), mock.patch.object(worker.time, "sleep", sleep), \
+                self.assertLogs("worker", "INFO") as logs:
             if env is None:
                 for k in SECRET_ENV:
                     os.environ.pop(k, None)
-            rc = worker.main(["--data-dir", self.root, *args])
+            try:
+                rc = worker.main(["--data-dir", self.root, *args])
+            except StopLoop:
+                rc = None
             logs_out = list(logs.output)
         return rc, calls, logs_out
 
@@ -449,6 +475,100 @@ class MainTest(Base):
         self.assertEqual(self.job_file(running)["status"], "running")
         self.assertEqual(os.listdir(self.dirs.work), ["live"])
 
+    # --- git 판은 작업자 시작 로그(journal)에만. 자체 점검은 찍지 않는다(배포가 그 출력을 공개 CI 로그에 남김)
+    def test_start_log_has_git_version(self):
+        _, _, logs = self.main("--once")
+        self.assertRegex("\n".join(logs), r"git version \d+\.\d+")
+
+    def test_start_log_warns_on_old_git(self):
+        with mock.patch.object(worker.subprocess, "run", return_value=git_says(OLD_GIT)):
+            rc, _, logs = self.main("--once")
+        self.assertEqual(rc, 0)                                   # 경고만 하고 돈다
+        warnings = [line for line in logs if line.startswith("WARNING:")]
+        self.assertTrue(any("2.39.5" in line and "2.45" in line for line in warnings), logs)
+
+    def test_start_log_new_git_does_not_warn(self):
+        with mock.patch.object(worker.subprocess, "run", return_value=git_says(NEW_GIT)):
+            rc, _, logs = self.main("--once")
+        self.assertEqual(rc, 0)
+        self.assertIn("git version 2.45.0", "\n".join(logs))
+        self.assertEqual([line for line in logs if line.startswith("WARNING:")], [])
+
+    def test_start_log_without_git_says_so_and_keeps_running(self):
+        with mock.patch.object(worker.subprocess, "run", side_effect=FileNotFoundError("git")):
+            rc, _, logs = self.main("--once")
+        self.assertEqual(rc, 0)
+        self.assertTrue(any(line.startswith("ERROR:") and "git" in line for line in logs), logs)
+
+    # --- 요청 파일 쓰기가 실패해도 대기열이 막히지 않는다
+    def unwritable(self, name):
+        """그 요청 파일 쓰기만 PermissionError로 실패하는 write_json. -> (가짜, 그 파일에 쓰려던 status 기록)"""
+        path = os.path.join(self.dirs.jobs, name)
+        real = worker.write_json
+        tried = []
+
+        def flaky(p, data):
+            if os.path.abspath(p) == path:
+                tried.append(data.get("status"))
+                raise PermissionError(13, "Permission denied", path)
+            return real(p, data)
+
+        return flaky, tried
+
+    def test_job_file_write_failure_skips_that_job_and_keeps_queue_moving(self):
+        """요청 파일을 못 쓰면 그 요청은 queued로 남는다. 작업자가 죽으면 systemd가 다시 켜고 같은 요청을 또 집어
+        모든 사람이 막히므로, 그 이름을 이 프로세스가 도는 동안 건너뛰고 --poll 뒤 다음 요청으로 간다."""
+        stuck = new_job(created="2026-11-28T00:01:00Z")
+        other = new_job(created="2026-11-28T00:02:00Z")
+        stuck_name, other_name = self.put(stuck), self.put(other)
+        flaky, tried = self.unwritable(stuck_name)
+        other_at_sleep = []
+        with mock.patch.object(worker, "write_json", side_effect=flaky):
+            rc, calls, logs = self.main("--poll", "7", stop_after_sleeps=3, env={"LV_GITHUB_TOKEN": FAKE_TOKEN},
+                                        on_sleep=lambda: other_at_sleep.append(self.job_file(other_name)["status"]))
+        self.assertIsNone(rc)                                     # 예외로 끝나지 않고 계속 돎(가짜 sleep이 멈춤)
+        self.assertEqual(tried, ["running"])                      # 막힌 요청은 한 번만 집음
+        self.assertEqual(self.job_file(stuck_name), stuck)        # 그대로 queued
+        self.assertEqual(self.job_file(other_name)["status"], "done")
+        self.assertEqual([c["id"] for c in calls], [other["id"]])
+        self.assertEqual(self.sleeps, [7, 7, 7])
+        self.assertEqual(other_at_sleep, ["queued", "done", "done"])   # 실패 뒤 --poll 쉬고 다음 요청으로, 그 뒤 대기
+        failed = [line for line in logs if stuck_name in line]
+        self.assertTrue(failed and all(line.startswith("ERROR:") for line in failed), logs)
+        self.assertIn("PermissionError", "\n".join(failed))
+        text = "\n".join(logs)
+        self.assertNotIn(self.dirs.jobs, "\n".join(failed))      # 경로는 남기지 않고 파일 이름만
+        self.assertNotIn(FAKE_TOKEN, text)
+        self.assertNotIn(FAKE_TOKEN[4:], text)
+
+    def test_once_job_file_write_failure_returns_one(self):
+        stuck_name = self.put(new_job())
+        flaky, tried = self.unwritable(stuck_name)
+        with mock.patch.object(worker, "write_json", side_effect=flaky):
+            rc, calls, logs = self.main("--once")
+        self.assertEqual((rc, calls, tried), (1, [], ["running"]))
+        self.assertEqual(self.job_file(stuck_name)["status"], "queued")
+        self.assertTrue(any(line.startswith("ERROR:") and stuck_name in line for line in logs), logs)
+
+    def test_recover_write_failure_does_not_stop_worker(self):
+        """시작할 때 닫지 못한 진행 중 요청이 있어도 작업자는 멈추지 않는다(멈추면 systemd가 다시 켜도 또 멈춤)."""
+        stuck_name = self.put(new_job(status="running", stage="색인", created="2026-11-28T00:00:00Z"))
+        crashed_name = self.put(new_job(status="running", stage="색인", created="2026-11-28T00:00:30Z"))
+        queued = new_job(created="2026-11-28T00:01:00Z")
+        queued_name = self.put(queued)
+        flaky, tried = self.unwritable(stuck_name)
+        with mock.patch.object(worker, "write_json", side_effect=flaky):
+            rc, calls, logs = self.main("--once")
+        self.assertEqual(rc, 0)
+        self.assertEqual(tried, ["failed"])
+        self.assertEqual(self.job_file(stuck_name)["status"], "running")
+        self.assertEqual(self.job_file(crashed_name)["error"], RESTART)   # 다른 요청은 닫음
+        self.assertEqual(self.job_file(queued_name)["status"], "done")
+        self.assertEqual([c["id"] for c in calls], [queued["id"]])
+        failed = [line for line in logs if stuck_name in line and line.startswith("ERROR:")]
+        self.assertTrue(failed, logs)
+        self.assertNotIn(self.dirs.jobs, "\n".join(failed))
+
 
 class SelfCheckTest(Base):
     def check(self, root=None, **kw):
@@ -472,7 +592,7 @@ class SelfCheckTest(Base):
         self.assertEqual((rc, out), (0, "OK\n"))
         self.assertEqual(snapshot(self.root), before)           # recover하지 않고 jobs·profiles·work를 건드리지 않음
         self.assertEqual(self.job_file(running)["status"], "running")
-        self.assertRegex(logs, r"git version \d+\.\d+")          # git 판은 로그(stderr)에
+        self.assertNotIn("git version", out + logs)              # git 판은 작업자 시작 로그에만
 
     def test_self_check_cli_prints_ok_and_leaves_code_alone(self):
         """배포 스크립트처럼 python3 -I -u로 부른다. 코드 폴더는 __pycache__가 없는 새 사본이다(남아 있던 컴파일 파일이
@@ -483,8 +603,8 @@ class SelfCheckTest(Base):
                             "--self-check"], capture_output=True, text=True, timeout=120,
                            env=clean_env(LV_GITHUB_TOKEN=FAKE_TOKEN))
         self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
-        self.assertEqual(p.stdout, "OK\n")                      # git 판은 stdout에 없음
-        self.assertRegex(p.stderr, r"git version \d+\.\d+")
+        self.assertEqual(p.stdout, "OK\n")
+        self.assertNotIn("git version", p.stderr)
         self.assertNotIn(FAKE_TOKEN, p.stdout + p.stderr)
         self.assertEqual(snapshot(code), before)                # 컴파일 파일(__pycache__)·빈 HOME이 생기지 않음
 
@@ -492,6 +612,29 @@ class SelfCheckTest(Base):
         p = subprocess.run([sys.executable, "-I", "-u", WORKER, "--data-dir", self.root, "--self-check"],
                            capture_output=True, text=True, timeout=120, env=clean_env())
         self.assertEqual((p.returncode, p.stdout), (0, "OK\n"), p.stdout + p.stderr)
+
+    def test_self_check_output_never_has_git_version(self):
+        """배포 스크립트는 자체 점검 출력을 공개 CI 로그에 남긴다. 받은 레포를 여는 git의 판은 stdout에도 stderr에도
+        찍지 않는다(그 판에 맞는 약점을 고르기 쉬움). 이 컴퓨터의 git과, 2.45보다 옛 판인 가짜 git 둔 다로 본다."""
+        real = subprocess.run(["git", "--version"], capture_output=True, text=True, timeout=30, env=clean_env())
+        self.assertEqual(real.returncode, 0, real.stderr)
+        bin_dir = os.path.join(self.tmp, "bin")
+        os.mkdir(bin_dir)
+        fake_git = os.path.join(bin_dir, "git")
+        with open(fake_git, "w") as f:
+            f.write('#!/bin/sh\n[ "$1" = --version ] && { echo "git version 2.39.5.synthetic"; exit 0; }\nexit 1\n')
+        os.chmod(fake_git, 0o755)
+        real_version = re.search(r"\d+\.\d+(?:\.\d+)?", real.stdout).group(0)
+        for label, env, version in (("이 컴퓨터의 git", clean_env(), real_version),
+                                    ("옛 판 가짜 git", clean_env(PATH=bin_dir + os.pathsep + os.environ["PATH"]),
+                                     "2.39.5.synthetic")):
+            with self.subTest(label):
+                p = subprocess.run([sys.executable, "-I", "-u", WORKER, "--data-dir", self.root, "--self-check"],
+                                   capture_output=True, text=True, timeout=120, env=env)
+                self.assertEqual((p.returncode, p.stdout), (0, "OK\n"), p.stdout + p.stderr)
+                for stream in (p.stdout, p.stderr):
+                    self.assertNotIn("git version", stream)
+                    self.assertNotIn(version, stream)
 
     def test_self_check_reports_bad_syntax(self):
         code = self.copy_service()
@@ -546,22 +689,23 @@ class SelfCheckTest(Base):
         self.assertEqual(rc, 1)
         self.assertIn("git", out)
 
-    def test_old_git_only_warns(self):
-        old = subprocess.CompletedProcess(["git", "--version"], 0, stdout="git version 2.39.5 (Apple Git-154)\n",
-                                          stderr="")
-        out = io.StringIO()
-        with mock.patch.object(worker.subprocess, "run", return_value=old), contextlib.redirect_stdout(out), \
-                self.assertLogs("worker", "WARNING") as logs:
-            rc = worker.self_check(self.root)
-        self.assertEqual((rc, out.getvalue()), (0, "OK\n"))
-        self.assertTrue(any("2.39.5" in line and "2.45" in line for line in logs.output), logs.output)
+    def test_self_check_old_or_new_git_passes_without_version(self):
+        """옛 판 경고는 작업자 시작 로그가 한다(MainTest). 자체 점검은 판도 경고도 남기지 않고 통과한다."""
+        for text, version in ((OLD_GIT, "2.39.5"), (NEW_GIT, "2.45.0")):
+            with self.subTest(version=version):
+                with mock.patch.object(worker.subprocess, "run", return_value=git_says(text)):
+                    rc, out, logs = self.check()
+                self.assertEqual((rc, out), (0, "OK\n"))
+                self.assertNotIn(version, out + logs)
+                self.assertNotIn("git version", out + logs)
+                self.assertNotIn("WARNING", logs)
 
-    def test_new_git_does_not_warn(self):
-        new = subprocess.CompletedProcess(["git", "--version"], 0, stdout="git version 2.45.0\n", stderr="")
-        with mock.patch.object(worker.subprocess, "run", return_value=new):
-            rc, _, logs = self.check()
-        self.assertEqual(rc, 0)
-        self.assertNotIn("WARNING", logs)
+    def test_self_check_fails_when_git_does_not_work(self):
+        broken = subprocess.CompletedProcess(["git", "--version"], 1, stdout="", stderr="error")
+        with mock.patch.object(worker.subprocess, "run", return_value=broken):
+            rc, out, _ = self.check()
+        self.assertEqual(rc, 1)
+        self.assertIn("git", out)
 
     def test_old_python_fails(self):
         with mock.patch.object(worker, "_py_version", return_value=(3, 9, 18)):

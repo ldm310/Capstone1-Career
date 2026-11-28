@@ -10,7 +10,10 @@ python3 -I -u worker.py --data-dir <CAREER_DATA_DIR>/lv-stat [--once] [--max-min
   같은 데이터 폴더에 작업자가 둘 돌면 recover가 남의 진행 중 요청을 닫으므로, 데이터 폴더의 .worker.lock을 잡은 작업자만 돈다.
 - --self-check(배포 스크립트가 판을 바꾸기 전에 지금 데이터 폴더로 부른다): recover하지 않고 jobs·profiles·work를 고치지 않는다.
   Python ≥3.10, git, 데이터 폴더 쓰기(임시 파일을 만들고 지움), Linguist 자료, 서비스 폴더의 모든 .py 문법(메모리에서 compile).
-  문제가 없으면 stdout에 OK 한 줄을 찍고 0으로 끝난다. git 판은 로그(stderr)에 남기고, 2.45보다 옛 판이면 경고만 한다.
+  문제가 없으면 stdout에 OK 한 줄을 찍고 0으로 끝난다. git은 도는지만 보고 판은 stdout에도 stderr에도 찍지 않는다(배포
+  출력은 공개 CI 로그에 남는다). git 판과 2.45보다 옛 판 경고는 작업자 시작 로그(journal)에 남긴다.
+- 요청 하나를 처리하다 예외가 나가면(요청 파일 쓰기 실패 등) 로그에 파일 이름과 예외 종류만 남기고, 그 요청은 이 프로세스가
+  도는 동안 다시 집지 않고 --poll 뒤 계속한다(죽으면 systemd가 다시 켜고 같은 요청을 또 집어 대기열 전체가 막힘).
 - 토큰(LV_GITHUB_TOKEN)은 로그에 'token yes/no'만 남긴다. 값은 analyze가 GitHub API에만 쓴다.
 """
 import argparse
@@ -146,9 +149,10 @@ def _created(job):
     return t.timestamp()
 
 
-def next_job(dirs):
-    """queued 중 createdAt이 가장 이른 요청(같으면 파일 이름 순) -> (파일 이름, 요청). 없으면 None."""
-    queued = [(name, job) for name, job in list_jobs(dirs) if job.get('status') == 'queued']
+def next_job(dirs, skip=()):
+    """queued 중 createdAt이 가장 이른 요청(같으면 파일 이름 순) -> (파일 이름, 요청). 없으면 None.
+    skip의 파일 이름은 뺀다(main이 처리하다 예외가 난 요청)."""
+    queued = [(name, job) for name, job in list_jobs(dirs) if job.get('status') == 'queued' and name not in skip]
     return min(queued, key=lambda item: (_created(item[1]), item[0])) if queued else None
 
 
@@ -158,12 +162,22 @@ def _fail(path, job, message):
     write_json(path, job)
 
 
+def _reason(e):
+    """로그용 예외 요약: 종류와 OSError의 strerror만. 예외 메시지에 든 경로·값은 남기지 않는다."""
+    strerror = getattr(e, 'strerror', None)
+    return f'{type(e).__name__}({strerror})' if isinstance(strerror, str) and strerror else type(e).__name__
+
+
 def recover(dirs):
-    """작업자가 (다시) 시작할 때: running이던 요청을 MSG_RESTART로 닫고 work를 비운다. queued는 그대로 둔다."""
+    """작업자가 (다시) 시작할 때: running이던 요청을 MSG_RESTART로 닫고 work를 비운다. queued는 그대로 둔다.
+    닫지 못한 요청(파일 쓰기 실패)은 로그만 남기고 넘어간다(시작할 때마다 멈추면 대기열 전체가 막힘)."""
     for name, job in list_jobs(dirs):
         if job.get('status') == 'running':
             log.warning('진행 중이던 요청을 닫음(작업자 다시 시작): %s', name)
-            _fail(os.path.join(dirs.jobs, name), job, MSG_RESTART)
+            try:
+                _fail(os.path.join(dirs.jobs, name), job, MSG_RESTART)
+            except Exception as e:
+                log.error('진행 중이던 요청 %s을 닫지 못함: %s', name, _reason(e))
     for entry in os.listdir(dirs.work):
         path = os.path.join(dirs.work, entry)
         if os.path.isdir(path) and not os.path.islink(path):
@@ -250,13 +264,11 @@ def self_check(root, code_dir=HERE):
     py = _py_version()
     if py < MIN_PYTHON:
         problems.append('Python %d.%d 이상이 필요합니다(지금 %s)' % (MIN_PYTHON + ('.'.join(map(str, py)),)))
-    git = _git_version()
-    log.info('자체 점검: Python %s, %s', '.'.join(map(str, py)), git[1] if git else 'git 없음')
-    if git is None:
+    log.info('자체 점검: Python %s', '.'.join(map(str, py)))
+    # git은 도는지만 본다. 판은 찍지 않는다: 배포 스크립트가 이 출력을 공개 CI 로그에 남기고, git은 남이 고른 레포를 받으므로
+    # 그 판에 맞는 약점을 고르기 쉽다. 판과 옛 판 경고는 작업자 시작 로그(_log_git, journal)가 남긴다.
+    if _git_version() is None:
         problems.append('git을 실행하지 못했습니다')
-    elif git[0] is None or git[0] < GIT_WANT:
-        log.warning('%s: %d.%d보다 옛 판이거나 판을 읽지 못함. GIT_NO_LAZY_FETCH를 몰라 큰 레포에서 빠진 파일 내용을 받으러 갈 수'
-                    ' 있습니다', git[1], *GIT_WANT)
 
     if not os.path.isdir(root):
         problems.append(f'데이터 폴더가 없습니다: {root}')
@@ -315,6 +327,18 @@ def _setup_logging():
     logging.basicConfig(level=logging.INFO, stream=sys.stderr, format='%(asctime)s %(levelname)s %(name)s: %(message)s')
 
 
+def _log_git():
+    """작업자 시작 로그(journal, 공개 안 됨)에 git 판을 남기고, GIT_WANT보다 옛 판이거나 판을 못 읽으면 경고만 한다."""
+    git = _git_version()
+    if git is None:
+        log.error('git을 실행하지 못함: 레포를 받을 수 없어 분석이 실패합니다')
+        return
+    log.info('git: %s', git[1])
+    if git[0] is None or git[0] < GIT_WANT:
+        log.warning('%s: %d.%d보다 옛 판이거나 판을 읽지 못함. GIT_NO_LAZY_FETCH를 몰라 큰 레포에서 빠진 파일 내용을 받으러 갈 수'
+                    ' 있습니다', git[1], *GIT_WANT)
+
+
 def _positive(text):
     v = float(text)
     if not v > 0:
@@ -346,14 +370,22 @@ def main(argv=None):
         token = 'yes' if os.environ.get('LV_GITHUB_TOKEN', '').strip() else 'no'
         log.info('작업자 시작: 데이터 %s, token %s, 상한 %g분, 간격 %g초%s', dirs.root, token, args.max_minutes, args.poll,
                  ', 하나만' if args.once else '')
+        _log_git()
         recover(dirs)
+        skip = set()   # 처리하다 예외가 난 요청 파일 이름. 이 프로세스가 도는 동안 다시 집지 않는다(머리 설명)
         while True:
-            found = next_job(dirs)
+            found = next_job(dirs, skip)
+            stuck = False
             if found:
-                process(dirs, found[0], found[1], args.max_minutes)
+                try:
+                    process(dirs, found[0], found[1], args.max_minutes)
+                except Exception as e:   # 경로·토큰이 든 메시지·traceback은 남기지 않는다
+                    stuck = True
+                    skip.add(found[0])
+                    log.error('요청 %s을 처리하지 못해 이 작업자가 도는 동안 건너뜀: %s', found[0], _reason(e))
             if args.once:
-                return 0
-            if not found:
+                return 1 if stuck else 0
+            if not found or stuck:
                 time.sleep(args.poll)
     finally:
         lock.close()

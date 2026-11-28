@@ -78,9 +78,13 @@ fi
 rel=$(cd "$rel" && pwd -P)
 
 # 2) 자체 점검(Python ≥3.10·git·데이터 폴더 쓰기) — 실패하면 여기서 멈추고 도는 작업자는 그대로
-if ! check=$(cd "$rel" && with_timeout 60 "$py" -I "$rel/service/worker.py" --self-check --data-dir "$lvdata" 2>&1); then
+#   CI 로그에는 stdout(OK 또는 '자체 점검 실패: …' 줄)만 남긴다. stderr(작업자 로그)는 공개되지 않게 서버 파일에만
+#   (소유자만 읽음, 배포마다 새로 씀)
+check_log=$base/self-check.log
+(umask 077 && : > "$check_log") && chmod 600 "$check_log"
+if ! check=$(cd "$rel" && with_timeout 60 "$py" -I "$rel/service/worker.py" --self-check --data-dir "$lvdata" 2>>"$check_log"); then
   printf '%s\n' "$check" >&2
-  echo "새 판(${sha:0:7}) 자체 점검 실패 — $svc 는 그대로" >&2; exit 1
+  echo "새 판(${sha:0:7}) 자체 점검 실패 — $svc 는 그대로(작업자 로그는 EC2 의 $check_log)" >&2; exit 1
 fi
 printf '%s\n' "$check"
 
