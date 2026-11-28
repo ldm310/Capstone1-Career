@@ -285,9 +285,13 @@ class DeployWorkerTest(unittest.TestCase):
         self.assertTrue(os.path.isabs(python), exec_line)
         self.assertTrue(exec_line.endswith(f'-I -u {self.base}/current/service/worker.py --data-dir {self.home}/career-data-staging/lv-stat'), exec_line)
         # OOMPolicy=continue: 메모리 한도(MemoryMax)로 자식(색인 등) 하나가 죽어도 유닛 전체를 멈추지 않는다(그 단계만 실패 메모)
-        for want in ('Restart=on-failure', 'Nice=10', 'IOSchedulingClass=idle', 'CPUQuota=100%', 'MemoryMax=1500M',
-                     'OOMPolicy=continue', f'EnvironmentFile=-{self.envfile}'):
+        # SuccessExitStatus=143: systemctl stop 의 SIGTERM 에 작업자는 정리한 뒤 143 으로 끝난다. 성공으로 봐야 유닛이
+        #   failed 가 아니라 inactive 로 남는다
+        for want in ('Restart=on-failure', 'Nice=10', 'IOSchedulingClass=idle', 'CPUQuota=100%', 'MemoryHigh=400M',
+                     'MemoryMax=512M', 'OOMPolicy=continue', 'SuccessExitStatus=143', f'EnvironmentFile=-{self.envfile}'):
             self.assertIn(want, lines)
+        # 메모리 한도 줄은 이 둘뿐이다(같은 이름이 또 있으면 systemd 는 뒤의 값을 쓴다)
+        self.assertEqual([l for l in lines if l.startswith('Memory')], ['MemoryHigh=400M', 'MemoryMax=512M'])
         self.assertIn('「Claude 임시값」', text)
         self.assertEqual(self.current(), sha(1))
         self.assertFalse((self.base / 'releases' / sha(1) / 'service' / '__pycache__').exists())
@@ -316,7 +320,7 @@ class DeployWorkerTest(unittest.TestCase):
     # --- 되돌리기 ---------------------------------------------------------------
     def test_rolls_back_release_unit_and_token_when_new_release_is_not_active(self):
         self.assertEqual(self.run_script(sha(1), token=TOKEN).returncode, 0)
-        old_unit = self.unit.read_text().replace('MemoryMax=1500M', 'MemoryMax=999M')   # 옛 배포가 쓴 다른 설정
+        old_unit = self.unit.read_text().replace('MemoryMax=512M', 'MemoryMax=999M')    # 옛 배포가 쓴 다른 설정
         self.unit.write_text(old_unit)
         self.set_active(False)
         r = self.run_script(sha(2), token=FAILED_TOKEN)
@@ -324,7 +328,7 @@ class DeployWorkerTest(unittest.TestCase):
         self.assertEqual(self.current(), sha(1))
         self.assertEqual(self.unit.read_text(), old_unit)                    # 서비스 설정도 옛 것으로
         # restart 마다 systemd 가 읽어 둔 설정: 1판, 2판(새 설정), 되돌린 1판(옛 설정을 다시 읽은 뒤)
-        self.assertEqual(self.loaded_at_restart(), ['MemoryMax=1500M', 'MemoryMax=1500M', 'MemoryMax=999M'])
+        self.assertEqual(self.loaded_at_restart(), ['MemoryMax=512M', 'MemoryMax=512M', 'MemoryMax=999M'])
         self.assertEqual(self.envfile.read_text(), f'LV_GITHUB_TOKEN={TOKEN}\n')
         self.assertEqual(stat.S_IMODE(self.envfile.stat().st_mode), 0o600)
         self.assertFalse((self.base / 'lv-worker.env.prev').exists())

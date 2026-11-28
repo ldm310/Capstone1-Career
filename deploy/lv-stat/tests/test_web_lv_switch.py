@@ -1,99 +1,58 @@
-"""deploy/web/deploy.sh 시험: 웹 서비스 파일이 스테이징에만 CAREER_LV_STAT=on 을 주는지(운영은 off) 본다.
+"""deploy/web/deploy.sh 시험: 웹 서비스 파일이 스테이징에만 CAREER_LV_STAT=on 을 주는지(운영은 off) 스크립트 글로 본다.
 
 웹의 LV 분석 칸·분석 API·공고 화면의 분석 결과 읽기는 이 값이 정확히 on 일 때만 켜진다(lv-stat/service/CONTRACT.md).
 작업자는 스테이징에만 있으므로 운영 웹은 꺼야 한다(꺼 두지 않으면 요청이 '대기'로 영영 남음).
 
-스크립트를 가짜 HOME·가짜 명령으로 실제로 돌린다. 웹 코드는 합성 git 레포(frontend/package.json 하나)이고 REPO 로
-넘긴다(GitHub 에 가지 않음). npm·node·curl 은 아무것도 하지 않는 가짜이고, sudo 는 서비스 파일(tee)을 시험 폴더에만
-쓰고 systemctl 은 기록만 한다. mv -Tf(GNU)는 macOS 에서도 돌게 rename 으로 바꾼다. 실제 빌드·서비스·EC2 는 건드리지 않는다.
+deploy.sh 는 팀 웹 배포 스크립트다. 가짜 명령으로 통째로 돌리면 팀이 다른 단계(빌드·DB 준비 등)를 고칠 때마다 이 시험이
+깨지므로, LV 스위치에 닿는 곳만 글로 읽는다: 환경별 case 갈래(staging → on, production → off)와, 서비스 파일 글(want="…")의
+Environment=CAREER_LV_STAT= 줄이 그 갈래가 정한 변수를 쓰는지. CI 는 deploy/web/deploy.sh 가 바뀌어도 이 시험을 돌린다
+(.github/workflows/ci.yml 의 lv-stat 경로).
 """
-import os
 from pathlib import Path
-import shutil
-import subprocess
-import sys
-import tempfile
+import re
 import unittest
 
 SCRIPT = Path(__file__).resolve().parents[2] / 'web' / 'deploy.sh'
-PATH0 = os.environ['PATH']
-BASH = shutil.which('bash', path=PATH0)
-GIT = shutil.which('git', path=PATH0)
-MV = shutil.which('mv', path=PATH0)
-
-STUBS = {
-    # 서비스 파일은 STUB_DIR 에만 쓰고, systemctl 은 기록만 한다. 옛 서비스 파일 읽기(sed)만 그대로 돌린다(없으면 실패).
-    'sudo': ('case "$1" in\n'
-             '  tee) cat > "$STUB_DIR/$(basename "$2")" ;;\n'
-             '  systemctl) shift; printf "%s\\n" "$*" >> "$STUB_DIR/systemctl.log" ;;\n'
-             '  sed) exec "$@" ;;\n'
-             '  cp) case "$3" in "$HOME"/*) exec cp "$2" "$3" ;; esac; echo "sudo $*" >> "$STUB_DIR/refused.log"; exit 1 ;;\n'
-             '  *) echo "sudo $*" >> "$STUB_DIR/refused.log"; exit 1 ;;\n'
-             'esac\n'),
-    'systemctl': 'printf "%s\\n" "$*" >> "$STUB_DIR/systemctl.log"\n',
-    'npm': 'printf "%s\\n" "npm $*" >> "$STUB_DIR/calls.log"\n',
-    'node': 'printf "%s\\n" "node $*" >> "$STUB_DIR/calls.log"\n',
-    'curl': 'exit 0\n',
-    'mv': (f'if [ "$1" = -Tf ]; then exec "{sys.executable}" -I -c '
-           '\'import os, sys; os.replace(sys.argv[1], sys.argv[2])\' "$2" "$3"; fi\n'
-           f'exec "{MV}" "$@"\n'),
-}
 
 
-def git(*args, cwd=None, env=None):
-    subprocess.run([GIT, *args], cwd=cwd, env=env, check=True, capture_output=True, text=True, timeout=60)
+def unit_lines(text):
+    """서비스 파일 글(want="…" 에 담아 sudo tee 로 쓰는 것)의 줄."""
+    m = re.search(r'^want="(.*?)"[ \t]*$', text, re.S | re.M)
+    if not m:
+        raise AssertionError(f'{SCRIPT} 에 서비스 파일 글(want="…")이 없다')
+    return m.group(1).splitlines()
 
 
-@unittest.skipUnless(BASH and GIT, 'bash 와 git 이 있어야 한다')
+def arm(text, env):
+    """`case "$env" in` 의 그 환경 갈래(`<env>)` 부터 `;;` 까지)에서 변수 = 값."""
+    m = re.search(r'^[ \t]*' + re.escape(env) + r'\)(.*?);;', text, re.S | re.M)
+    if not m:
+        raise AssertionError(f'{SCRIPT} 에 {env}) 갈래가 없다')
+    return dict(re.findall(r'(?:^|[\s;])(\w+)=([^\s;]*)', m.group(1)))
+
+
 class WebLvSwitchTest(unittest.TestCase):
     def setUp(self):
-        self.temp = tempfile.TemporaryDirectory()
-        self.addCleanup(self.temp.cleanup)
-        root = Path(self.temp.name).resolve()
-        self.home, self.bin, self.stub = root / 'home', root / 'bin', root / 'stub'
-        for d in (self.home, self.bin, self.stub):
-            d.mkdir()
-        for name, body in STUBS.items():
-            path = self.bin / name
-            path.write_text('#!/bin/sh\n' + body)
-            path.chmod(0o755)
-        # 합성 웹 코드 레포(커밋 하나)
-        self.repo = root / 'repo'
-        (self.repo / 'frontend').mkdir(parents=True)
-        (self.repo / 'frontend' / 'package.json').write_text('{"name": "synthetic-web"}\n')
-        genv = dict(os.environ, HOME=str(root), GIT_CONFIG_NOSYSTEM='1', GIT_AUTHOR_NAME='Synthetic',
-                    GIT_AUTHOR_EMAIL='synthetic@example.com', GIT_COMMITTER_NAME='Synthetic',
-                    GIT_COMMITTER_EMAIL='synthetic@example.com')
-        git('init', '-q', str(self.repo), env=genv)
-        git('-C', str(self.repo), 'add', '-A', env=genv)
-        git('-C', str(self.repo), '-c', 'commit.gpgsign=false', 'commit', '-q', '-m', 'synthetic web', env=genv)
-        self.sha = subprocess.run([GIT, '-C', str(self.repo), 'rev-parse', 'HEAD'], env=genv, check=True,
-                                  capture_output=True, text=True).stdout.strip()
+        self.text = SCRIPT.read_text(encoding='utf-8')
+        self.unit = unit_lines(self.text)
+        switch = [line for line in self.unit if 'CAREER_LV_STAT' in line]
+        self.assertEqual(len(switch), 1, switch)                       # 같은 이름이 또 있으면 systemd 는 뒤의 값을 쓴다
+        m = re.fullmatch(r'Environment=CAREER_LV_STAT=\$\{?(\w+)\}?', switch[0])
+        self.assertIsNotNone(m, f'스위치 값은 환경별 갈래가 정한 변수여야 한다: {switch[0]}')
+        self.line, self.var = switch[0], m.group(1)
 
-    def deploy(self, env_name):
-        """deploy.sh <env_name> <커밋> 을 돌린다. -> 가짜 sudo 가 받은 서비스 파일의 줄"""
-        env = {k: v for k, v in os.environ.items() if k != 'CAREER_LV_STAT'}
-        env.update(HOME=str(self.home), PATH=f'{self.bin}:{PATH0}', STUB_DIR=str(self.stub), REPO=str(self.repo),
-                   GIT_TERMINAL_PROMPT='0')
-        r = subprocess.run([BASH, str(SCRIPT), env_name, self.sha], env=env, capture_output=True, text=True,
-                           timeout=120)
-        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
-        self.assertFalse((self.stub / 'refused.log').exists(), (self.stub / 'refused.log').read_text()
-                         if (self.stub / 'refused.log').exists() else '')
-        svc = 'career-web-staging' if env_name == 'staging' else 'career-web'
-        return (self.stub / f'{svc}.service').read_text().splitlines()
+    def test_staging_arm_turns_the_lv_switch_on(self):
+        self.assertEqual(arm(self.text, 'staging').get(self.var), 'on')
 
-    def test_staging_web_unit_turns_the_lv_switch_on(self):
-        lines = self.deploy('staging')
-        self.assertIn(f'Environment=CAREER_DATA_DIR={self.home}/career-data-staging', lines)   # 스테이징 판을 배포함
-        self.assertEqual([l for l in lines if 'CAREER_LV_STAT' in l], ['Environment=CAREER_LV_STAT=on'])
-        self.assertGreater(lines.index('Environment=CAREER_LV_STAT=on'), lines.index('[Service]'))
+    def test_production_arm_turns_the_lv_switch_off(self):
+        self.assertEqual(arm(self.text, 'production').get(self.var), 'off')
 
-    def test_production_web_unit_turns_the_lv_switch_off(self):
-        lines = self.deploy('production')
-        self.assertIn(f'Environment=CAREER_DATA_DIR={self.home}/career-data', lines)           # 운영 판을 배포함
-        self.assertEqual([l for l in lines if 'CAREER_LV_STAT' in l], ['Environment=CAREER_LV_STAT=off'])
-        self.assertGreater(lines.index('Environment=CAREER_LV_STAT=off'), lines.index('[Service]'))
+    def test_web_unit_sets_the_switch_from_that_variable_only(self):
+        """스위치 줄은 [Service] 안에 있고, 그 변수는 두 갈래 밖에서 다시 정하지 않는다(뒤에서 바꾸면 갈래의 값이 안 쓰임)."""
+        self.assertLess(self.unit.index('[Service]'), self.unit.index(self.line))
+        self.assertLess(self.unit.index(self.line), self.unit.index('[Install]'))
+        assigned = re.findall(r'(?:^|[\s;])' + re.escape(self.var) + r'=', self.text, re.M)
+        self.assertEqual(len(assigned), 2, f'{self.var} 를 정하는 곳은 staging·production 갈래뿐이어야 한다')
 
 
 if __name__ == '__main__':

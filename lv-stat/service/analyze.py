@@ -59,6 +59,7 @@ FINISH_S = 120             # 「Claude 임시값」 마무리는 deadline − FI
 # DISK_FLOOR보다 작으면 그 레포부터는 받지 않고, 받기·색인 중에 DISK_FLOOR 밑으로 내려가면 그 단계를 멈춘다(_spawn 감시).
 DISK_FLOOR = 2 * 1024 ** 3         # 「Claude 임시값」 남겨 둘 공간(2GiB). 첫 배포 로그의 디스크 줄을 보고 다시 정한다
 BIG_REPO_EST = 500 * 1024 ** 2     # 「Claude 임시값」 큰 레포(400MB 넘음) 하나의 예상 크기(2단계 실측 최대 309MB, 3.4GB 레포)
+MIB = 1024 ** 2                    # 로그에 남기는 크기의 단위(MiB, 버림)
 
 MSG_NO_USER = 'GitHub 계정을 찾을 수 없습니다. 주소를 확인해 주세요.'
 MSG_ORG = '개인 GitHub 계정 주소를 넣어 주세요(조직 계정은 분석하지 않습니다).'
@@ -287,8 +288,13 @@ def _clone_all(repos, home, clone_end, progress, clone_fn, notes):
             notes.append(f'시간 상한에 닿아 레포 {total - i}개는 받지 못함')
             break
         big = r['size'] > BIG_KB
-        if _disk_free(home) - (BIG_REPO_EST if big else r['size'] * 1024) < DISK_FLOOR:
+        free, est = _disk_free(home), BIG_REPO_EST if big else r['size'] * 1024
+        if free - est < DISK_FLOOR:
             notes.append(NOTE_DISK_CLONE.format(n=total - i))
+            # 작업자 로그(journal)에는 수만 남긴다(경로·레포 이름 없음). DISK_FLOOR를 다시 정할 때 본다
+            log.warning('디스크 여유가 모자라 레포 받기를 멈춤: 레포 %d개 중 %d개 받음, %d개는 받지 않음'
+                        '(남은 공간 %d MiB, 다음 레포를 받으면 %d MiB < 남길 공간 %d MiB)',
+                        total, len(entries), total - i, free // MIB, (free - est) // MIB, DISK_FLOOR // MIB)
             break
         # 키는 파일·폴더 이름으로 쓴다: 차례 번호(겹치지 않음) + 영문·숫자·._-만 남긴 이름
         key = '%02d-%s' % (i + 1, re.sub(r'[^A-Za-z0-9._-]', '_', r['full_name'].replace('/', '__'))[:80])
