@@ -57,3 +57,10 @@ DEMO 평가와 CONFIRMED 평가를 구분하고, 더미 점수는 해당 더미 
 - 차트 점은 즉시 나타나는 LV 툴팁을 제공한다. 키보드 포커스·Enter·Escape·터치도 지원한다.
 - 공고 본문의 줄간격, 항목 간격, 여백을 줄였다. 근무지, 접수, 기업 정보는 펼쳐서 표시한다.
 - 이번 화면 조정은 로컬 검수 중이며 원격 브랜치에는 아직 반영하지 않았다.
+
+## 2026-11-28 스테이징 LV 서비스(분석 결과로 계산한 LV)
+
+- 서버 설정 `CAREER_LV_STAT=on`(스테이징 웹만, `deploy/web/deploy.sh`)이면 `GET /api/jobs/my-levels`는 그 회원의 분석 결과 파일(`<CAREER_DATA_DIR>/lv-stat/profiles/`, 형식은 `lv-stat/service/CONTRACT.md`)을 먼저 읽는다. 있으면 저장된 LV(RDS)를 읽지 않고 공고 문장마다 그 자리에서 점수를 계산해 같은 모양으로 준다. DB에는 쓰지 않는다.
+- 결과 파일이 없으면, 그리고 스위치가 꺼진 운영과 데모 계정은 지금처럼 RDS를 읽는다(`source: "RDS"`).
+- 분석 결과로 계산한 답은 `source: "LV_STAT"`이다. 행마다 `usedCodes`(점수를 낸 카테고리, 레이더는 이 축에만 값을 놓음)가 있고 `referenceScore`·`referenceKind`는 null(파란 선 없음), `evaluationKind`는 `CONFIRMED`, `evaluatedAt`은 분석 시각이다. 답에는 `labels`(화면의 라벨 한 줄: 2단계 규칙 · LLM 보충 끔 · 제안 기준 · 본인 확인 안 됨), `identityVerified: false`, `methodVersion`(결과 파일의 method)이 더 있고, `sources`는 분석한 GitHub 계정 하나다.
+- 공고 화면: LV_STAT 답은 맞는 행이 없어도 자료 1개로 세서 빈 차트와 라벨을 보인다('분석 자료 미등록'이 아님). RDS 답은 지금처럼 맞는 행이 있을 때만 쓴다. 분류 버전이 없는 공고는 분석 결과(`GET /api/lv-stat/analysis`의 profile)가 있으면 자료 1개로 센다.

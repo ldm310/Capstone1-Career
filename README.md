@@ -171,6 +171,8 @@ macOS/Linux에서는 `./gradlew test`를 사용합니다. 결과 보고서는 `b
   - `develop` → 웹 **스테이징**(EC2 3001번, https://staging.15-164-137-78.sslip.io, 시험용 데이터)
   - `main` → 웹 **운영**(EC2 3000번, https://15-164-137-78.sslip.io) + `job-skill`(RDS 마이그레이션 → 노트북 Airflow)
   - 웹 배포(`deploy/web/deploy.sh`)는 판마다 따로 빌드한 뒤 한 번에 바꾸고, 안 뜨면 이전 판으로 되돌린다. 그 커밋에 `frontend/`가 없으면 웹을 건드리지 않는다.
+  - `develop`이 `lv-stat/`·`deploy/lv-stat/`를 바꾸면 `staging-lv-worker` 잡이 스테이징 EC2에 LV 분석 작업자(systemd `career-lv-worker-staging`)를 배포한다. main·운영에는 배포하지 않는다([deploy/lv-stat/README.md](deploy/lv-stat/README.md)).
+  - 웹의 LV 분석 기능(분석 칸·분석 API·공고 화면의 분석 결과 읽기)은 서버 설정 `CAREER_LV_STAT`로 켠다. 웹 배포가 스테이징에 `on`, 운영에 `off`를 준다(작업자가 스테이징에만 있음).
 - **설정은 `.env`**: 주소·비밀번호·포트처럼 환경마다 다른 값은 코드에 넣지 않고 각 폴더의 `.env`에서 읽는다(`.env`가 로컬/운영 스위치).
 - **새 폴더를 합칠 때**: 그 파트가 `ci.yml`에 자기 잡을 더한다(자리와 예시는 파일 안 주석). 잡 안의 명령(버전·빌드·시험)은 그 파트가 정한다.
 
@@ -178,6 +180,7 @@ macOS/Linux에서는 `./gradlew test`를 사용합니다. 결과 보고서는 `b
 
 1. Settings → Secrets and variables → Actions → Secrets
    - `RDS_HOST`, `RDS_PASSWORD`: RDS 주소와 마스터 암호(job-skill 마이그레이션)
+   - `STAGING_LV_GITHUB_TOKEN`(선택): LV 분석 작업자가 GitHub API에 쓰는 공개 레포 읽기 전용 토큰. 없으면 GitHub API를 시간당 60번만 부른다([deploy/lv-stat/README.md](deploy/lv-stat/README.md))
 2. Settings → Actions → Runners → New self-hosted runner — 러너 두 대(토큰은 1시간이면 만료)
    - 노트북(Windows): 라벨 `career-laptop`, 서비스로 실행(사용자 계정 — Docker·git·py 를 씀) → 노트북 Airflow 배포
    - EC2(Linux, `ubuntu` 계정): 라벨 `career-ec2` → 웹 배포. 러너가 GitHub 에 일을 받으러 가서, 밖에서 EC2 로 SSH 를 열 필요가 없다
