@@ -5,6 +5,8 @@
 - main을 끝없이 돌리는 시험은 가짜 sleep이 StopLoop를 던져 멈춘다.
 - 데이터 폴더는 시험마다 새 임시 폴더다. 요청·프로필은 합성 값이고, 토큰은 시험용 가짜 값이다.
 - 자체 점검의 문법 오류·Linguist 자료 시험은 서비스 폴더의 임시 사본을 고친다(진짜 코드 폴더는 건드리지 않는다).
+- analyze의 남은 공간(_disk_free)은 시험마다 넉넉한 값으로 바꾼다(test_analyze.plenty_of_disk). 진짜 작업자 프로세스를 띄우는
+  SIGTERM 시험에는 닿지 않으므로, 그 시험은 지금처럼 남은 공간이 모자라면 건너뛴다.
 """
 import contextlib
 import fcntl
@@ -29,7 +31,7 @@ sys.path.insert(0, SERVICE)
 
 import worker  # noqa: E402
 import ghapi  # noqa: E402  worker가 불러온 analyze가 s2 폴더를 sys.path에 넣는다(같은 RateLimited 클래스)
-from test_analyze import FakeAPI, gone, kill_group, slow_git  # noqa: E402  가짜 GitHub API·가짜 git(SIGTERM 시험)
+from test_analyze import FakeAPI, gone, kill_group, plenty_of_disk, slow_git  # noqa: E402  가짜 GitHub API·가짜 git(SIGTERM 시험)
 
 WORKER = os.path.join(SERVICE, "worker.py")
 RESTART = "작업자가 다시 시작되어 중단됐습니다. 다시 요청해 주세요."
@@ -105,6 +107,7 @@ def clean_env(**extra):
 
 class Base(unittest.TestCase):
     def setUp(self):
+        plenty_of_disk(self, worker.A)   # 이 프로세스의 analyze만. SIGTERM 시험의 진짜 작업자는 자기 가드로 건너뜀
         self.tmp = tempfile.mkdtemp(prefix="lv-worker-test-")
         self.addCleanup(shutil.rmtree, self.tmp, True)
         self.root = os.path.join(self.tmp, "lv-stat")

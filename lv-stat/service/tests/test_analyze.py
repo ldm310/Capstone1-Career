@@ -7,6 +7,8 @@
 - s2lib는 불러올 때 작업 폴더(LV_S2_HOME, 없으면 코드 폴더) 아래 빈 HOME 폴더를 만든다. analyze는 git 환경(GENV)을 쓰려고 이
   프로세스에서 s2lib를 처음 쓸 때 불러온다. 코드 폴더에 그 폴더가 생기지 않게 setUpModule에서 임시 폴더를 작업 폴더로 두고 먼저
   불러 둔다.
+- 남은 공간(analyze._disk_free)은 시험마다 넉넉한 값(PLENTY_FREE)으로 바꾼다(plenty_of_disk). 디스크 여유 시험만 그 안에서 다시
+  바꾼다. 그래서 이 컴퓨터의 남은 공간이 DISK_FLOOR(2GiB) 밑이어도 시험 결과가 같다.
 """
 import datetime
 import http.server
@@ -38,6 +40,16 @@ NAMES = {"L": "프로그래밍 활용", "O": "운영 배포", "B": "백엔드 �
          "F": "프론트엔드 앱", "A": "AI 기술"}
 STAGES = ["레포 찾기", "레포 받기", "색인", "규칙 적용", "계산"]
 RATE_MESSAGE = r"^GitHub 호출 한도에 걸렸습니다\(\d+분 뒤 다시 시도\)$"
+PLENTY_FREE = 10 ** 15       # 디스크 여유를 보는 시험이 아닐 때의 남은 공간(1PB)
+
+
+def plenty_of_disk(test, module=analyze):
+    """그 시험이 끝날 때까지 module(analyze)._disk_free가 PLENTY_FREE를 돌려주게 한다(받기 전 점검·받기와 색인 중 감시).
+    디스크 여유를 보는 시험은 그 안에서 다시 바꾼다. 자식 프로세스(진짜 작업자 등)에는 닿지 않는다."""
+    patcher = mock.patch.object(module, "_disk_free", lambda path: PLENTY_FREE)
+    patcher.start()
+    test.addCleanup(patcher.stop)
+
 
 # 내 커밋 3개(noreply 이메일), 2026-01-03·06·09. 커밋 3(1단계)·바꾼 줄 2+4+2=8(1단계)·기간 7일(2단계) → Python LV (1+1+2)/3 = 1.3
 PY_COMMITS = [
@@ -323,6 +335,7 @@ def s2_module_of():
 
 class AnalyzeTest(unittest.TestCase):
     def setUp(self):
+        plenty_of_disk(self)   # 디스크 여유 시험은 그 안에서 _disk_free를 다시 바꾼다
         saved = {k: os.environ.get(k) for k in GITHUB_ENV}
         for k in GITHUB_ENV:
             os.environ.pop(k, None)
