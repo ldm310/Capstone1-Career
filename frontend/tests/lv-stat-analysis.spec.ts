@@ -4,6 +4,7 @@ import {
   test,
   type APIRequestContext,
   type APIResponse,
+  type Locator,
   type Page,
 } from "@playwright/test";
 import { createHash, randomUUID } from "node:crypto";
@@ -372,6 +373,8 @@ test.describe("analysis screen", () => {
     "AI 기술 LV 0.0",
   ];
   type Reply = { status: number; json: unknown };
+  // GET 답으로 "lost"를 두면 답하지 않고 연결을 끊는다(fetch가 실패한다).
+  type Answer = Reply | "lost";
 
   // 화면 시험의 요청 id. 끝난 요청의 결과(profile.jobId)는 이 id다(작업자가 쓰는 그대로).
   const screenJobId = "00000000-0000-4000-8000-000000000012";
@@ -407,10 +410,10 @@ test.describe("analysis screen", () => {
     );
   }
 
-  // /api/lv-stat/analysis 흉내. GET·POST마다 지금 정해 둔 답을 주고, 읽은 횟수와 보낸 본문을 센다.
+  // /api/lv-stat/analysis 흉내. GET·POST마다 지금 정해 둔 답을 주고, 읽은 횟수(끊은 GET 포함)와 보낸 본문을 센다.
   async function analysisApi(page: Page) {
     const calls = { get: 0, posts: [] as unknown[] };
-    let get: Reply = { status: 200, json: { job: null, profile: null } };
+    let get: Answer = { status: 200, json: { job: null, profile: null } };
     let post: Reply = { status: 202, json: { job: job({}) } };
     await page.route("**/api/lv-stat/analysis", (route) => {
       const sent = route.request();
@@ -419,11 +422,13 @@ test.describe("analysis screen", () => {
         return route.fulfill(post);
       }
       calls.get++;
-      return route.fulfill(get);
+      return get === "lost"
+        ? route.abort("connectionrefused")
+        : route.fulfill(get);
     });
     return {
       calls,
-      answerGet: (reply: Reply) => void (get = reply),
+      answerGet: (reply: Answer) => void (get = reply),
       answerPost: (reply: Reply) => void (post = reply),
     };
   }
@@ -618,6 +623,78 @@ test.describe("analysis screen", () => {
     await settle(page);
     expect(api.calls.get).toBe(first + 4);
   });
+
+  // 결과를 기다리며 다시 읽는 동안 GET이 401·404·그 밖의 오류로 답하거나 연결이 끊기면, POST 401처럼 요청과 결과를 비우고
+  // 기다림을 끝낸다(같은 답이 계속 오면 5초마다 끝없이 읽지 않게). 그 뒤 시간을 5초씩 1분 넘기며 읽은 수를 센다.
+  const waitEnders: {
+    answer: Answer;
+    what: string;
+    then: string;
+    check: (page: Page, block: Locator) => Promise<void>;
+  }[] = [
+    {
+      answer: { status: 401, json: { error: "로그인이 필요합니다." } },
+      what: "a 401",
+      then: "shows the login prompt",
+      check: async (_page, block) => {
+        await expect(block.getByText("로그인이 필요합니다.")).toBeVisible();
+        await expect(
+          block.getByRole("link", { name: "로그인, 회원가입" }),
+        ).toBeVisible();
+        await expect(
+          block.getByPlaceholder("https://github.com/아이디"),
+        ).toHaveCount(0);
+      },
+    },
+    {
+      answer: { status: 404, json: { error: "GitHub 분석을 쓸 수 없어요." } },
+      what: "a 404 (switch off)",
+      then: "is not drawn",
+      check: async (page) => {
+        await expect(page.locator(".github-lv-analysis")).toHaveCount(0);
+        await expect(page.locator(".analysis-flow")).toBeVisible();
+      },
+    },
+    {
+      answer: { status: 500, json: { error: "합성 서버 오류" } },
+      what: "a 500",
+      then: "shows the API's error",
+      check: async (_page, block) => {
+        await expect(block.getByRole("alert")).toHaveText("합성 서버 오류");
+      },
+    },
+    {
+      answer: "lost",
+      what: "a lost connection",
+      then: "asks to check the connection",
+      check: async (_page, block) => {
+        await expect(block.getByRole("alert")).toHaveText(
+          "연결을 확인해 주세요.",
+        );
+      },
+    },
+  ];
+  for (const { answer, what, then, check } of waitEnders) {
+    test(`while a done job waits for its result, ${what} ends the wait: the block ${then} and reading stops`, async ({
+      page,
+    }) => {
+      // done인데 결과는 다른 분석의 것이다: 기다리며 다시 읽는 중. 기다림이 끝나도 그 결과는 보이지 않는다.
+      const { api, block, first, readAgain } = await startedThenDone(
+        page,
+        syntheticProfile("screen-member"),
+      );
+      await readAgain(1);
+      api.answerGet(answer);
+      await readAgain(2);
+      for (let step = 0; step < 12; step++) {
+        await page.clock.runFor(5000);
+        await settle(page);
+      }
+      expect(api.calls.get).toBe(first + 2);
+      await check(page, block);
+      await expect(block.getByRole("listitem")).toHaveCount(0);
+    });
+  }
 
   test("a finished analysis shows the summary when the page opens, without reading again", async ({
     page,

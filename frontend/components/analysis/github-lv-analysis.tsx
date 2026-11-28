@@ -40,6 +40,7 @@ interface State {
   // 끝난 GET 수. 진행 중이면 GET이 끝날 때마다 다음 읽기를 잡는다.
   reads: number;
   // done인 요청과 그 요청의 것이 아닌 결과를 연달아 받은 횟수(그런 답이 아니면 0). 0보다 크면 결과를 보이지 않는다.
+  // 그사이 200이 아닌 답이나 연결 끊김이 오면 기다림을 끝내고 0이다(received).
   stale: number;
 }
 
@@ -63,19 +64,24 @@ const active = (status: LvJobStatus | undefined) =>
 
 // GET 한 번의 답을 화면 상태에 넣는다. reply가 null이면 연결이 끊긴 것이다: 진행 중이면 다음 차례에 다시 읽고,
 // 첫 읽기였으면 입력 칸을 연다(로그인이 안 됐으면 POST가 401로 알려 준다).
+// done인 요청의 결과를 기다리며 다시 읽는 중(stale > 0)에 200이 아닌 답이 오거나 연결이 끊기면, POST 401처럼 요청과
+// 결과를 비우고 stale을 0으로 돌려 기다림을 끝낸다(같은 답이 계속 오면 5초마다 끝없이 읽지 않게).
 function received(state: State, reply: Reply | null): State {
   const reads = state.reads + 1;
-  if (!reply) return { ...state, reads, signedIn: state.signedIn ?? true };
-  if (reply.status === 404)
-    return { ...state, reads, off: true, job: null, profile: null };
+  const ended = { job: null, profile: null, stale: 0 };
+  const waiting = state.stale > 0;
+  if (!reply)
+    return waiting
+      ? { ...state, reads, ...ended, readError: offline }
+      : { ...state, reads, signedIn: state.signedIn ?? true };
+  if (reply.status === 404) return { ...state, reads, off: true, ...ended };
   if (reply.status === 401)
     return {
       ...state,
       reads,
       signedIn: false,
       loginNote: errorText(reply.body),
-      job: null,
-      profile: null,
+      ...ended,
     };
   if (reply.status !== 200)
     return {
@@ -83,6 +89,7 @@ function received(state: State, reply: Reply | null): State {
       reads,
       signedIn: true,
       readError: errorText(reply.body),
+      ...(waiting ? ended : {}),
     };
   const body = reply.body as { job: LvJob | null; profile: LvProfile | null };
   const stale =
