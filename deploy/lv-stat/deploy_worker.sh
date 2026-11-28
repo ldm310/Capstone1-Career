@@ -111,11 +111,14 @@ ExecStart=$py -I -u $base/current/service/worker.py --data-dir $lvdata
 Restart=on-failure
 RestartSec=10
 # 「Claude 임시값」: 같은 EC2 의 운영 웹(3000)·스테이징 웹(3001)·스테이징 백엔드보다 뒤로 미루는 값.
-#   Nice·CPUQuota·MemoryMax 숫자는 실제 분석 시간·메모리를 재 보고 맞춘다.
+#   Nice·CPUQuota 숫자는 실제 분석 시간을 재 보고 맞춘다.
 Nice=10
 IOSchedulingClass=idle
 CPUQuota=100%
-MemoryMax=1500M
+# 「Claude 임시값」 메모리: 첫 배포 로그에서 서버 메모리 1905MB 중 사용 가능 751MB였다(운영 웹·스테이징 웹·백엔드와 같은 서버).
+#   MemoryHigh 를 넘으면 커널이 메모리를 거둬 느려지고, MemoryMax 를 넘으면 그 프로세스가 죽는다. 실제 분석의 메모리를 재 보고 맞춘다.
+MemoryHigh=400M
+MemoryMax=512M
 # 메모리 한도로 자식(색인·git) 하나가 죽어도 작업자는 계속 돈다: 그 단계만 실패로 notes 에 남는다(기본 stop 이면 유닛 전체가 멈춤)
 OOMPolicy=continue
 NoNewPrivileges=true
