@@ -98,6 +98,18 @@ function received(state: State, reply: Reply | null): State {
   };
 }
 
+// 분석 시각(한국 시각). 예: 2026. 11. 28. 09:05
+const analyzedTime = (value: string) =>
+  new Date(value).toLocaleString("ko-KR", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: "Asia/Seoul",
+  });
+
 function progressText(job: LvJob) {
   const stage = job.stage ?? "대기";
   return job.progress
@@ -249,6 +261,20 @@ export function GithubLvAnalysis() {
       )}
       {profile && !state.stale && (
         <div className="github-lv-summary">
+          {/* 아무 공개 계정이나 넣을 수 있으므로 어느 계정을 언제 분석했는지, 잘렸는지(메모)를 그대로 보인다. */}
+          <p className="github-lv-account">
+            <strong>{profile.login}</strong> ·{" "}
+            {analyzedTime(profile.analyzedAt)} 분석
+          </p>
+          <p className="github-lv-repos">
+            레포 {profile.repos.found}개 찾음 · 분석 {profile.repos.analyzed}개
+            · 실패 {profile.repos.failed}개
+          </p>
+          {profile.repos.notes.map((note, index) => (
+            <p className="github-lv-note" key={index}>
+              {note}
+            </p>
+          ))}
           <ul>
             {order.map((code) => {
               const category = profile.categories[code];

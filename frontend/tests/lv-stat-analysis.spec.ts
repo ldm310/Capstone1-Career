@@ -635,6 +635,12 @@ test.describe("analysis screen", () => {
     const block = page.getByRole("region", { name: title });
     await expect(block.getByRole("listitem")).toHaveText(summary);
     await expect(block).toContainText(labelLine);
+    // 아무 공개 계정이나 넣을 수 있으므로 어느 계정을 언제(한국 시각) 분석했는지, 레포 수와 메모(시간 상한 등)를 그대로 보인다.
+    await expect(block).toContainText(
+      "synthetic-user · 2026. 11. 28. 09:05 분석",
+    );
+    await expect(block).toContainText("레포 2개 찾음 · 분석 1개 · 실패 1개");
+    await expect(block.getByText("합성 메모", { exact: true })).toBeVisible();
     await page.clock.pauseAt(paused);
     const first = api.calls.get;
     await page.clock.runFor(30000);

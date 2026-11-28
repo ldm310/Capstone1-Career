@@ -526,6 +526,23 @@
 .github-lv-failure button {
   margin-top: 12px;
 }
+.github-lv-account,
+.github-lv-repos,
+.github-lv-note {
+  margin: 12px 0 0;
+  color: #43566d;
+  font-size: 14px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.github-lv-repos,
+.github-lv-note {
+  margin-top: 4px;
+}
+.github-lv-note {
+  color: #735b36;
+  font-size: 13px;
+}
 .github-lv-summary ul {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
