@@ -836,4 +836,166 @@ test.describe("analysis screen", () => {
         .getAttribute("points"))!.split(" "),
     ).toHaveLength(4);
   });
+
+  // 아래는 분석한 회원(작업 공간 자료는 없음)의 공고 상세 역량 분석 탭. 점수 행이 없는 공고에서도 '분석 자료 미등록'을
+  // 보이지 않아야 한다(분석은 /analysis에서 이미 끝났다).
+  const postingStats = "/jobs?job=study-demo-backend&demo=low&view=stats";
+  const unregistered = "분석 자료 미등록";
+  const emptyRadar = "현재 표시할 카테고리의 평가 결과가 없습니다.";
+  const unclassified = "이 공고의 분류된 역량 정보가 아직 없습니다.";
+  type Sentence = { id: string; text: string; codes: string[] };
+  type Scored = Sentence & { used: string[]; score: number };
+
+  // 공고 문장(keywords, version이 null이면 분류 버전 없는 공고)과 my-levels의 LV_STAT 답(scored 행)을 흉내 낸다.
+  async function analyzedMemberOn(
+    page: Page,
+    sentences: Sentence[],
+    scored: Scored[],
+    version: string | null = examples.version,
+  ) {
+    await account(page, true);
+    await page.route("**/api/career", (route) =>
+      route.fulfill({ json: { workspace: { runs: [], documents: [] } } }),
+    );
+    await page.route("**/api/growth", (route) =>
+      route.fulfill({ json: { growth: { reviews: [], tasks: [] } } }),
+    );
+    await page.route("**/api/jobs/keywords?**", (route) =>
+      route.fulfill({
+        json: {
+          source: version ? "SAVED_REVIEW" : "UNAVAILABLE",
+          ...(version ? { version } : {}),
+          keywords: sentences.map((sentence) => ({
+            id: sentence.id,
+            text: sentence.text,
+            categoryCodes: sentence.codes,
+            level: null,
+          })),
+          levelScoringEnabled: false,
+        },
+      }),
+    );
+    const calls = { myLevels: 0 };
+    await page.route("**/api/jobs/my-levels?**", (route) => {
+      calls.myLevels++;
+      return route.fulfill({
+        json: {
+          jobId: "study-demo-backend",
+          taxonomyVersion: version,
+          source: "LV_STAT",
+          levels: scored.map((row) => ({
+            keywordId: row.id,
+            text: row.text,
+            categoryCodes: row.codes,
+            usedCodes: row.used,
+            score: row.score,
+            referenceScore: null,
+            referenceKind: null,
+            evaluationKind: "CONFIRMED",
+            evaluatedAt: "2026-11-28T00:05:00.000Z",
+          })),
+          sources: [
+            {
+              id: "lv-stat:synthetic-user",
+              kind: "GITHUB",
+              title: "synthetic-user",
+              simulated: false,
+            },
+          ],
+          labels: labelLine.split(" · "),
+          identityVerified: false,
+          methodVersion: "lv-stat-s2-20261127",
+        },
+      });
+    });
+    return calls;
+  }
+
+  test("an analyzed member sees the empty chart with the labels line, not the registration prompt, when only Q, S or H sentences are on the posting", async ({
+    page,
+  }) => {
+    await analyzedMemberOn(
+      page,
+      [
+        { id: "synthetic-q", text: "합성 품질 문장", codes: ["Q"] },
+        { id: "synthetic-s", text: "합성 보안 문장", codes: ["S"] },
+        { id: "synthetic-h", text: "합성 장비 문장", codes: ["H"] },
+      ],
+      [],
+    );
+    await page.goto(postingStats);
+    const card = page.locator(".saved-level-radar");
+    await expect(card).toContainText(emptyRadar);
+    await expect(card).toContainText(labelLine);
+    await expect(page.getByText(unregistered)).toHaveCount(0);
+    await expect(page.getByText(unclassified)).toHaveCount(0);
+  });
+
+  test("an analyzed member on a posting with no classified sentences sees the empty chart, the labels line and the not-yet-classified note", async ({
+    page,
+  }) => {
+    await analyzedMemberOn(page, [], []);
+    await page.goto(postingStats);
+    const card = page.locator(".saved-level-radar");
+    await expect(card).toContainText(emptyRadar);
+    await expect(card).toContainText(labelLine);
+    await expect(page.getByText(unclassified)).toBeVisible();
+    await expect(page.getByText(unregistered)).toHaveCount(0);
+  });
+
+  test("on a posting without a classification version, an analysis profile counts as the member's source; a 404 or no profile does not", async ({
+    page,
+  }) => {
+    const calls = await analyzedMemberOn(page, [], [], null);
+    let reply: Reply = {
+      status: 200,
+      json: {
+        job: job({ status: "done", stage: "끝" }),
+        profile: syntheticProfile("screen-member"),
+      },
+    };
+    let reads = 0;
+    await page.route("**/api/lv-stat/analysis", (route) => {
+      reads++;
+      return route.fulfill(reply);
+    });
+    await page.goto(postingStats);
+    await expect(page.getByText(unclassified)).toBeVisible();
+    await expect(page.getByText(unregistered)).toHaveCount(0);
+    expect(reads).toBe(1);
+    // 스위치가 꺼진 서버(404)나 분석 결과가 없는 회원은 자료가 없다(지금처럼 '미등록').
+    for (const next of [
+      { status: 404, json: { error: "GitHub 분석을 쓸 수 없어요." } },
+      { status: 200, json: { job: null, profile: null } },
+    ]) {
+      reply = next;
+      await page.reload();
+      await expect(
+        page.getByRole("heading", { name: unregistered, exact: true }),
+      ).toBeVisible();
+    }
+    expect(calls.myLevels).toBe(0);
+  });
+
+  test("an analysis that scores only two categories shows the numbers line and the labels line instead of a chart", async ({
+    page,
+  }) => {
+    const sentences = [
+      { id: "synthetic-l", text: "합성 문장 하나", codes: ["L"] },
+      { id: "synthetic-b", text: "합성 문장 둘", codes: ["B"] },
+    ];
+    await analyzedMemberOn(page, sentences, [
+      { ...sentences[0], used: ["L"], score: 50 },
+      { ...sentences[1], used: ["B"], score: 40 },
+    ]);
+    await page.goto(postingStats);
+    const card = page.locator(".saved-level-radar");
+    await expect(card).toContainText(
+      "프로그래밍·CS 기초 LV 50.0, 백엔드 개발 LV 40.0",
+    );
+    await expect(card).toContainText(labelLine);
+    await expect(card).not.toContainText("(더미)");
+    await expect(page.getByTestId("saved-level-radar")).toHaveCount(0);
+    await expect(page.getByText(unregistered)).toHaveCount(0);
+  });
 });

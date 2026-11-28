@@ -254,6 +254,8 @@ export function PersonalJobComparison({ jobId }: { jobId: string }) {
         return;
       }
       current.viewer = "member";
+      // 스테이징 LV 서비스의 분석 결과를 자료로 셀 때 쓴다(분류 버전이 없는 공고).
+      let analysisSources = 0;
       if (keywordData?.data.version) {
         try {
           const saved = await read(
@@ -270,12 +272,22 @@ export function PersonalJobComparison({ jobId }: { jobId: string }) {
                     [...row.categoryCodes].sort().join(),
               ),
             );
-            if (matching.length) current.saved = { ...data, levels: matching };
+            // 분석 결과(LV_STAT)는 점수를 낸 문장이 없어도 둔다: 분석한 회원이라 '미등록'이 아니라 빈 차트와 라벨을 본다.
+            if (matching.length || data.source === "LV_STAT")
+              current.saved = { ...data, levels: matching };
           } else if (saved.response.status !== 503)
             current.levelError = "저장된 LV를 불러오지 못했습니다.";
         } catch {
           current.levelError = "저장된 LV를 불러오지 못했습니다.";
         }
+      } else {
+        // 분류 버전이 없는 공고는 공고별 LV를 묻지 않는다. 분석 결과(프로필)가 있으면 자료 하나로 센다.
+        // 스테이징 스위치가 꺼진 서버(404)나 결과가 없는 회원은 자료가 아니다.
+        try {
+          const analysis = await read("/api/lv-stat/analysis");
+          if (analysis.response.ok && analysis.data?.profile)
+            analysisSources = 1;
+        } catch {}
       }
       if (controller.signal.aborted) return;
       const [career, growth] = await Promise.allSettled([
@@ -297,7 +309,8 @@ export function PersonalJobComparison({ jobId }: { jobId: string }) {
           ? (growth.value.data.growth?.reviews ?? [])
           : [];
       current.sourceCount =
-        current.saved?.sources.length || workspace.runs.length;
+        current.saved?.sources.length ||
+        workspace.runs.length + analysisSources;
       current.rows = connectJobEvidence(
         keywords,
         currentFindings(workspace),

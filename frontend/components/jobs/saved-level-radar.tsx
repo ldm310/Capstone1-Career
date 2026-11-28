@@ -45,10 +45,12 @@ export function SavedLevelRadar({
   const labelLine = !demo && labels?.length ? labels.join(" · ") : null;
   const kinds = new Set(visibleLevels.map((row) => row.referenceKind));
   if (!axes.length) {
+    // 분석 결과(LV_STAT)에서 점수를 낸 문장이 없는 공고도 라벨 한 줄은 보인다(어떤 기준의 결과인지).
     return (
       <section className="personal-radar-card saved-level-radar">
         <h4>공고별 LV 비교</h4>
         <p>현재 표시할 카테고리의 평가 결과가 없습니다.</p>
+        {labelLine && <p className="saved-level-labels">{labelLine}</p>}
       </section>
     );
   }
