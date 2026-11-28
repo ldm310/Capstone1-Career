@@ -255,6 +255,39 @@ class Progress:
         return [(d, t) for s, d, t in self.calls if s == stage][-1]
 
 
+class Clock:
+    """analyze가 보는 시계(analyze.time 자리). time()은 실제 시각 + skew다. 시험이 skew를 늘려 단계가 제 몫을 다 쓴 것처럼 만든다
+    (실제로 기다리지 않고 마감 가까이로 간다). monotonic()(자식 프로세스 기다리기)은 실제 그대로다."""
+
+    def __init__(self):
+        self.skew = 0.0
+
+    def time(self):
+        return time.time() + self.skew
+
+    def monotonic(self):
+        return time.monotonic()
+
+    def use_up(self, start, timeout):
+        """start에 시작한 단계가 timeout초를 다 쓰고 끝난 시각으로 시계를 옮긴다."""
+        self.skew += start + timeout - self.time()
+
+
+def cut_in_half(path):
+    """파일을 반만 남긴다(쓰던 중에 끝난 JSON 파일)."""
+    with open(path, "r+", encoding="utf-8") as f:
+        f.truncate(len(f.read()) // 2)
+
+
+def s2_module_of():
+    """s2_final.MODULE_OF(vars 키 → 그 파일을 쓰는 추출기)를 불러오지 않고 읽는다(불러오면 s2lib가 작업 폴더를 정한다)."""
+    import ast
+    with open(os.path.join(CODE, "s2_final.py"), encoding="utf-8") as f:
+        tree = ast.parse(f.read())
+    (value,) = [n.value for n in tree.body if isinstance(n, ast.Assign) and [getattr(t, "id", None) for t in n.targets] == ["MODULE_OF"]]
+    return ast.literal_eval(value)
+
+
 class AnalyzeTest(unittest.TestCase):
     def setUp(self):
         saved = {k: os.environ.get(k) for k in GITHUB_ENV}
@@ -621,7 +654,8 @@ class AnalyzeTest(unittest.TestCase):
         srcs = {"tester/new": self.make_src("new", PY_COMMITS), "tester/old": self.make_src("old", GO_COMMITS)}
         clone = LocalClone(srcs, self.genv, delay=5)
         job = new_job()
-        seconds = (analyze.CLONE_MIN_S + 4) / analyze.CLONE_SHARE   # 처음엔 받기 몫이 64초 남고, 5초 뒤 59초
+        # 받기 몫은 마무리·계산 몫(2×FINISH_S)을 뺀 시간의 CLONE_SHARE다. 처음엔 받기 몫이 64초 남고, 5초 뒤 59초
+        seconds = 2 * analyze.FINISH_S + (analyze.CLONE_MIN_S + 4) / analyze.CLONE_SHARE
         p = self.run_analyze(job, clone, seconds=seconds)
         self.check_profile(p, job)
         self.assertEqual([f for f, _, _ in clone.calls], ["tester/new"])
@@ -743,7 +777,8 @@ class AnalyzeTest(unittest.TestCase):
         prog = Progress({"규칙 적용": lambda: seen.update(person=read_json(os.path.join(self.home(job), "index", "P01", "person.json")))})
         t = time.time()
         with mock.patch.object(analyze, "INDEX_SHARE", 0.04), self.assertLogs("analyze", "WARNING"):
-            p = self.run_analyze(job, LocalClone(srcs, self.genv), seconds=200, progress=prog)   # 색인은 8초 안에
+            # 색인은 8초 안에(마무리·계산 몫을 뺀 200초의 0.04)
+            p = self.run_analyze(job, LocalClone(srcs, self.genv), seconds=2 * analyze.FINISH_S + 200, progress=prog)
         self.assertLess(time.time() - t, 40)   # 막힌 색인을 기다리지 않았다(프로세스 묶음을 끝냄)
         # 색인을 기다리는 동안에도 진행(레포 1/2)을 알렸다: 색인이 끝나고 규칙 적용을 시작하기 한참 전이다
         first = {}
@@ -825,6 +860,125 @@ class AnalyzeTest(unittest.TestCase):
                 self.assertEqual(p["repos"], {"found": 1, "analyzed": 1, "failed": 0, "notes": notes})
                 self.assertEqual({c for c, v in p["categories"].items() if v["lv"] is None}, nulls)
                 self.assertFalse(os.path.exists(self.home(job)))
+
+    def test_half_written_vars_keeps_other_categories(self):
+        # 추출기가 vars 파일을 쓰다가 끝나면(오류로 멈춤, 또는 0으로 끝났지만 끝날 때 저장 실패) 반쯤 쓴 vars-*.json이 남는다.
+        # 마무리(s2_final)는 vars를 모두 읽고 시작하므로 그대로 두면 일곱 카테고리가 모두 null이 된다. 마무리 전에 그 파일을 지우고
+        # '규칙 적용 실패: <추출기>'를 한 번만 남긴다. 같은 추출기가 쓴 다른 파일(vars-deploy)과 다른 카테고리는 값이 남는다.
+        real = analyze.run_step
+
+        def crashed(script, home, timeout, poll=None):
+            ok, msg = real(script, home, timeout, poll)
+            if script != "cat_prog_deploy.py":
+                return ok, msg
+            cut_in_half(os.path.join(home, "out", "P01", "vars-prog.json"))
+            return False, "Traceback (most recent call last): ..."
+
+        def exit0(script, home, timeout, poll=None):
+            ok, msg = real(script, home, timeout, poll)
+            if script == "cat_prog_deploy.py":
+                cut_in_half(os.path.join(home, "out", "P01", "vars-prog.json"))
+            return ok, msg
+
+        for name, step in (("crashed", crashed), ("exit 0", exit0)):
+            with self.subTest(name):
+                self.api.routes.clear()
+                self.account(["tester/demo"])
+                job = new_job()
+                clone = LocalClone({"tester/demo": self.make_src("demo-" + name.replace(" ", "-"), PY_COMMITS)}, self.genv)
+                with mock.patch.object(analyze, "run_step", step), self.assertLogs("analyze", "WARNING"):
+                    p = self.run_analyze(job, clone)
+                self.check_profile(p, job)
+                self.assertEqual(p["repos"]["notes"], ["규칙 적용 실패: cat_prog_deploy"])
+                cats = p["categories"]
+                self.assertEqual({c for c, v in cats.items() if v["lv"] is None}, {"L"})
+                self.assertEqual((cats["L"]["languages"], cats["L"]["best"]), ({}, None))
+                self.assertFalse(os.path.exists(self.home(job)))
+        self.assertEqual(analyze.VARS_OF, s2_module_of())   # vars 키 → 추출기 이름은 마무리(s2_final)와 같은 표
+
+    def test_rules_deadline_is_one_note(self):
+        # 규칙 적용 중 시간 상한에 닿으면, 시간을 넘겨 끝낸 추출기와 시작하지 못한 추출기를 notes 한 줄로 센다(추출기마다
+        # '규칙 적용 실패'를 남기지 않음). 오류로 실패한 추출기는 이름을 남긴다. 끝낸 추출기가 쓰던 vars 파일(반쯤 씀)은 지우고
+        # 이름을 따로 남기지 않으며, 나머지 카테고리는 마무리한다.
+        self.account(["tester/demo"])
+        clone = LocalClone({"tester/demo": self.make_src("demo", PY_COMMITS)}, self.genv)
+        clock, started = Clock(), []
+        real = analyze.run_step
+
+        def step(script, home, timeout, poll=None):
+            started.append(script)
+            if script == "cat_backend_b.py":
+                return False, "Traceback (most recent call last): ..."      # 시간과 관계없는 오류
+            if script != "cat_db.py":
+                return real(script, home, timeout, poll)
+            start = clock.time()
+            real(script, home, timeout, poll)
+            cut_in_half(os.path.join(home, "out", "P01", "vars-db.json"))   # 쓰던 중에 끝냄
+            clock.use_up(start, timeout)                                      # 제 몫을 다 씀
+            return False, analyze.TIMED_OUT
+
+        job, prog = new_job(), Progress()
+        with mock.patch.multiple(analyze, time=clock, run_step=step), self.assertLogs("analyze", "WARNING"):
+            p = self.run_analyze(job, clone, progress=prog)
+        self.check_profile(p, job)
+        self.assertEqual(started, ["s2_index.py", "cat_prog_deploy.py", "cat_backend_a.py", "cat_backend_b.py", "cat_db.py",
+                                   "s2_final.py"])   # 뒤의 추출기 셋은 시작하지 않음
+        self.assertEqual(p["repos"]["notes"], ["규칙 적용 실패: cat_backend_b", "시간 상한에 닿아 규칙 4개는 적용하지 못함"])
+        self.assertEqual({c for c, v in p["categories"].items() if v["lv"] is None}, {"D", "E", "F", "A"})
+        self.assertEqual(p["categories"]["L"]["languages"], {"Python": 1.3})
+        self.assertEqual(prog.last("규칙 적용"), (7, 7))
+        self.assertFalse(os.path.exists(self.home(job)))
+
+    def test_steps_fit_inside_deadline(self):
+        # 시간 계획: 마감(deadline)에서 마무리(s2_final)·계산(calc) 몫(각 FINISH_S)을 뺀 시간(work)을 나눈다. 받기는 work의
+        # CLONE_SHARE까지, 색인은 INDEX_SHARE까지, 추출기는 deadline − 2×FINISH_S까지, 마무리는 deadline − FINISH_S까지,
+        # 계산은 deadline까지. 마지막 추출기와 마무리가 제 몫보다 LATE초 늦게 끝난 것처럼 시계를 옮겨도, 다음 단계가 남은 시간만
+        # 받아 어느 단계도 마감을 넘겨 돌지 않는다.
+        self.account(["tester/demo"])
+        local = LocalClone({"tester/demo": self.make_src("demo", PY_COMMITS)}, self.genv)
+        clock, steps, late = Clock(), [], 30                # steps = [(단계, 시작(analyze 시계), timeout)]
+        real_step, real_spawn = analyze.run_step, analyze._spawn
+
+        def clone_fn(full, dest, big, timeout):
+            steps.append(("clone", clock.time(), timeout))
+            return local(full, dest, big, timeout)
+
+        def step(script, home, timeout, poll=None):
+            start = clock.time()
+            steps.append((script, start, timeout))
+            ok, msg = real_step(script, home, timeout, poll)
+            if script in ("cat_ai.py", "s2_final.py"):     # 제 몫을 다 쓰고 late초 늦게 끝남
+                clock.use_up(start, timeout + late)
+            return ok, msg
+
+        def spawn(argv, env, timeout, poll=None):
+            if "-c" in argv:                                 # 계산(calc)
+                steps.append(("calc", clock.time(), timeout))
+            return real_spawn(argv, env, timeout, poll)
+
+        job, seconds, fin, tol = new_job(), 1200, analyze.FINISH_S, 1.0
+        t0 = time.time()
+        deadline = t0 + seconds
+        with mock.patch.multiple(analyze, time=clock, run_step=step, _spawn=spawn):
+            p = analyze.analyze(job, self.work, deadline, Progress(), clone_fn=clone_fn)
+        self.check_profile(p, job)
+        self.assertEqual(p["repos"]["notes"], [])
+        self.assertEqual([s for s, _, _ in steps],
+                         ["clone", "s2_index.py"] + [e + ".py" for e in analyze.EXTRACTORS] + ["s2_final.py", "calc"])
+        ends = {s: start + timeout for s, start, timeout in steps}
+        for e in analyze.EXTRACTORS:                         # 추출기는 마무리·계산 몫을 남기고 멈춘다
+            self.assertAlmostEqual(ends[e + ".py"], deadline - 2 * fin, delta=tol, msg=e)
+        (_, final_start, final_timeout), (_, _, calc_timeout) = steps[-2:]
+        self.assertGreater(final_start, deadline - 2 * fin + late - tol)   # 추출기가 늦게 끝난 뒤(마감 가까이)에 마무리한다
+        self.assertAlmostEqual(final_timeout, fin - late, delta=tol)        # 늦은 만큼 줄어 계산 몫을 남김
+        self.assertAlmostEqual(ends["s2_final.py"], deadline - fin, delta=tol)
+        self.assertAlmostEqual(calc_timeout, fin - late, delta=tol)         # 마감까지 남은 만큼만
+        self.assertAlmostEqual(ends["calc"], deadline, delta=tol)
+        self.assertLessEqual(max(ends.values()), deadline + tol)
+        work = seconds - 2 * fin                             # 「Claude 임시값」 몫은 work에 곱한다(20분이면 받기 8분·색인 12.8분째까지)
+        self.assertAlmostEqual(ends["clone"], t0 + work * analyze.CLONE_SHARE, delta=tol)
+        self.assertAlmostEqual(ends["s2_index.py"], t0 + work * analyze.INDEX_SHARE, delta=tol)
+        self.assertFalse(os.path.exists(self.home(job)))
 
 
 if __name__ == "__main__":

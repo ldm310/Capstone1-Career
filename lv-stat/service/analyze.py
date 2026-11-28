@@ -11,7 +11,8 @@ analyze(job, work_root, deadline, progress)가 CONTRACT.md의 profile을 돌려�
   받은 레포의 코드는 실행하지 않는다(git 명령만).
 - 색인 결과는 레포 파일마다 읽는다(s2_index는 레포마다 실패를 error로 남기고 0으로 끝난다): 호출 한도면 요청 실패(UserError),
   그 밖의 실패는 repos.failed와 notes. 시간을 넘기면 색인한 레포만으로 계속한다.
-- LLM 보충은 끈다(s2_final). 추출기·마무리가 실패하면 notes에 남기고 계속한다.
+- LLM 보충은 끈다(s2_final). 추출기·마무리가 실패하면 notes에 남기고 계속한다. 추출기가 쓰다 만 vars 파일은 마무리 전에 지운다.
+- 모든 단계는 마감(deadline) 안에 끝난다(시간 계획은 CLONE_SHARE·INDEX_SHARE·FINISH_S 설명).
 - 작업 폴더 <work_root>/<요청 id>는 끝나면(실패해도) 지운다.
 """
 import ast
@@ -34,6 +35,9 @@ import ghapi as G  # noqa: E402
 METHOD = 'lv-stat-s2-20261127'
 LABELS = ['2단계 규칙', 'LLM 보충 끔', '제안 기준', '본인 확인 안 됨']
 EXTRACTORS = ['cat_prog_deploy', 'cat_backend_a', 'cat_backend_b', 'cat_db', 'cat_de', 'cat_fe', 'cat_ai']
+# out/<pid>/vars-<키>.json → 그 파일을 쓰는 추출기(s2_final.MODULE_OF와 같은 표. 시험이 같은지 본다)
+VARS_OF = {'prog': 'cat_prog_deploy', 'deploy': 'cat_prog_deploy', 'backend_a': 'cat_backend_a', 'backend_b': 'cat_backend_b',
+           'de': 'cat_de', 'db': 'cat_db', 'fe': 'cat_fe', 'ai': 'cat_ai'}
 CODES = ('L', 'O', 'B', 'E', 'D', 'F', 'A')    # CONTRACT categories
 PID = 'P01'                                    # people.json의 사람 번호(cat_ai는 ^P\d\d$만 받는다)
 
@@ -43,10 +47,12 @@ OWN_PAGES = 3              # 본인 소유 레포 목록 쪽 수(쪽마다 100�
 SEARCH_PAGES = 3           # 커밋 검색 쪽 수(쪽마다 100개)
 BIG_KB = 400 * 1024        # GitHub size(KB)가 이보다 크면 큰 레포(400MB 넘음): --filter=blob:none + .git/lv-partial
 CLONE_MIN_S = 60           # 받기 몫이 이만큼(초) 남지 않으면 더 받지 않는다
-# 시간 계획: 마감(deadline)까지 남은 시간을 단계별로 나눠 뒤 단계 몫을 남긴다(받기가 길어져도 받은 레포는 분석한다).
-CLONE_SHARE = 0.5          # 받기는 남은 시간의 절반까지
-INDEX_SHARE = 0.8          # 색인은 8할까지. 추출기는 마감까지
-FINISH_S = 120             # 마무리(s2_final)·계산은 마감과 관계없이 단계마다 이만큼(초)까지 기다린다(작업이 작아 빠름)
+# 시간 계획: 모든 단계가 마감(deadline) 안에 끝난다. 끝의 마무리(s2_final)·계산(calc) 몫(각 FINISH_S)을 먼저 떼고, 시작할 때
+# 남은 나머지(work = deadline − 2×FINISH_S − 시작 시각)를 앞 단계에 나눈다(받기가 길어져도 받은 레포는 분석한다).
+# 20분이면 받기 8분·색인 12.8분째까지·추출기 16분째까지·마무리 18분째까지·계산 20분까지.
+CLONE_SHARE = 0.5          # 「Claude 임시값」 받기는 work의 절반까지
+INDEX_SHARE = 0.8          # 「Claude 임시값」 색인은 work의 8할까지. 추출기는 work 끝(deadline − 2×FINISH_S)까지
+FINISH_S = 120             # 「Claude 임시값」 마무리는 deadline − FINISH_S까지, 계산은 deadline까지, 단계마다 이만큼(초)까지
 
 MSG_NO_USER = 'GitHub 계정을 찾을 수 없습니다. 주소를 확인해 주세요.'
 MSG_ORG = '개인 GitHub 계정 주소를 넣어 주세요(조직 계정은 분석하지 않습니다).'
@@ -346,17 +352,46 @@ def _index(home, login, entries, index_end, progress, notes):
 
 
 # ---------------- 규칙 적용·계산
-def _rules(home, deadline, progress, notes):
-    """추출기 7개를 차례로 돌린다(각자 마감까지). 실패·시간 초과는 notes에 이름을 남기고 다음으로 간다."""
+def _rules(home, rules_end, progress, notes):
+    """추출기 7개를 차례로 돌린다(각자 rules_end까지). 오류로 실패한 추출기는 notes에 이름을 남기고 다음으로 간다.
+    시간 상한에 닿아 끝낸 추출기와 시작하지 못한 추출기는 notes 한 줄로 센다.
+    -> notes가 이미 다룬 추출기 이름(실패·시간 상한)"""
     total = len(EXTRACTORS)
     progress('규칙 적용', 0, total)
+    covered, cut = set(), 0
     for i, name in enumerate(EXTRACTORS, 1):
-        left = deadline - time.time()
-        ok, msg = run_step(name + '.py', home, left) if left > 0 else (False, TIMED_OUT)
-        if not ok:
-            notes.append(f'규칙 적용 실패: {name}')
-            log.warning('%s 실패: %s', name, msg)
+        left = rules_end - time.time()
+        if left <= 0:
+            cut += 1                         # 시작하지 못함
+        else:
+            ok, msg = run_step(name + '.py', home, left)
+            if not ok:
+                covered.add(name)
+                if msg == TIMED_OUT:
+                    cut += 1
+                else:
+                    notes.append(f'규칙 적용 실패: {name}')
+                log.warning('%s %s: %s', name, '시간 상한' if msg == TIMED_OUT else '실패', msg)
         progress('규칙 적용', i, total)
+    if cut:
+        notes.append(f'시간 상한에 닿아 규칙 {cut}개는 적용하지 못함')
+    return covered
+
+
+def _drop_broken_vars(home, covered, notes):
+    """반쯤 쓴 vars-*.json(추출기가 쓰다가 끝남·멈춤)을 지운다. s2_final은 vars 파일을 모두 읽은 뒤 마무리하므로, 깨진 파일이
+    하나라도 있으면 모든 카테고리를 마무리하지 못한다. 그 추출기를 notes가 아직 다루지 않았으면 '규칙 적용 실패: <이름>'을 남긴다."""
+    out = os.path.join(home, 'out', PID)
+    for name in sorted(os.listdir(out)) if os.path.isdir(out) else []:
+        m = re.fullmatch(r'vars-(\w+)\.json', name)
+        if not m or isinstance(_load_json(os.path.join(out, name)), dict):
+            continue
+        os.remove(os.path.join(out, name))
+        extractor = VARS_OF.get(m.group(1), m.group(1))
+        log.warning('반쯤 쓴 규칙 결과를 지움: %s', name)
+        if extractor not in covered:
+            covered.add(extractor)
+            notes.append(f'규칙 적용 실패: {extractor}')
 
 
 def _is_level(v):
@@ -385,9 +420,10 @@ def _categories(res):
     return out
 
 
-def _finish(home, notes):
-    """LLM 없는 마무리(s2_final)와 계산(calc, 자식 프로세스) → categories. 마무리하지 못한 카테고리는 notes에 남긴다."""
-    ok, msg = run_step('s2_final.py', home, FINISH_S)
+def _finish(home, deadline, notes):
+    """LLM 없는 마무리(s2_final, deadline − FINISH_S까지)와 계산(calc, 자식 프로세스, deadline까지) → categories.
+    단계마다 FINISH_S초까지다. 마무리하지 못한 카테고리는 notes에 남긴다."""
+    ok, msg = run_step('s2_final.py', home, min(FINISH_S, deadline - FINISH_S - time.time()))
     if not ok:
         notes.append('규칙 마무리 실패')
         log.warning('s2_final 실패: %s', msg)
@@ -402,7 +438,8 @@ def _finish(home, notes):
             notes.append(f'규칙 마무리 실패: {m.group(1)}')
         elif rec.get('finalize_error'):
             notes.append(f'규칙 마무리 실패: {m.group(1)}')
-    rc, stdout, err = _spawn([sys.executable, '-I', '-B', '-c', CALC, S2DIR, PID], _child_env(home, False), FINISH_S)
+    rc, stdout, err = _spawn([sys.executable, '-I', '-B', '-c', CALC, S2DIR, PID], _child_env(home, False),
+                             min(FINISH_S, deadline - time.time()))
     if rc != 0:
         raise RuntimeError(f'계산 실패({"시간 초과" if rc is None else rc}): {err.strip()[-300:]}')
     return _categories(json.loads(stdout))
@@ -417,7 +454,7 @@ def analyze(job, work_root, deadline, progress, clone_fn=clone):
     if not UUID.fullmatch(job_id):
         raise ValueError('요청 id가 uuid가 아님')      # 작업 폴더 이름으로 쓴다
     t0 = time.time()
-    budget = deadline - t0
+    work = deadline - 2 * FINISH_S - t0      # 규칙 적용까지 쓸 시간(마무리·계산 몫을 뗌. 머리의 시간 계획)
     home = os.path.join(os.path.abspath(work_root), job_id)
     shutil.rmtree(home, ignore_errors=True)
     os.makedirs(home, mode=0o700)
@@ -427,12 +464,13 @@ def analyze(job, work_root, deadline, progress, clone_fn=clone):
         login, repos = discover(job['login'], notes)
         if not repos:
             raise UserError(MSG_NO_REPOS)
-        entries, clone_failed = _clone_all(repos, home, t0 + budget * CLONE_SHARE, progress, clone_fn, notes)
+        entries, clone_failed = _clone_all(repos, home, t0 + work * CLONE_SHARE, progress, clone_fn, notes)
         _write_json(os.path.join(home, 'people.json'), [dict(pid=PID, login=login, role=None, level=None, repos=entries)])
-        analyzed, index_failed = _index(home, login, entries, t0 + budget * INDEX_SHARE, progress, notes)
-        _rules(home, deadline, progress, notes)
+        analyzed, index_failed = _index(home, login, entries, t0 + work * INDEX_SHARE, progress, notes)
+        covered = _rules(home, deadline - 2 * FINISH_S, progress, notes)
+        _drop_broken_vars(home, covered, notes)
         progress('계산', None, None)
-        categories = _finish(home, notes)
+        categories = _finish(home, deadline, notes)
         return dict(schema='lv-stat-profile/1', method=METHOD, labels=list(LABELS), namespace=job['namespace'],
                     subjectId=job['subjectId'], login=login, jobId=job_id, analyzedAt=now_iso(),
                     repos=dict(found=len(repos), analyzed=analyzed, failed=clone_failed + index_failed, notes=notes),
