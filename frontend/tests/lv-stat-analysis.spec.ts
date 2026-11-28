@@ -4,11 +4,15 @@ import {
   test,
   type APIRequestContext,
   type APIResponse,
+  type Page,
 } from "@playwright/test";
 import { createHash, randomUUID } from "node:crypto";
 import { mkdir, readdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
+import AxeBuilder from "@axe-core/playwright";
 import { demoAccount } from "@/lib/server/demo-account";
+import examples from "@/mock/reviewed-keyword-examples.json";
+import type { LvJob, LvProfile } from "@/types/lv-stat";
 
 // GitHub 계정 LV 분석 요청 API(/api/lv-stat/analysis)를 dev 서버로 시험한다. 로그인은 다른 e2e 시험처럼
 // /api/account 가입·로그인이다. 분석 작업자는 돌지 않는다(요청은 queued로 남고 GitHub에 가지 않는다).
@@ -50,6 +54,36 @@ const refused = (status: number, error: unknown) => ({
 });
 const found = (body: unknown) => ({ status: 200, cacheControl: noStore, body });
 const nothing = found({ job: null, profile: null });
+
+// 작업자가 쓴 분석 결과(CONTRACT.md 모양, 합성 값). 화면 시험도 같은 값을 쓴다.
+function syntheticProfile(subjectId: string): LvProfile {
+  return {
+    schema: "lv-stat-profile/1",
+    method: "lv-stat-s2-20261127",
+    labels: ["2단계 규칙", "LLM 보충 끔", "제안 기준", "본인 확인 안 됨"],
+    namespace,
+    subjectId,
+    login: "synthetic-user",
+    jobId: randomUUID(),
+    analyzedAt: "2026-11-28T00:05:00.000Z",
+    repos: { found: 2, analyzed: 1, failed: 1, notes: ["합성 메모"] },
+    categories: {
+      L: {
+        name: "프로그래밍 활용",
+        lv: 2.5,
+        unknown: 0,
+        languages: { Java: 2.5, Python: 1.0 },
+        best: "Java",
+      },
+      O: { name: "운영 배포", lv: 1.0, unknown: 0 },
+      B: { name: "백엔드 개발", lv: 2.0, unknown: 1 },
+      E: { name: "데이터 엔지니어", lv: 0, unknown: 0 },
+      D: { name: "데이터베이스", lv: 1.5, unknown: 0 },
+      F: { name: "프론트엔드 앱", lv: null, unknown: 2 },
+      A: { name: "AI 기술", lv: 0, unknown: 0 },
+    },
+  };
+}
 
 test.describe("analysis API", () => {
   let contexts: APIRequestContext[] = [];
@@ -128,32 +162,7 @@ test.describe("analysis API", () => {
 
   // 작업자가 쓴 분석 결과(CONTRACT.md 모양, 합성 값).
   async function analyzed(subjectId: string) {
-    const profile = {
-      schema: "lv-stat-profile/1",
-      method: "lv-stat-s2-20261127",
-      labels: ["2단계 규칙", "LLM 보충 끔", "제안 기준", "본인 확인 안 됨"],
-      namespace,
-      subjectId,
-      login: "synthetic-user",
-      jobId: randomUUID(),
-      analyzedAt: "2026-11-28T00:05:00.000Z",
-      repos: { found: 2, analyzed: 1, failed: 1, notes: ["합성 메모"] },
-      categories: {
-        L: {
-          name: "프로그래밍 활용",
-          lv: 2.5,
-          unknown: 0,
-          languages: { Java: 2.5, Python: 1.0 },
-          best: "Java",
-        },
-        O: { name: "운영 배포", lv: 1.0, unknown: 0 },
-        B: { name: "백엔드 개발", lv: 2.0, unknown: 1 },
-        E: { name: "데이터 엔지니어", lv: 0, unknown: 0 },
-        D: { name: "데이터베이스", lv: 1.5, unknown: 0 },
-        F: { name: "프론트엔드 앱", lv: null, unknown: 2 },
-        A: { name: "AI 기술", lv: 0, unknown: 0 },
-      },
-    };
+    const profile = syntheticProfile(subjectId);
     await plant(
       path.join(dataDir, "profiles"),
       `${profileKey(subjectId)}.json`,
@@ -337,5 +346,463 @@ test.describe("analysis API", () => {
       expect(body.error).not.toContain(jobsDir);
       expect(body.error).not.toContain("EACCES");
     }
+  });
+});
+
+// 분석 화면(/analysis의 새 칸)과 공고 상세의 레이더 차트. API는 page.route로 흉내 낸다(서버의 작업자·GitHub에
+// 가지 않는다). 진행 중에 5초마다 읽는 것은 page.clock으로 시간을 넘겨 본다. 시계는 페이지가 다 뜬 뒤에 멈춘다
+// (playwright 안내대로, 뜨는 동안의 타이머는 그대로 돈다).
+test.describe("analysis screen", () => {
+  const title = "GitHub 계정으로 공고별 LV 보기";
+  const guide = "분석이 끝나면 공고 상세의 레이더 차트에 공고마다 LV가 나와요.";
+  const labelLine = "2단계 규칙 · LLM 보충 끔 · 제안 기준 · 본인 확인 안 됨";
+  const address = "https://github.com/synthetic-user";
+  const loaded = new Date("2026-11-28T09:00:00+09:00");
+  const paused = new Date("2026-11-28T09:10:00+09:00");
+  const summary = [
+    "프로그래밍 활용 LV 2.5",
+    "운영 배포 LV 1.0",
+    "백엔드 개발 LV 2.0 · 모름 1개",
+    "데이터 엔지니어 LV 0.0",
+    "데이터베이스 LV 1.5",
+    "프론트엔드 앱 판정 불가 · 모름 2개",
+    "AI 기술 LV 0.0",
+  ];
+  type Reply = { status: number; json: unknown };
+
+  function job(fields: Partial<LvJob>): LvJob {
+    return {
+      id: "00000000-0000-4000-8000-000000000012",
+      namespace,
+      subjectId: "screen-member",
+      login: "synthetic-user",
+      input: address,
+      status: "queued",
+      createdAt: "2026-11-28T00:00:00.000Z",
+      ...fields,
+    };
+  }
+  const reading = (
+    fields: Partial<LvJob>,
+    profile: LvProfile | null = null,
+  ) => ({
+    status: 200,
+    json: { job: job(fields), profile },
+  });
+
+  // 기존 분석 흐름(AnalysisFlow)과 머리글이 묻는 계정. 화면 칸 자체는 /api/lv-stat/analysis의 401로 로그인을 안다.
+  async function account(page: Page, member: boolean) {
+    await page.route("**/api/account", (route) =>
+      route.fulfill({
+        json: {
+          user: member ? { id: "screen-member", name: "화면 시험" } : null,
+          guest: false,
+        },
+      }),
+    );
+  }
+
+  // /api/lv-stat/analysis 흉내. GET·POST마다 지금 정해 둔 답을 주고, 읽은 횟수와 보낸 본문을 센다.
+  async function analysisApi(page: Page) {
+    const calls = { get: 0, posts: [] as unknown[] };
+    let get: Reply = { status: 200, json: { job: null, profile: null } };
+    let post: Reply = { status: 202, json: { job: job({}) } };
+    await page.route("**/api/lv-stat/analysis", (route) => {
+      const sent = route.request();
+      if (sent.method() === "POST") {
+        calls.posts.push(sent.postDataJSON());
+        return route.fulfill(post);
+      }
+      calls.get++;
+      return route.fulfill(get);
+    });
+    return {
+      calls,
+      answerGet: (reply: Reply) => void (get = reply),
+      answerPost: (reply: Reply) => void (post = reply),
+    };
+  }
+
+  // 시간을 넘긴 뒤 읽기 요청이 생겼다면 route까지 닿을 틈을 준다(없어야 하는 요청을 셀 때).
+  async function settle(page: Page) {
+    await page.waitForTimeout(500);
+  }
+
+  test("signed-out visitors see the login prompt instead of the form, above the existing flow", async ({
+    page,
+  }) => {
+    await account(page, false);
+    const api = await analysisApi(page);
+    api.answerGet({ status: 401, json: { error: "로그인이 필요합니다." } });
+    await page.goto("/analysis");
+    const block = page.getByRole("region", { name: title });
+    await expect(block.getByRole("heading", { level: 2 })).toHaveText(title);
+    await expect(block).toContainText(guide);
+    await expect(block.getByText("로그인이 필요합니다.")).toBeVisible();
+    await expect(
+      block.getByRole("link", { name: "로그인, 회원가입" }),
+    ).toHaveAttribute("href", "/sign-in?next=%2Fanalysis");
+    await expect(
+      block.getByPlaceholder("https://github.com/아이디"),
+    ).toHaveCount(0);
+    await expect(
+      block.getByRole("button", { name: "분석 시작", exact: true }),
+    ).toHaveCount(0);
+    expect(
+      await block.evaluate(
+        (section) =>
+          section.compareDocumentPosition(
+            document.querySelector(".analysis-flow")!,
+          ) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ),
+    ).toBeTruthy();
+    expect(api.calls.posts).toEqual([]);
+  });
+
+  test("a member starts an analysis, sees the stage every 5 seconds, then the summary, and reading stops", async ({
+    page,
+  }) => {
+    await account(page, true);
+    const api = await analysisApi(page);
+    await page.clock.install({ time: loaded });
+    await page.goto("/analysis");
+    const block = page.getByRole("region", { name: title });
+    const start = block.getByRole("button", { name: "분석 시작", exact: true });
+    const status = block.getByRole("status");
+    await expect(block).toContainText(guide);
+    await block.getByPlaceholder("https://github.com/아이디").fill(address);
+    await expect(start).toBeEnabled();
+    await page.clock.pauseAt(paused);
+    const first = api.calls.get;
+    expect(first).toBeGreaterThan(0);
+
+    await start.click();
+    await expect(status).toHaveText("대기");
+    expect(api.calls.posts).toEqual([{ url: address }]);
+    await expect(start).toBeDisabled();
+    await expect(block.getByRole("listitem")).toHaveCount(0);
+
+    api.answerGet(
+      reading({
+        status: "running",
+        stage: "레포 받기",
+        progress: { done: 2, total: 5 },
+      }),
+    );
+    await page.clock.runFor(4900);
+    await settle(page);
+    expect(api.calls.get).toBe(first);
+    await page.clock.runFor(100);
+    await expect(status).toHaveText("레포 받기 (2/5)");
+    expect(api.calls.get).toBe(first + 1);
+
+    api.answerGet(
+      reading(
+        {
+          status: "done",
+          stage: "끝",
+          progress: { done: 5, total: 5 },
+          profileKey: profileKey("screen-member"),
+        },
+        syntheticProfile("screen-member"),
+      ),
+    );
+    await page.clock.runFor(5000);
+    await expect(block.getByRole("listitem")).toHaveText(summary);
+    await expect(block).toContainText(labelLine);
+    await expect(status).toHaveText("");
+    expect(api.calls.get).toBe(first + 2);
+    await expect(start).toBeEnabled();
+
+    await page.clock.runFor(30000);
+    await settle(page);
+    expect(api.calls.get).toBe(first + 2);
+  });
+
+  test("a finished analysis shows the summary when the page opens, without reading again", async ({
+    page,
+  }) => {
+    await account(page, true);
+    const api = await analysisApi(page);
+    api.answerGet(
+      reading(
+        { status: "done", stage: "끝", progress: { done: 1, total: 1 } },
+        syntheticProfile("screen-member"),
+      ),
+    );
+    await page.clock.install({ time: loaded });
+    await page.goto("/analysis");
+    const block = page.getByRole("region", { name: title });
+    await expect(block.getByRole("listitem")).toHaveText(summary);
+    await expect(block).toContainText(labelLine);
+    await page.clock.pauseAt(paused);
+    const first = api.calls.get;
+    await page.clock.runFor(30000);
+    await settle(page);
+    expect(api.calls.get).toBe(first);
+  });
+
+  test("a failed analysis shows the worker's error as written, stops reading, and 다시 시도 asks again with the same address", async ({
+    page,
+  }) => {
+    await account(page, true);
+    const api = await analysisApi(page);
+    const error = "GitHub 호출 한도에 걸렸습니다(12분 뒤 다시 시도)";
+    api.answerGet(
+      reading({
+        status: "failed",
+        stage: "실패",
+        error,
+        input: "https://github.com/Synthetic-User/",
+      }),
+    );
+    await page.clock.install({ time: loaded });
+    await page.goto("/analysis");
+    const block = page.getByRole("region", { name: title });
+    await expect(block.getByRole("alert")).toHaveText(error);
+    const retry = block.getByRole("button", { name: "다시 시도", exact: true });
+    await expect(retry).toBeVisible();
+    await page.clock.pauseAt(paused);
+    const first = api.calls.get;
+    await page.clock.runFor(30000);
+    await settle(page);
+    expect(api.calls.get).toBe(first);
+
+    await retry.click();
+    await expect(block.getByRole("status")).toHaveText("대기");
+    expect(api.calls.posts).toEqual([
+      { url: "https://github.com/Synthetic-User/" },
+    ]);
+    await expect(block.getByRole("alert")).toHaveCount(0);
+    await expect(retry).toHaveCount(0);
+  });
+
+  test("a refused request shows the API's error as written, and a 401 turns the form into the login prompt", async ({
+    page,
+  }) => {
+    await account(page, true);
+    const api = await analysisApi(page);
+    await page.goto("/analysis");
+    const block = page.getByRole("region", { name: title });
+    const input = block.getByPlaceholder("https://github.com/아이디");
+    const start = block.getByRole("button", { name: "분석 시작", exact: true });
+    await input.fill(address);
+    for (const reply of [
+      { status: 403, error: "데모 계정은 GitHub 분석을 할 수 없어요." },
+      { status: 409, error: "이미 분석 중이에요. 끝나면 다시 시도해 주세요." },
+    ]) {
+      api.answerPost({ status: reply.status, json: { error: reply.error } });
+      await start.click();
+      await expect(block.getByRole("alert")).toHaveText(reply.error);
+      await expect(start).toBeEnabled();
+      await expect(input).toHaveValue(address);
+      await expect(block.getByRole("status")).toHaveText("");
+    }
+    api.answerPost({ status: 401, json: { error: "로그인이 필요합니다." } });
+    await start.click();
+    await expect(block.getByText("로그인이 필요합니다.")).toBeVisible();
+    await expect(
+      block.getByRole("link", { name: "로그인, 회원가입" }),
+    ).toBeVisible();
+    await expect(input).toHaveCount(0);
+    expect(api.calls.posts).toHaveLength(3);
+  });
+
+  // analysis-flow.spec.ts의 휴대폰 폭·axe 시험은 그 앞(홈 메뉴 글)에서 이미 실패해 /analysis까지 가지 않는다
+  // (ad977ff에서도 같음). 그래서 새 칸이 가장 넓을 때(요약·실패 글·오류 글)를 여기서 본다.
+  test("the block fits phone widths and passes axe with the summary, the failure and an error", async ({
+    page,
+  }) => {
+    await account(page, true);
+    const api = await analysisApi(page);
+    api.answerGet(
+      reading(
+        {
+          status: "failed",
+          stage: "실패",
+          error: "GitHub 호출 한도에 걸렸습니다(12분 뒤 다시 시도)",
+        },
+        syntheticProfile("screen-member"),
+      ),
+    );
+    api.answerPost({
+      status: 429,
+      json: { error: "요청이 많습니다. 15분 후 다시 시도해 주세요." },
+    });
+    await page.goto("/analysis");
+    const block = page.getByRole("region", { name: title });
+    await block.getByPlaceholder("https://github.com/아이디").fill(address);
+    await block.getByRole("button", { name: "분석 시작", exact: true }).click();
+    await expect(block.getByRole("alert")).toHaveCount(2);
+    await expect(block.getByRole("listitem")).toHaveText(summary);
+    for (const width of [768, 390, 320]) {
+      await page.setViewportSize({ width, height: 960 });
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= innerWidth,
+        ),
+      ).toBe(true);
+    }
+    await block.screenshot({ path: "work/github-lv-analysis-mobile.png" });
+    expect(
+      (
+        await new AxeBuilder({ page })
+          .include(".github-lv-analysis")
+          .withTags(["wcag2a", "wcag2aa", "wcag21aa"])
+          .analyze()
+      ).violations,
+    ).toEqual([]);
+  });
+
+  test("leaving the page stops reading", async ({ page }) => {
+    await account(page, true);
+    const api = await analysisApi(page);
+    await page.clock.install({ time: loaded });
+    await page.goto("/analysis");
+    const block = page.getByRole("region", { name: title });
+    await block.getByPlaceholder("https://github.com/아이디").fill(address);
+    const start = block.getByRole("button", { name: "분석 시작", exact: true });
+    await expect(start).toBeEnabled();
+    await page.clock.pauseAt(paused);
+    await start.click();
+    await expect(block.getByRole("status")).toHaveText("대기");
+    api.answerGet(
+      reading({
+        status: "running",
+        stage: "색인",
+        progress: { done: 1, total: 3 },
+      }),
+    );
+    await page.clock.runFor(5000);
+    await expect(block.getByRole("status")).toHaveText("색인 (1/3)");
+    await page
+      .getByRole("navigation", { name: "주 메뉴" })
+      .getByRole("link", { name: "채용 공고" })
+      .click();
+    await expect(page).toHaveURL(/\/jobs$/);
+    await expect(block).toHaveCount(0);
+    const left = api.calls.get;
+    await page.clock.runFor(30000);
+    await settle(page);
+    expect(api.calls.get).toBe(left);
+  });
+
+  test("a posting scored from the analysis shows the labels line, no dummy mark or blue line, and puts each row only on its usedCodes axes", async ({
+    page,
+  }) => {
+    await account(page, true);
+    await page.route("**/api/career", (route) =>
+      route.fulfill({ json: { workspace: { runs: [], documents: [] } } }),
+    );
+    await page.route("**/api/growth", (route) =>
+      route.fulfill({ json: { growth: { reviews: [], tasks: [] } } }),
+    );
+    // 합성 공고 문장. 백엔드+프론트 문장은 프론트 LV가 없어(판정 불가) 백엔드로만 점수를 냈고(usedCodes),
+    // 프론트만 있는 문장은 점수가 없어 행이 없다. 그래서 프론트 축은 없어야 한다.
+    const keywords = [
+      {
+        id: "synthetic-l",
+        text: "합성 문장 하나",
+        codes: ["L"],
+        used: ["L"],
+        score: 50,
+      },
+      {
+        id: "synthetic-bf",
+        text: "합성 문장 둘",
+        codes: ["B", "F"],
+        used: ["B"],
+        score: 40,
+      },
+      {
+        id: "synthetic-d",
+        text: "합성 문장 셋",
+        codes: ["D"],
+        used: ["D"],
+        score: 30,
+      },
+      {
+        id: "synthetic-o",
+        text: "합성 문장 넷",
+        codes: ["O"],
+        used: ["O"],
+        score: 20,
+      },
+      {
+        id: "synthetic-f",
+        text: "합성 문장 다섯",
+        codes: ["F"],
+        used: [],
+        score: null,
+      },
+    ];
+    await page.route("**/api/jobs/keywords?**", (route) =>
+      route.fulfill({
+        json: {
+          source: "SAVED_REVIEW",
+          version: examples.version,
+          keywords: keywords.map((keyword) => ({
+            id: keyword.id,
+            text: keyword.text,
+            categoryCodes: keyword.codes,
+            level: null,
+          })),
+          levelScoringEnabled: true,
+        },
+      }),
+    );
+    await page.route("**/api/jobs/my-levels?**", (route) =>
+      route.fulfill({
+        json: {
+          jobId: "study-demo-backend",
+          taxonomyVersion: examples.version,
+          source: "LV_STAT",
+          levels: keywords
+            .filter((keyword) => keyword.score !== null)
+            .map((keyword) => ({
+              keywordId: keyword.id,
+              text: keyword.text,
+              categoryCodes: keyword.codes,
+              usedCodes: keyword.used,
+              score: keyword.score,
+              referenceScore: null,
+              referenceKind: null,
+              evaluationKind: "CONFIRMED",
+              evaluatedAt: "2026-11-28T00:05:00.000Z",
+            })),
+          sources: [
+            {
+              id: "lv-stat:synthetic-user",
+              kind: "GITHUB",
+              title: "synthetic-user",
+              simulated: false,
+            },
+          ],
+          labels: labelLine.split(" · "),
+          identityVerified: false,
+          methodVersion: "lv-stat-s2-20261127",
+        },
+      }),
+    );
+    await page.goto("/jobs?job=study-demo-backend&demo=low&view=stats");
+    const card = page.locator(".saved-level-radar");
+    const radar = page.getByTestId("saved-level-radar");
+    await expect(radar).toBeVisible();
+    await expect(card).toContainText(labelLine);
+    await expect(card).not.toContainText("(더미)");
+    await expect(
+      radar.locator(
+        '[data-series="reference"], [data-series-point="reference"]',
+      ),
+    ).toHaveCount(0);
+    await expect(radar).toHaveAttribute(
+      "aria-label",
+      "프로그래밍·CS 기초: 내 LV 50.0. 백엔드 개발: 내 LV 40.0. 데이터베이스: 내 LV 30.0. 인프라·배포·운영: 내 LV 20.0",
+    );
+    expect(
+      (await radar
+        .locator('polygon[data-series="mine"]')
+        .getAttribute("points"))!.split(" "),
+    ).toHaveLength(4);
   });
 });

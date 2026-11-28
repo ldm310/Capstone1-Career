@@ -158,6 +158,11 @@
 .saved-level-legend .mine {
   background: #479b45;
 }
+.saved-level-labels {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: #43566d;
+}
 .personal-comparison-footer {
   display: flex;
   align-items: center;

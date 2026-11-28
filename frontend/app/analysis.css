@@ -426,3 +426,145 @@
     font-size: 13px;
   }
 }
+
+/* GitHub 계정 LV 분석(기존 분석 흐름 위의 칸). */
+.github-lv-analysis {
+  max-width: 760px;
+  margin: 0 auto 24px;
+  padding: 32px 40px;
+  border: 1px solid #e2e9f0;
+  border-radius: 16px;
+  background: #fff;
+  color: #243f53;
+}
+.github-lv-analysis h2 {
+  margin: 0 0 8px;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.4;
+  letter-spacing: -0.025em;
+}
+.github-lv-guide {
+  margin: 0 0 20px;
+  color: #536c80;
+  font-size: 14px;
+  line-height: 1.8;
+}
+.github-lv-form {
+  display: flex;
+  gap: 8px;
+}
+.github-lv-form input {
+  min-width: 0;
+  width: 100%;
+  padding: 13px;
+  border: 1px solid #ccd9e5;
+  border-radius: 9px;
+  background: #fff;
+  font-size: 14px;
+}
+.github-lv-analysis button {
+  flex-shrink: 0;
+  padding: 10px 18px;
+  border-radius: 9px;
+  background: #315e7e;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+}
+.github-lv-analysis button:hover:not(:disabled) {
+  background: #254d6b;
+}
+.github-lv-analysis button:disabled,
+.github-lv-form input:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+.github-lv-login {
+  margin: 0;
+  padding: 16px 20px;
+  background: #fff8ec;
+  border: 1px solid #efdec3;
+  border-radius: 12px;
+  color: #735b36;
+  font-size: 14px;
+  line-height: 1.8;
+}
+.github-lv-login a {
+  color: #315e7e;
+  font-weight: 600;
+}
+.github-lv-error {
+  margin: 12px 0 0;
+  padding: 12px 15px;
+  background: #fff4f1;
+  border-radius: 8px;
+  color: #9a3d2e;
+  font-size: 13px;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+.github-lv-progress {
+  margin: 0;
+  padding-top: 12px;
+  color: #416d8d;
+  font-size: 14px;
+  font-weight: 600;
+}
+.github-lv-progress:empty {
+  padding: 0;
+}
+.github-lv-failure {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+.github-lv-failure .github-lv-error {
+  flex: 1 1 240px;
+}
+.github-lv-failure button {
+  margin-top: 12px;
+}
+.github-lv-summary ul {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 8px;
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.github-lv-summary li {
+  padding: 10px 14px;
+  border: 1px solid #e2e9f0;
+  border-radius: 10px;
+  background: #f7fafd;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.github-lv-summary li span {
+  color: #43566d;
+}
+.github-lv-summary li strong {
+  color: #243f53;
+}
+.github-lv-summary li small {
+  color: #536c80;
+  font-size: 13px;
+}
+.github-lv-labels {
+  margin: 12px 0 0;
+  color: #536c80;
+  font-size: 13px;
+}
+@media (max-width: 680px) {
+  .github-lv-analysis {
+    padding: 24px 20px;
+  }
+  .github-lv-form {
+    flex-direction: column;
+  }
+  .github-lv-analysis button {
+    padding: 12px;
+  }
+}

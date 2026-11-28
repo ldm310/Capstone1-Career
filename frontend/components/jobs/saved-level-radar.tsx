@@ -5,10 +5,22 @@ import {
 import type { SavedPostingLevel } from "@/types/posting-level";
 import { RadarPoint } from "./radar-point";
 
-export function SavedLevelRadar({ levels }: { levels: SavedPostingLevel[] }) {
+// 행이 놓이는 축. LV_STAT 행은 점수를 낸 카테고리(usedCodes)에만 놓아, LV가 없는(판정 불가) 축이 다른
+// 카테고리의 점수를 받지 않게 한다. 저장된 LV(RDS) 행은 usedCodes가 없어 지금처럼 문장의 카테고리에 놓는다.
+const axisCodes = (row: SavedPostingLevel) =>
+  row.usedCodes ?? row.categoryCodes;
+
+export function SavedLevelRadar({
+  levels,
+  labels,
+}: {
+  levels: SavedPostingLevel[];
+  // LV_STAT 결과 라벨(PostingLevels.labels). 있으면 한 줄로 보이고 비교 값(파란 선)은 그리지 않는다.
+  labels?: string[];
+}) {
   const axes = skillCategories.flatMap((category) => {
     const items = levels.filter((row) =>
-      row.categoryCodes.includes(category.code),
+      axisCodes(row).includes(category.code),
     );
     if (!items.length) return [];
     const references = items.filter((row) => row.referenceScore !== null);
@@ -26,9 +38,11 @@ export function SavedLevelRadar({ levels }: { levels: SavedPostingLevel[] }) {
     ];
   });
   const visibleLevels = levels.filter((row) =>
-    hasVisibleSkillCategory(row.categoryCodes),
+    hasVisibleSkillCategory(axisCodes(row)),
   );
   const demo = visibleLevels.some((row) => row.evaluationKind === "DEMO");
+  // 확정 LV(CONFIRMED)에 라벨이 있으면 '(더미)' 자리에 라벨 한 줄을 둔다.
+  const labelLine = !demo && labels?.length ? labels.join(" · ") : null;
   const kinds = new Set(visibleLevels.map((row) => row.referenceKind));
   if (!axes.length) {
     return (
@@ -39,7 +53,9 @@ export function SavedLevelRadar({ levels }: { levels: SavedPostingLevel[] }) {
     );
   }
   const hasReference =
-    axes.every((axis) => axis.reference !== null) && kinds.size === 1;
+    !labelLine &&
+    axes.every((axis) => axis.reference !== null) &&
+    kinds.size === 1;
   const referenceLabel = kinds.has("SYNTHETIC_APPLICANTS")
     ? "경쟁자 평균 (더미)"
     : kinds.has("VERIFIED_APPLICANTS")
@@ -85,6 +101,7 @@ export function SavedLevelRadar({ levels }: { levels: SavedPostingLevel[] }) {
           <i className="mine" />내 LV{demo ? " (더미)" : ""}
         </span>
       </div>
+      {labelLine && <p className="saved-level-labels">{labelLine}</p>}
       {axes.length >= 3 ? (
         <svg
           viewBox="0 0 520 400"

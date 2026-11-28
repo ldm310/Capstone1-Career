@@ -359,7 +359,10 @@ export function PersonalJobComparison({ jobId }: { jobId: string }) {
           ) : (
             <>
               {current.saved ? (
-                <SavedLevelRadar levels={current.saved.levels} />
+                <SavedLevelRadar
+                  levels={current.saved.levels}
+                  labels={current.saved.labels}
+                />
               ) : (
                 !!current.rows.length && <EvidenceRadar rows={current.rows} />
               )}
