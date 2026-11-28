@@ -116,6 +116,8 @@ Nice=10
 IOSchedulingClass=idle
 CPUQuota=100%
 MemoryMax=1500M
+# 메모리 한도로 자식(색인·git) 하나가 죽어도 작업자는 계속 돈다: 그 단계만 실패로 notes 에 남는다(기본 stop 이면 유닛 전체가 멈춤)
+OOMPolicy=continue
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=full

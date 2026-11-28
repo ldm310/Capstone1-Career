@@ -284,8 +284,9 @@ class DeployWorkerTest(unittest.TestCase):
         python = exec_line.split('=', 1)[1].split()[0]
         self.assertTrue(os.path.isabs(python), exec_line)
         self.assertTrue(exec_line.endswith(f'-I -u {self.base}/current/service/worker.py --data-dir {self.home}/career-data-staging/lv-stat'), exec_line)
+        # OOMPolicy=continue: 메모리 한도(MemoryMax)로 자식(색인 등) 하나가 죽어도 유닛 전체를 멈추지 않는다(그 단계만 실패 메모)
         for want in ('Restart=on-failure', 'Nice=10', 'IOSchedulingClass=idle', 'CPUQuota=100%', 'MemoryMax=1500M',
-                     f'EnvironmentFile=-{self.envfile}'):
+                     'OOMPolicy=continue', f'EnvironmentFile=-{self.envfile}'):
             self.assertIn(want, lines)
         self.assertIn('「Claude 임시값」', text)
         self.assertEqual(self.current(), sha(1))
