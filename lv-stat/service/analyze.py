@@ -13,6 +13,8 @@ analyze(job, work_root, deadline, progress)가 CONTRACT.md의 profile을 돌려�
   그 밖의 실패는 repos.failed와 notes. 시간을 넘기면 색인한 레포만으로 계속한다.
 - LLM 보충은 끈다(s2_final). 추출기·마무리가 실패하면 notes에 남기고 계속한다. 추출기가 쓰다 만 vars 파일은 마무리 전에 지운다.
 - 모든 단계는 마감(deadline) 안에 끝난다(시간 계획은 CLONE_SHARE·INDEX_SHARE·FINISH_S 설명).
+- 디스크 여유(DISK_FLOOR): 받기 전마다 남은 공간에서 그 레포의 예상 크기를 뺀 값이 DISK_FLOOR보다 작으면 그 레포부터는 받지 않고,
+  받기·색인 중에 남은 공간이 DISK_FLOOR 밑으로 내려가면 그 단계를 멈춘다(받은·색인한 레포로 계속, notes에 메모 한 줄).
 - 작업 폴더 <work_root>/<요청 id>는 끝나면(실패해도) 지운다.
 """
 import ast
@@ -53,6 +55,10 @@ CLONE_MIN_S = 60           # 받기 몫이 이만큼(초) 남지 않으면 더 �
 CLONE_SHARE = 0.5          # 「Claude 임시값」 받기는 work의 절반까지
 INDEX_SHARE = 0.8          # 「Claude 임시값」 색인은 work의 8할까지. 추출기는 work 끝(deadline − 2×FINISH_S)까지
 FINISH_S = 120             # 「Claude 임시값」 마무리는 deadline − FINISH_S까지, 계산은 deadline까지, 단계마다 이만큼(초)까지
+# 디스크 여유: 작업 폴더는 운영 웹(SQLite)·스테이징 웹·백엔드와 같은 디스크다. 받기 전마다 남은 공간 − 그 레포의 예상 크기가
+# DISK_FLOOR보다 작으면 그 레포부터는 받지 않고, 받기·색인 중에 DISK_FLOOR 밑으로 내려가면 그 단계를 멈춘다(_spawn 감시).
+DISK_FLOOR = 2 * 1024 ** 3         # 「Claude 임시값」 남겨 둘 공간(2GiB). 첫 배포 로그의 디스크 줄을 보고 다시 정한다
+BIG_REPO_EST = 500 * 1024 ** 2     # 「Claude 임시값」 큰 레포(400MB 넘음) 하나의 예상 크기(2단계 실측 최대 309MB, 3.4GB 레포)
 
 MSG_NO_USER = 'GitHub 계정을 찾을 수 없습니다. 주소를 확인해 주세요.'
 MSG_ORG = '개인 GitHub 계정 주소를 넣어 주세요(조직 계정은 분석하지 않습니다).'
@@ -60,9 +66,13 @@ MSG_NO_REPOS = '공개 레포에서 이 계정의 커밋을 찾지 못했습니�
 MSG_NO_CLONE = '레포를 받지 못했습니다. 잠시 뒤 다시 시도해 주세요.'
 MSG_NO_INDEX = '레포를 색인하지 못했습니다. 잠시 뒤 다시 시도해 주세요.'
 NOTE_SEARCH = '커밋 검색을 하지 못해 남의 레포를 다 찾지 못함'
+NOTE_DISK_CLONE = '디스크 여유가 모자라 레포 {n}개는 받지 못함'
+NOTE_DISK_INDEX = '디스크 여유가 모자라 레포 {n}개는 색인하지 못함'
 
 TIMED_OUT = 'timeout'                          # run_step이 시간을 넘겼을 때 돌려주는 글
+DISK_LOW = 'disk-low'                          # 디스크 감시가 자식을 끝냈을 때 _spawn의 종료 코드 자리·run_step의 글
 API_STEPS = ('s2_index.py',)                   # GitHub API를 부르는 단계. 이 단계만 토큰을 받는다
+DISK_STEPS = ('s2_index.py',)                  # 디스크를 쓰는 단계(큰 레포의 내 경로 받기). _spawn이 남은 공간을 본다
 GITHUB_ENV = ('LV_GITHUB_API', 'LV_GITHUB_OFFLINE', 'LV_GITHUB_TOKEN')   # ghapi가 읽는 환경 변수
 POLL_S = 1.0                                   # 자식 프로세스를 기다리며 진행을 보는 간격(초)
 TAIL = 2000                                    # 로그에 남기는 자식 출력의 끝 글자 수
@@ -74,6 +84,10 @@ log = logging.getLogger(__name__)
 
 class UserError(RuntimeError):
     """사용자에게 그대로 보이는 실패(짧은 한국어)."""
+
+
+class DiskLow(Exception):
+    """받는 중에 디스크 여유가 DISK_FLOOR 밑으로 내려가 받기를 멈춤(clone이 올리고 _clone_all이 받기를 그만둔다)."""
 
 
 def now_iso():
@@ -157,14 +171,21 @@ def discover(login, notes):
 
 
 # ---------------- 자식 프로세스
-def _spawn(argv, env, timeout, poll=None):
+def _disk_free(path):
+    """path(요청 작업 폴더나 그 아래)가 있는 디스크의 남은 공간(바이트). 시험이 바꿔 끼운다."""
+    return shutil.disk_usage(path).free
+
+
+def _spawn(argv, env, timeout, poll=None, watch=None):
     """argv를 새 세션(프로세스 묶음)의 자식으로 돌린다. timeout초를 넘기면 묶음 전체를 끝낸다(os.killpg: git 같은 손주까지).
+    watch(폴더)를 주면 POLL_S초마다 그 디스크의 남은 공간을 보고, DISK_FLOOR 밑이면 시간을 넘겼을 때처럼 묶음 전체를 끝낸다.
+    기다리다 예외가 나도(SIGTERM의 SystemExit 등) 묶음 전체를 끝내고 거둔다.
     출력은 임시 파일로 받는다(파이프가 차서 멈추지 않게). 기다리는 동안 POLL_S초마다 poll()을 부른다.
-    -> (종료 코드(시간을 넘겼으면 None), stdout 글자, stderr 글자)"""
+    -> (종료 코드(시간을 넘겼으면 None, 디스크 감시가 끝냈으면 DISK_LOW), stdout 글자, stderr 글자)"""
     with tempfile.TemporaryFile() as out, tempfile.TemporaryFile() as err:
         p = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=out, stderr=err, env=env, start_new_session=True)
         end = time.monotonic() + timeout
-        rc = None
+        rc, low = None, False
         try:
             while True:
                 try:
@@ -173,10 +194,13 @@ def _spawn(argv, env, timeout, poll=None):
                 except subprocess.TimeoutExpired:
                     if time.monotonic() >= end:
                         break
+                    if watch and _disk_free(watch) < DISK_FLOOR:
+                        low = True
+                        break
                     if poll:
                         poll()
         finally:
-            if rc is None:                   # 시간을 넘김(또는 기다리다 예외). 아직 거두지 않아 묶음 번호(= pid)가 그대로다
+            if rc is None:                   # 시간을 넘김·디스크 감시(또는 기다리다 예외). 아직 거두지 않아 묶음 번호(= pid)가 그대로다
                 try:
                     os.killpg(p.pid, signal.SIGKILL)
                 except ProcessLookupError:
@@ -184,7 +208,7 @@ def _spawn(argv, env, timeout, poll=None):
                 p.wait()
         out.seek(0)
         err.seek(0)
-        return rc, out.read().decode('utf-8', 'replace'), err.read().decode('utf-8', 'replace')
+        return DISK_LOW if low else rc, out.read().decode('utf-8', 'replace'), err.read().decode('utf-8', 'replace')
 
 
 def _child_env(home, api):
@@ -200,25 +224,37 @@ def _child_env(home, api):
 
 def run_step(script, home, timeout, poll=None):
     """s2 단계 하나(python3 -I -B <s2>/<script> P01)를 새 세션의 자식 프로세스로 돌린다. LV_S2_HOME은 home의 절대 경로다.
-    GitHub API를 부르는 단계(s2_index)만 토큰을 받는다. timeout초를 넘기면 프로세스 묶음 전체를 끝낸다.
-    -> (0으로 끝났으면 참, 시간을 넘겼으면 TIMED_OUT, 아니면 출력의 끝 부분)"""
+    GitHub API를 부르는 단계(s2_index)만 토큰을 받는다. timeout초를 넘기면 프로세스 묶음 전체를 끝낸다. 디스크를 쓰는 단계
+    (DISK_STEPS)는 home 디스크의 남은 공간이 DISK_FLOOR 밑으로 내려가도 끝낸다.
+    -> (0으로 끝났으면 참, 시간을 넘겼으면 TIMED_OUT, 디스크 감시가 끝냈으면 DISK_LOW, 아니면 출력의 끝 부분)"""
     home = os.path.abspath(home)
+    name = os.path.basename(script)
     rc, out, err = _spawn([sys.executable, '-I', '-B', os.path.join(S2DIR, script), PID],
-                          _child_env(home, os.path.basename(script) in API_STEPS), timeout, poll)
+                          _child_env(home, name in API_STEPS), timeout, poll, watch=home if name in DISK_STEPS else None)
     if rc is None:
         return False, TIMED_OUT
+    if rc == DISK_LOW:
+        return False, DISK_LOW
     return rc == 0, (out + err)[-TAIL:]
 
 
 # ---------------- 받기
 def clone(full_name, dest, big, timeout, run=None):
     """https://github.com/<full_name>.git을 dest에 받는다(--no-checkout, 토큰 없이 s2lib.GENV). 1MB 넘는 파일 내용은 받지 않고,
-    큰 레포(big)는 내용 없이 받은 뒤 .git/lv-partial을 만든다. timeout초를 넘기면 그만둔다. run은 시험용 자리
-    (기본은 새 세션 자식 프로세스, 시간을 넘기면 묶음 전체를 끝냄). -> 받았으면 참(못 받으면 dest를 지운다)"""
+    큰 레포(big)는 내용 없이 받은 뒤 .git/lv-partial을 만든다. timeout초를 넘기면 그만둔다. 받는 중에 dest 디스크의 남은 공간이
+    DISK_FLOOR 밑으로 내려가면 그만두고 DiskLow를 올린다. run은 시험용 자리(기본은 새 세션 자식 프로세스와 디스크 감시, 시간을
+    넘기거나 디스크가 모자라면 묶음 전체를 끝냄). -> 받았으면 참(못 받으면 dest를 지운다)"""
     s2 = _s2lib()
     argv = ['git', '-c', 'core.hooksPath=/dev/null', '-c', 'protocol.file.allow=never', 'clone', '--no-checkout', '--no-tags',
             '--quiet', '--filter=blob:none' if big else '--filter=blob:limit=1m', f'https://github.com/{full_name}.git', dest]
-    rc, _, err = (run or _spawn)(argv, s2.GENV, timeout)
+    if run is None:
+        rc, _, err = _spawn(argv, s2.GENV, timeout, watch=os.path.dirname(os.path.abspath(dest)))
+    else:
+        rc, _, err = run(argv, s2.GENV, timeout)
+    if rc == DISK_LOW:
+        log.warning('레포 받기 멈춤(디스크 여유 모자람) %s', full_name)
+        shutil.rmtree(dest, ignore_errors=True)
+        raise DiskLow(full_name)
     if rc != 0:
         log.warning('레포 받기 실패 %s: %s', full_name, '시간 초과' if rc is None else err.strip()[-300:])
         shutil.rmtree(dest, ignore_errors=True)
@@ -239,8 +275,9 @@ def _branches(d):
 
 
 def _clone_all(repos, home, clone_end, progress, clone_fn, notes):
-    """레포를 차례로 받는다. 받기 몫(clone_end까지)이 CLONE_MIN_S초 아래로 남으면 그만둔다.
-    -> (people.json의 레포 칸 목록, 받지 못한 수). 하나도 못 받으면 UserError."""
+    """레포를 차례로 받는다. 받기 몫(clone_end까지)이 CLONE_MIN_S초 아래로 남거나 디스크 여유가 모자라면(받기 전: home 디스크의
+    남은 공간 − 예상 크기 < DISK_FLOOR, 받는 중: clone_fn이 DiskLow) 그 레포부터는 받지 않고 notes에 한 줄을 남긴다. 예상 크기는
+    큰 레포면 BIG_REPO_EST, 아니면 GitHub size(KB) × 1024다. -> (people.json의 레포 칸 목록, 받지 못한 수). 하나도 못 받으면 UserError."""
     os.makedirs(os.path.join(home, 'repos'))
     entries, failed, total = [], 0, len(repos)
     progress('레포 받기', 0, total)
@@ -249,11 +286,19 @@ def _clone_all(repos, home, clone_end, progress, clone_fn, notes):
         if left < CLONE_MIN_S:
             notes.append(f'시간 상한에 닿아 레포 {total - i}개는 받지 못함')
             break
+        big = r['size'] > BIG_KB
+        if _disk_free(home) - (BIG_REPO_EST if big else r['size'] * 1024) < DISK_FLOOR:
+            notes.append(NOTE_DISK_CLONE.format(n=total - i))
+            break
         # 키는 파일·폴더 이름으로 쓴다: 차례 번호(겹치지 않음) + 영문·숫자·._-만 남긴 이름
         key = '%02d-%s' % (i + 1, re.sub(r'[^A-Za-z0-9._-]', '_', r['full_name'].replace('/', '__'))[:80])
         dest = os.path.join(home, 'repos', key)
-        big = r['size'] > BIG_KB
-        if clone_fn(r['full_name'], dest, big, left):
+        try:
+            cloned = clone_fn(r['full_name'], dest, big, left)
+        except DiskLow:                      # 받는 중에 모자람: 이 레포와 뒤의 레포는 받지 않음(받기 실패로 세지 않음)
+            notes.append(NOTE_DISK_CLONE.format(n=total - i))
+            break
+        if cloned:
             # PR 목록은 본인 소유·포크 아님·400MB 이하 레포만 받는다(2단계 범위. s2_index는 레포의 PR을 끝까지 받는다)
             entries.append(dict(key=key, full_name=r['full_name'], dir=dest, default_branch=r['default_branch'],
                                 **_branches(dest), prs=r['owned'] and not big, evidence=False))
@@ -292,8 +337,9 @@ def _rate_limit_message(err):
 
 
 def _index(home, login, entries, index_end, progress, notes):
-    """색인 단계(s2_index). 레포 파일마다 결과를 읽는다. 시간을 넘기거나 실패하면 색인 파일이 있는 레포만으로 person.json을
-    쓴다(s2_index와 같은 칸). -> (색인한 레포 수, 색인하지 못한 레포 수(시간 상한으로 못 한 것은 빼고))"""
+    """색인 단계(s2_index). 레포 파일마다 결과를 읽는다. 시간을 넘기거나 디스크 여유가 모자라 멈추거나 실패하면 색인 파일이 있는
+    레포만으로 person.json을 쓴다(s2_index와 같은 칸). 시간 상한·디스크 여유로 못 한 레포는 그 이유의 메모 한 줄로만 센다.
+    -> (색인한 레포 수, 색인하지 못한 레포 수(시간 상한·디스크 여유로 못 한 것은 빼고))"""
     idx = os.path.join(home, 'index', PID)
     total, shown = len(entries), [0]
     progress('색인', 0, total)
@@ -309,9 +355,9 @@ def _index(home, login, entries, index_end, progress, notes):
 
     t = time.time()
     ok, msg = run_step('s2_index.py', home, index_end - time.time(), poll=poll)
-    timed_out = msg == TIMED_OUT
+    timed_out, disk_low = msg == TIMED_OUT, msg == DISK_LOW
     if not ok:
-        log.warning('색인 %s: %s', '시간 상한' if timed_out else '실패', msg)
+        log.warning('색인 %s: %s', '시간 상한' if timed_out else '디스크 여유 모자람' if disk_low else '실패', msg)
     keys, missing, failed, analyzed, unfetched, unblamed = [], 0, 0, 0, 0, 0
     for e in entries:
         path = os.path.join(idx, e['key'] + '.json')
@@ -334,6 +380,8 @@ def _index(home, login, entries, index_end, progress, notes):
             unblamed += count if isinstance(count, int) else 0
     if missing and timed_out:
         notes.append(f'시간 상한에 닿아 레포 {missing}개는 색인하지 못함')
+    elif missing and disk_low:
+        notes.append(NOTE_DISK_INDEX.format(n=missing))
     else:
         failed += missing
     if failed:

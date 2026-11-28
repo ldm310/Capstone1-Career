@@ -82,6 +82,39 @@ with open(os.path.join(os.environ["LV_S2_HOME"], os.path.basename(sys.argv[0]) +
     json.dump(out, f)
 """
 
+def slow_git(pids):
+    """가짜 git(sh): 손주 프로세스(60초 잠)를 띄우고 자기와 손주 번호를 pids 파일에 남긴 뒤 60초 잔다. 디스크 감시가 묶음 전체를
+    끝내야 한다(os.killpg). 받은 레포의 코드가 아니라 이 시험이 만든 껍데기다."""
+    return ('#!/bin/sh\nsleep 60 &\nprintf "%%s %%s\\n" "$$" "$!" > "%s"\nexec sleep 60\n' % pids)
+
+
+def kill_group(pids):
+    """slow_git이 남긴 번호의 프로세스 묶음을 끝낸다(시험이 실패해 남은 것을 치움)."""
+    try:
+        with open(pids, encoding="utf-8") as f:
+            numbers = [int(n) for n in f.read().split()]
+    except (OSError, ValueError):
+        return
+    for n in numbers:
+        for kill in (os.killpg, os.kill):
+            try:
+                kill(n, 9)
+            except (ProcessLookupError, PermissionError):
+                pass
+
+
+def gone(pid, wait=10):
+    """pid 프로세스가 wait초 안에 없어지면 참."""
+    end = time.time() + wait
+    while time.time() < end:
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return True
+        time.sleep(0.1)
+    return False
+
+
 # 손주 프로세스(60초 잠)를 띄우고 그 번호를 남긴 뒤 자기도 잔다. 시간을 넘기면 묶음 전체가 끝나야 한다.
 PROBE_SLOW = r"""
 import os, subprocess, sys, time
@@ -671,6 +704,111 @@ class AnalyzeTest(unittest.TestCase):
         self.check_profile(p, job)
         self.assertEqual(p["repos"], {"found": 2, "analyzed": 1, "failed": 1, "notes": ["레포 1개는 받지 못함"]})
 
+    # ---------------- 디스크 여유(「Claude 임시값」 DISK_FLOOR 2GiB, 운영 웹과 같은 디스크)
+    def test_disk_floor_stops_cloning_with_note(self):
+        # 받기 전마다 남은 공간에서 그 레포의 예상 크기(GitHub size KB × 1024)를 뺀 값이 DISK_FLOOR보다 작으면 그 레포부터는
+        # 받지 않고 메모를 남긴다(시간 상한과 같은 꼴). 받은 레포로 끝까지 분석한다. 남은 공간은 요청 작업 폴더에서 잰다.
+        self.user()
+        self.owned([repo_obj("tester/new", "2026-03-02T00:00:00Z", size=10),
+                    repo_obj("tester/old", "2026-03-01T00:00:00Z", size=50)])
+        srcs = {"tester/new": self.make_src("new", PY_COMMITS), "tester/old": self.make_src("old", GO_COMMITS)}
+        clone = LocalClone(srcs, self.genv)
+        job, asked = new_job(), []
+
+        def disk_free(path):
+            asked.append(path)
+            return analyze.DISK_FLOOR + 10 * 1024   # 10KB 레포는 딱 받을 수 있고(같으면 받음), 50KB 레포는 못 받음
+
+        with mock.patch.object(analyze, "_disk_free", disk_free):
+            p = self.run_analyze(job, clone)
+        self.check_profile(p, job)
+        self.assertEqual([f for f, _, _ in clone.calls], ["tester/new"])
+        self.assertEqual(p["repos"], {"found": 2, "analyzed": 1, "failed": 0,
+                                      "notes": ["디스크 여유가 모자라 레포 1개는 받지 못함"]})
+        self.assertEqual(p["categories"]["L"]["languages"], {"Python": 1.3})
+        self.assertTrue(asked)
+        self.assertTrue(all(a == self.home(job) or a.startswith(self.home(job) + os.sep) for a in asked), asked)
+
+    def test_disk_estimate_is_github_size_or_big_repo_estimate(self):
+        # 예상 크기는 400MB 이하 레포면 GitHub size(KB) × 1024, 큰 레포(400MB 넘음, blob 없이 받음)면 BIG_REPO_EST(500MB,
+        # 2단계 실측 최대 309MB)다. 남은 공간 − 예상 크기 = DISK_FLOOR면 받고, 1바이트 모자라면 받지 않는다.
+        floor, big_est, mib = analyze.DISK_FLOOR, analyze.BIG_REPO_EST, 1024 * 1024
+        rows = [  # (GitHub size KB, 남은 공간, 받는가)
+            (10, floor + 10 * 1024, True),
+            (10, floor + 10 * 1024 - 1, False),
+            (400 * 1024, floor + 400 * mib, True),        # 딱 400MB는 큰 레포가 아님: GitHub size로 잰다
+            (BIG_KB, floor + big_est, True),
+            (BIG_KB, floor + big_est - 1, False),
+            (BIG_KB, floor + 401 * mib, False),            # 큰 레포는 GitHub size가 아니라 500MB로 잰다
+        ]
+        for size, free, cloned in rows:
+            with self.subTest(size=size, free=free - floor):
+                home = tempfile.mkdtemp(dir=self.tmp)
+                calls, notes = [], []
+
+                def fake_clone(full, dest, big, timeout):
+                    calls.append((full, big))
+                    os.makedirs(os.path.join(dest, ".git"))
+                    return True
+
+                repo = dict(full_name="tester/r", default_branch="main", size=size, pushed_at=None, owned=True)
+                with mock.patch.object(analyze, "_disk_free", lambda path: free):
+                    if cloned:
+                        entries, failed = analyze._clone_all([repo], home, time.time() + 600, Progress(), fake_clone, notes)
+                        self.assertEqual((len(entries), failed, notes), (1, 0, []))
+                        self.assertEqual(calls, [("tester/r", size > 400 * 1024)])
+                    else:
+                        with self.assertRaises(analyze.UserError) as cm:   # 하나도 못 받았으면 지금처럼 MSG_NO_CLONE
+                            analyze._clone_all([repo], home, time.time() + 600, Progress(), fake_clone, notes)
+                        self.assertEqual(str(cm.exception), "레포를 받지 못했습니다. 잠시 뒤 다시 시도해 주세요.")
+                        self.assertEqual((calls, notes), ([], ["디스크 여유가 모자라 레포 1개는 받지 못함"]))
+
+    def test_disk_watchdog_stops_a_running_clone_with_note(self):
+        # 받는 중에 남은 공간이 DISK_FLOOR 밑으로 내려가면 시간 초과처럼 그 clone의 프로세스 묶음 전체를 끝낸다(시간 초과와는
+        # 다른 결과). 그 레포와 뒤의 레포는 받지 않았다고 메모 한 줄을 남기고(받기 실패로 세지 않음), 받은 레포로 끝까지 분석한다.
+        import s2lib
+        self.account(["tester/fast", "tester/slow", "tester/later"])
+        local = LocalClone({"tester/fast": self.make_src("fast", PY_COMMITS)}, self.genv)
+        fake_bin = os.path.join(self.tmp, "fake-bin")
+        os.makedirs(fake_bin)
+        pids = os.path.join(self.tmp, "slow-clone.pids")
+        with open(os.path.join(fake_bin, "git"), "w", encoding="utf-8") as f:
+            f.write(slow_git(pids))
+        os.chmod(os.path.join(fake_bin, "git"), 0o755)
+        self.addCleanup(kill_group, pids)
+        state, calls = {"cloning": False}, []
+
+        def clone_fn(full, dest, big, timeout):
+            calls.append(full)
+            if full == "tester/fast":
+                return local(full, dest, big, timeout)
+            if full != "tester/slow":
+                return False                                  # 감시가 받기를 멈췄으면 불리지 않는다
+            state["cloning"] = True                           # 진짜 clone(새 세션 자식 + 감시), git만 가짜
+            try:
+                with mock.patch.dict(s2lib.GENV, PATH=fake_bin + os.pathsep + s2lib.GENV.get("PATH", "")):
+                    return analyze.clone(full, dest, big, timeout)
+            finally:
+                state["cloning"] = False
+
+        def disk_free(path):   # 느린 clone이 시작된 뒤(가짜 git이 번호를 남김)에만 여유가 모자람
+            low = state["cloning"] and os.path.exists(pids)
+            return analyze.DISK_FLOOR - 1 if low else analyze.DISK_FLOOR + 10 ** 12
+
+        job, t = new_job(), time.time()
+        with mock.patch.object(analyze, "_disk_free", disk_free), self.assertLogs("analyze", "WARNING"):
+            p = self.run_analyze(job, clone_fn)
+        self.assertLess(time.time() - t, 40)                  # 60초 자는 clone을 기다리지 않았다
+        self.assertEqual(calls, ["tester/fast", "tester/slow"])
+        self.check_profile(p, job)
+        self.assertEqual(p["repos"], {"found": 3, "analyzed": 1, "failed": 0,
+                                      "notes": ["디스크 여유가 모자라 레포 2개는 받지 못함"]})
+        self.assertEqual(p["categories"]["L"]["languages"], {"Python": 1.3})
+        with open(pids, encoding="utf-8") as f:
+            for pid in (int(n) for n in f.read().split()):
+                self.assertTrue(gone(pid), "디스크 감시는 clone의 손주 프로세스까지 끝내야 한다(os.killpg)")
+        self.assertFalse(os.path.exists(self.home(job)))
+
     def test_index_rate_limit_fails(self):
         self.account(["tester/demo"])
         self.api.routes[index_commits("tester/demo")] = rate_limited()
@@ -819,6 +957,35 @@ class AnalyzeTest(unittest.TestCase):
         self.assertEqual(p["repos"], {"found": 2, "analyzed": 1, "failed": 0, "notes": ["시간 상한에 닿아 레포 1개는 색인하지 못함"]})
         self.assertEqual(p["categories"]["L"]["languages"], {"Python": 1.3})
 
+    def test_disk_watchdog_stops_indexing_and_keeps_indexed_repos(self):
+        # 색인 중에 남은 공간이 DISK_FLOOR 밑으로 내려가면(큰 레포의 내 경로 받기 등) 시간 초과처럼 색인 프로세스 묶음을 끝내고,
+        # 색인한 레포만으로 계속한다. 메모는 시간 상한과 다른 한 줄이고, 못 한 레포를 '색인하지 못함'으로 또 세지 않는다.
+        self.account(["tester/fast", "tester/slow"])
+        self.api.routes[index_commits("tester/slow")] = self.api.block()   # 두 번째 레포 색인이 끝나지 않음
+        srcs = {"tester/fast": self.make_src("fast", PY_COMMITS), "tester/slow": self.make_src("slow", GO_COMMITS)}
+        job = new_job()
+
+        def disk_free(path):   # 첫 레포의 색인 파일을 다 쓴 뒤로는 여유가 모자람
+            idx = os.path.join(self.home(job), "index", "P01")
+            try:
+                names = os.listdir(idx)
+            except OSError:
+                names = []
+            done = [n for n in names if "fast" in n and isinstance(analyze._load_json(os.path.join(idx, n)), dict)]
+            return analyze.DISK_FLOOR - 1 if done else analyze.DISK_FLOOR + 10 ** 12
+
+        t = time.time()
+        with mock.patch.object(analyze, "INDEX_SHARE", 0.04), mock.patch.object(analyze, "_disk_free", disk_free), \
+                self.assertLogs("analyze", "WARNING"):
+            # 색인 몫은 8초(마무리·계산 몫을 뺀 200초의 0.04). 감시가 그보다 먼저 끝내야 시간 상한 메모가 아니다
+            p = self.run_analyze(job, LocalClone(srcs, self.genv), seconds=2 * analyze.FINISH_S + 200)
+        self.assertLess(time.time() - t, 40)
+        self.check_profile(p, job)
+        self.assertEqual(p["repos"], {"found": 2, "analyzed": 1, "failed": 0,
+                                      "notes": ["디스크 여유가 모자라 레포 1개는 색인하지 못함"]})
+        self.assertEqual(p["categories"]["L"]["languages"], {"Python": 1.3})
+        self.assertFalse(os.path.exists(self.home(job)))
+
     def test_rule_failures_are_notes(self):
         # 추출기가 실패하면 notes에 이름을 남기고 계속한다. 마무리(s2_final)가 모듈을 마무리하지 못하면(finalize_error) 그 카테고리를,
         # 마무리 단계 자체가 실패하면 그 사실을 notes에 남긴다. 어느 경우든 프로필은 CONTRACT 모양이다(모른 카테고리는 null).
@@ -951,10 +1118,10 @@ class AnalyzeTest(unittest.TestCase):
                 clock.use_up(start, timeout + late)
             return ok, msg
 
-        def spawn(argv, env, timeout, poll=None):
+        def spawn(argv, env, timeout, poll=None, watch=None):
             if "-c" in argv:                                 # 계산(calc)
                 steps.append(("calc", clock.time(), timeout))
-            return real_spawn(argv, env, timeout, poll)
+            return real_spawn(argv, env, timeout, poll, watch)
 
         job, seconds, fin, tol = new_job(), 1200, analyze.FINISH_S, 1.0
         t0 = time.time()
