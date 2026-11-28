@@ -12,9 +12,10 @@ set -euo pipefail
 env=${1:?staging 또는 production}
 sha=${2:?커밋}
 REPO=${REPO:-https://github.com/ldm310/Capstone1-Career.git}
+# lv_stat: 웹의 LV 분석 기능 스위치 CAREER_LV_STAT(lv-stat/service/CONTRACT.md). 분석 작업자가 스테이징에만 있어 스테이징만 on
 case "$env" in
-  staging)    svc=career-web-staging; port=3001; data=$HOME/career-data-staging ;;
-  production) svc=career-web;         port=3000; data=$HOME/career-data ;;
+  staging)    svc=career-web-staging; port=3001; data=$HOME/career-data-staging; lv_stat=on ;;
+  production) svc=career-web;         port=3000; data=$HOME/career-data;         lv_stat=off ;;
   *) echo "staging 또는 production 만 됩니다: $env" >&2; exit 2 ;;
 esac
 base=$HOME/web/$env
@@ -56,6 +57,7 @@ User=$(id -un)
 WorkingDirectory=$base/current/frontend
 Environment=NODE_ENV=production
 Environment=CAREER_DATA_DIR=$data
+Environment=CAREER_LV_STAT=$lv_stat
 Environment=NEXT_TELEMETRY_DISABLED=1
 EnvironmentFile=-$data/.env
 ExecStart=$(command -v npm) start -- -p $port -H 127.0.0.1
