@@ -18,11 +18,13 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import type * as KeywordsRoute from "@/app/api/jobs/keywords/route";
 import type * as MyLevelsRoute from "@/app/api/jobs/my-levels/route";
+import type * as AnalysisRoute from "@/app/api/lv-stat/analysis/route";
 import { detectLanguages, scoreKeyword } from "@/lib/lv-stat/score";
 import type * as DemoAccount from "@/lib/server/demo-account";
 import type * as JobKeywords from "@/lib/server/job-keywords";
 import type * as LvStore from "@/lib/server/lv-stat";
 import type * as ProfileLevels from "@/lib/server/profile-levels";
+import type * as Store from "@/lib/server/store";
 import examples from "@/mock/reviewed-keyword-examples.json";
 import type {
   LvCategory,
@@ -1905,5 +1907,501 @@ test.describe("profile levels", () => {
       body: { error: "공고와 분류 버전을 확인해 주세요." },
     });
     expect(requests).toEqual([]);
+  });
+});
+
+// app/api/lv-stat/analysis/route.ts의 POST·GET을 직접 부른다. 같은 확인을 dev 서버로 하는 e2e
+// (tests/lv-stat-analysis.spec.ts)는 CI가 돌리지 않아서, 서버 쪽 규칙을 CI가 돌리는 이 계약 시험에도 둔다.
+test.describe("analysis api", () => {
+  let GET: typeof AnalysisRoute.GET;
+  let POST: typeof AnalysisRoute.POST;
+  let realStore: typeof Store;
+  let demoAccount: typeof DemoAccount.demoAccount;
+  let loginHook: ReturnType<typeof registerHooks> | undefined;
+  let fakeDir: string;
+  let dataDir: string;
+  let errors: ReturnType<typeof captureErrors>;
+
+  const namespace = "staging";
+  const signIn = "로그인이 필요합니다.";
+  const badOrigin = "요청 출처를 확인할 수 없습니다.";
+  const urlHelp =
+    "GitHub 계정 주소를 넣어 주세요. 예: https://github.com/아이디";
+  const demoRefused = "데모 계정은 GitHub 분석을 할 수 없어요.";
+  const busy = "이미 분석 중이에요. 끝나면 다시 시도해 주세요.";
+  const full = "지금 분석 요청이 많아요. 잠시 뒤 다시 시도해 주세요.";
+  const requestFailed = "분석 요청을 처리하지 못했어요.";
+  const lookupFailed = "분석 결과를 불러오지 못했어요.";
+  const uuidV4 =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+  // 이 시험이 바꾸는 환경 변수. 시험마다 처음 값으로 되돌린다.
+  const envKeys = ["CAREER_DATA_DIR", "CAREER_PROFILE_NAMESPACE"] as const;
+  const savedEnv: Partial<Record<(typeof envKeys)[number], string>> = {};
+
+  // route의 store(@/lib/server/store)만 시험용으로 바꾼다. store.ts의 user·isGuest는 Next 요청 안에서만 쿠키를
+  // 읽고 rateLimit은 SQLite를 쓰기 때문이다. 로그인 사용자·손님 id·rateLimit이 던질 것은 시험이 정하고,
+  // originCheck·jsonBody는 진짜 store.ts 함수를 부른다. route가 부른 store 함수와 인자는 calls에 순서대로 쌓인다.
+  // 요청·결과 파일(lib/server/lv-stat.ts)은 진짜이고, 시험마다 새 CAREER_DATA_DIR에 쓴다.
+  type Account = { id: string; email: string; name: string };
+  type Double = {
+    user: Account | null;
+    guest?: string;
+    limitError?: unknown;
+    calls: unknown[][];
+    originCheck: (req: Request) => void;
+    jsonBody: (req: Request) => Promise<unknown>;
+  };
+  let double: Double;
+  const as = (user: Account | null, guest?: string) => {
+    double.user = user;
+    double.guest = guest;
+  };
+  const member = (id: string) =>
+    as({ id, email: `${id}@example.invalid`, name: "합성 회원" });
+  const guest = (id: string) =>
+    as({ id, email: `${id}@example.invalid`, name: "손님" }, id);
+  const demo = () =>
+    as({ id: "demo-user", email: demoAccount.email, name: demoAccount.name });
+  // 지금까지 쌓인 store 부름을 꺼내고 비운다.
+  const took = () => double.calls.splice(0);
+  // 회원의 POST가 지나는 store 부름: 출처 → 로그인 → 손님 확인 → rateLimit(키 lv-stat:<id>, 최대 6) → 본문
+  const memberCalls = (id: string) => [
+    ["originCheck"],
+    ["user"],
+    ["isGuest", id],
+    ["rateLimit", `lv-stat:${id}`, 6],
+    ["jsonBody"],
+  ];
+
+  const sameSite = { origin: "http://local", host: "local" };
+  async function answer(response: Response) {
+    return {
+      status: response.status,
+      cacheControl: response.headers.get("cache-control"),
+      body: await response.json(),
+    };
+  }
+  // body가 글이면 그대로 보내고(JSON 아닌 본문), 아니면 JSON으로 보낸다.
+  async function post(
+    body: unknown,
+    headers: Record<string, string> = sameSite,
+  ) {
+    return answer(
+      await POST(
+        new Request("http://local/api/lv-stat/analysis", {
+          method: "POST",
+          headers: { "content-type": "application/json", ...headers },
+          body: typeof body === "string" ? body : JSON.stringify(body),
+        }),
+      ),
+    );
+  }
+  const get = async () => answer(await GET());
+  const refused = (status: number, error: string) => ({
+    status,
+    cacheControl: "private, no-store",
+    body: { error },
+  });
+  const found = (job: LvJob | null, profile: LvProfile | null = null) => ({
+    status: 200,
+    cacheControl: "private, no-store",
+    body: { job, profile },
+  });
+  // 회원의 POST가 202이고 그 job을 준다.
+  async function queued(url = "https://github.com/synthetic-user") {
+    const { status, body } = await post({ url });
+    expect(status, url).toBe(202);
+    return body.job as LvJob;
+  }
+
+  const jobsDir = () => path.join(dataDir, "lv-stat", "jobs");
+  const jobPath = (id: string) => path.join(jobsDir(), `${id}.json`);
+  const profilePath = (subjectId: string) =>
+    path.join(
+      dataDir,
+      "lv-stat",
+      "profiles",
+      `${contractKey(namespace, subjectId)}.json`,
+    );
+  async function jobFiles() {
+    try {
+      return (await readdir(jobsDir())).sort();
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+      throw error;
+    }
+  }
+  async function writeJson(file: string, value: unknown) {
+    await mkdir(path.dirname(file), { recursive: true });
+    await writeFile(file, JSON.stringify(value));
+  }
+  const resultOf = (subjectId: string, jobId: string): LvProfile => ({
+    ...profile({ B: 2.0 }),
+    subjectId,
+    jobId,
+  });
+  // 작업자가 끝낸 요청 파일과 그 결과 파일(CONTRACT 모양)을 둔다.
+  async function finished(subjectId: string) {
+    const job: LvJob = {
+      id: "6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b",
+      namespace,
+      subjectId,
+      login: "synthetic-user",
+      input: "https://github.com/synthetic-user",
+      status: "done",
+      createdAt: "2026-11-28T00:00:00.000Z",
+      stage: "끝",
+      progress: { done: 1, total: 1 },
+      startedAt: "2026-11-28T00:00:01.000Z",
+      finishedAt: "2026-11-28T00:01:00.000Z",
+      profileKey: contractKey(namespace, subjectId),
+    };
+    const result = resultOf(subjectId, job.id);
+    await writeJson(jobPath(job.id), job);
+    await writeJson(profilePath(subjectId), result);
+    return { job, profile: result };
+  }
+
+  // 진짜 store.ts rateLimit이 최대 6일 때 7번째 부름에서 던지는 글. 이 시험의 dataDir에 새 SQLite를 열어 재고 닫는다.
+  function storeLimitMessage() {
+    const shared = globalThis as unknown as { careerDb?: { close(): void } };
+    const previous = shared.careerDb;
+    // store.ts db()가 globalThis에 둔 연결을 비워 새 dataDir에 새로 열게 한다. delete를 쓰면 TS가 아래
+    // finally에서 careerDb를 없는 값으로 좁혀서 Reflect로 지운다.
+    Reflect.deleteProperty(shared, "careerDb");
+    try {
+      for (let i = 0; i < 6; i++) realStore.rateLimit("lv-stat:limit-probe", 6);
+      try {
+        realStore.rateLimit("lv-stat:limit-probe", 6);
+      } catch (error) {
+        return (error as Error).message;
+      }
+      throw new Error("store.ts rateLimit allowed a 7th call with max 6");
+    } finally {
+      shared.careerDb?.close();
+      if (previous) shared.careerDb = previous;
+      else delete shared.careerDb;
+    }
+  }
+
+  test.beforeAll(async () => {
+    fakeDir = await mkdtemp(path.join(tmpdir(), "lv-stat-analysis-login-"));
+    const fakeStore = path.join(fakeDir, "store.cjs");
+    await writeFile(
+      fakeStore,
+      [
+        "// 시험용 store: 시험이 globalThis.lvStatAnalysisTest에 둔 값으로 답하고, 부른 함수와 인자를 calls에 남긴다.",
+        "const t = () => globalThis.lvStatAnalysisTest;",
+        "const called = (...call) => t().calls.push(call);",
+        "exports.originCheck = (req) => { called('originCheck'); t().originCheck(req); };",
+        "exports.user = async () => { called('user'); return t().user; };",
+        "exports.isGuest = (id) => { called('isGuest', id); return t().guest === id; };",
+        "exports.rateLimit = (key, max) => { called('rateLimit', key, max); if (t().limitError !== undefined) throw t().limitError; };",
+        "exports.jsonBody = (req) => { called('jsonBody'); return t().jsonBody(req); };",
+      ].join("\n"),
+    );
+    loginHook = registerHooks({
+      resolve: (specifier, context, nextResolve) =>
+        nextResolve(
+          specifier === "@/lib/server/store" &&
+            context.parentURL?.endsWith("/app/api/lv-stat/analysis/route.ts")
+            ? fakeStore
+            : specifier,
+          context,
+        ),
+    });
+    realStore = await import("@/lib/server/store");
+    ({ demoAccount } = await import("@/lib/server/demo-account"));
+    ({ GET, POST } = await import("@/app/api/lv-stat/analysis/route"));
+  });
+
+  test.afterAll(async () => {
+    loginHook?.deregister();
+    await rm(fakeDir, { recursive: true, force: true });
+  });
+
+  test.beforeEach(async () => {
+    for (const key of envKeys) savedEnv[key] = process.env[key];
+    dataDir = await mkdtemp(path.join(tmpdir(), "lv-stat-analysis-"));
+    process.env.CAREER_DATA_DIR = dataDir;
+    process.env.CAREER_PROFILE_NAMESPACE = namespace;
+    double = {
+      user: null,
+      calls: [],
+      originCheck: realStore.originCheck,
+      jsonBody: realStore.jsonBody,
+    };
+    (globalThis as { lvStatAnalysisTest?: Double }).lvStatAnalysisTest = double;
+    errors = captureErrors();
+  });
+
+  test.afterEach(async () => {
+    errors.restore();
+    delete (globalThis as { lvStatAnalysisTest?: Double }).lvStatAnalysisTest;
+    for (const key of envKeys) {
+      const value = savedEnv[key];
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+    await rm(dataDir, { recursive: true, force: true });
+  });
+
+  test("signed-out visitors and guests get 401 on POST and GET", async () => {
+    // 손님 id의 요청·결과 파일이 있어도 401이다.
+    await finished("synthetic-guest");
+    const before = await jobFiles();
+    const input = { url: "https://github.com/synthetic-user" };
+    as(null);
+    expect(await post(input)).toEqual(refused(401, signIn));
+    expect(took()).toEqual([["originCheck"], ["user"]]);
+    expect(await get()).toEqual(refused(401, signIn));
+    expect(took()).toEqual([["user"]]);
+    guest("synthetic-guest");
+    expect(await post(input)).toEqual(refused(401, signIn));
+    expect(took()).toEqual([
+      ["originCheck"],
+      ["user"],
+      ["isGuest", "synthetic-guest"],
+    ]);
+    expect(await get()).toEqual(refused(401, signIn));
+    expect(took()).toEqual([["user"], ["isGuest", "synthetic-guest"]]);
+    // rateLimit·본문 읽기 전에 막아 요청 파일이 늘지 않는다.
+    expect(await jobFiles()).toEqual(before);
+    expect(errors.calls).toEqual([]);
+  });
+
+  test("a POST from another site, without an origin, or with origin null is 403", async () => {
+    member("member-a");
+    const input = { url: "https://github.com/synthetic-user" };
+    const origins: Record<string, string>[] = [
+      { origin: "https://untrusted.example", host: "local" },
+      { host: "local" },
+      { origin: "null", host: "local" },
+    ];
+    for (const headers of origins) {
+      expect(await post(input, headers), JSON.stringify(headers)).toEqual(
+        refused(403, badOrigin),
+      );
+      // 출처를 가장 먼저 본다: 로그인·rateLimit·본문을 보지 않는다.
+      expect(took()).toEqual([["originCheck"]]);
+    }
+    // 진짜 originCheck가 던지는 것. 다른 사이트·출처 없음은 store.ts의 글이고, Origin: null은 주소가 아니라
+    // TypeError('Invalid URL')다. route는 셋 다 store.ts의 글로 답한다.
+    const realCheck = (headers: Record<string, string>) => {
+      try {
+        realStore.originCheck(new Request("http://local/", { headers }));
+      } catch (error) {
+        return error instanceof Error
+          ? `${error.name}: ${error.message}`
+          : String(error);
+      }
+      return "passed";
+    };
+    expect(origins.map(realCheck)).toEqual([
+      `Error: ${badOrigin}`,
+      `Error: ${badOrigin}`,
+      "TypeError: Invalid URL",
+    ]);
+    expect(realCheck(sameSite)).toBe("passed");
+    expect(await jobFiles()).toEqual([]);
+    expect(await get()).toEqual(found(null));
+    expect(errors.calls).toEqual([]);
+  });
+
+  test("the demo account gets 403 on POST and nothing is written", async () => {
+    demo();
+    expect(await post({ url: "https://github.com/synthetic-user" })).toEqual(
+      refused(403, demoRefused),
+    );
+    // rateLimit·본문 앞에서 막아 데이터 폴더에 아무것도 생기지 않는다.
+    expect(took()).toEqual([
+      ["originCheck"],
+      ["user"],
+      ["isGuest", "demo-user"],
+    ]);
+    expect(await readdir(dataDir)).toEqual([]);
+    // 같은 id라도 데모 이메일이 아닌 회원은 요청할 수 있다(데모는 이메일로 가른다).
+    member("demo-user");
+    expect(await queued()).toMatchObject({ subjectId: "demo-user" });
+    expect(errors.calls).toEqual([]);
+  });
+
+  test("GET for the demo account gives nulls without reading any file", async () => {
+    const planted = await finished("demo-user");
+    demo();
+    expect(await get()).toEqual(found(null));
+    // 같은 id의 보통 회원에게는 두 파일이 보인다(route가 데모 계정으로 읽었다면 받았을 값이다).
+    member("demo-user");
+    expect(await get()).toEqual(found(planted.job, planted.profile));
+    // 두 파일을 모두 읽을 수 없게 한다: 요청 파일은 권한 없음(EACCES), 결과 자리는 폴더(EISDIR).
+    // 어느 하나라도 읽으면 500이므로, 데모 GET이 200이면 아무 파일도 읽지 않은 것이다.
+    await chmod(jobPath(planted.job.id), 0o000);
+    await rm(profilePath("demo-user"));
+    await mkdir(profilePath("demo-user"));
+    demo();
+    expect(await get()).toEqual(found(null));
+    member("demo-user");
+    expect(await get()).toEqual(refused(500, lookupFailed));
+    expect(errors.calls).toEqual([
+      ["LV analysis lookup failed", { error: "Error" }],
+    ]);
+  });
+
+  test("the rate limit gives 429 with the store's message before the body is read", async () => {
+    // route는 rateLimit이 던진 글을 store.ts의 한도 글과 맞춰 429로 바꾼다. 그 글은 진짜 store.ts에서 잰다.
+    const limited = storeLimitMessage();
+    member("member-a");
+    double.limitError = new Error(limited);
+    expect(await post({ url: "https://github.com/synthetic-user" })).toEqual(
+      refused(429, limited),
+    );
+    // 키는 회원마다(lv-stat:<id>), 최대 6이다. 본문을 읽지 않고 요청 파일도 만들지 않는다.
+    expect(took()).toEqual(memberCalls("member-a").slice(0, 4));
+    expect(await jobFiles()).toEqual([]);
+    expect(errors.calls).toEqual([]);
+  });
+
+  test("an address that is not a GitHub account gets 400 with an example", async () => {
+    member("member-a");
+    const bodies: unknown[] = [
+      { url: "https://gitlab.com/synthetic-user" },
+      { url: "github.com/synthetic-user" },
+      { url: "https://github.com/synthetic user" },
+      { url: "https://github.com/synthetic-user/repo/tree/main" },
+      { url: " \t\n " },
+      {},
+      { url: 42 },
+      { url: ["https://github.com/synthetic-user"] },
+      "null",
+      // JSON이 아닌 본문, 빈 본문
+      "https://github.com/synthetic-user",
+      "",
+    ];
+    for (const body of bodies) {
+      expect(await post(body), JSON.stringify(body)).toEqual(
+        refused(400, urlHelp),
+      );
+      expect(took(), JSON.stringify(body)).toEqual(memberCalls("member-a"));
+    }
+    expect(await jobFiles()).toEqual([]);
+    expect(await get()).toEqual(found(null));
+    expect(errors.calls).toEqual([]);
+  });
+
+  test("a member's POST is 202 with the trimmed address, and GET returns the same job", async () => {
+    member("member-a");
+    const start = Date.now();
+    const created = await post({
+      url: " \n\thttps://github.com/Synthetic-User/sample-repo/\t ",
+    });
+    expect(created).toEqual({
+      status: 202,
+      cacheControl: "private, no-store",
+      body: {
+        job: {
+          id: expect.stringMatching(uuidV4),
+          namespace,
+          subjectId: "member-a",
+          login: "Synthetic-User",
+          input: "https://github.com/Synthetic-User/sample-repo/",
+          status: "queued",
+          createdAt: expect.any(String),
+        },
+      },
+    });
+    const job = created.body.job as LvJob;
+    expect(Date.parse(job.createdAt)).toBeGreaterThanOrEqual(start);
+    expect(Date.parse(job.createdAt)).toBeLessThanOrEqual(Date.now());
+    expect(took()).toEqual(memberCalls("member-a"));
+    // 요청 파일은 그 job 하나이고, 파일에 저장된 주소도 앞뒤 공백을 뺀 것이다.
+    expect(await jobFiles()).toEqual([`${job.id}.json`]);
+    expect(JSON.parse(await readFile(jobPath(job.id), "utf8"))).toEqual(job);
+    expect(await get()).toEqual(found(job));
+    expect(took()).toEqual([["user"], ["isGuest", "member-a"]]);
+    // 작업자가 결과 파일을 쓰면 GET이 그 결과도 준다.
+    const result = resultOf("member-a", job.id);
+    await writeJson(profilePath("member-a"), result);
+    expect(await get()).toEqual(found(job, result));
+    expect(errors.calls).toEqual([]);
+  });
+
+  test("a second POST while the first is queued is 409", async () => {
+    member("member-a");
+    const first = await queued();
+    expect(await post({ url: "https://github.com/synthetic-other" })).toEqual(
+      refused(409, busy),
+    );
+    expect(await jobFiles()).toEqual([`${first.id}.json`]);
+    expect(await get()).toEqual(found(first));
+    expect(errors.calls).toEqual([]);
+  });
+
+  test("a POST at the queue cap of 20 is 503", async () => {
+    for (let i = 1; i <= 20; i++) {
+      member(`member-${i}`);
+      await queued();
+    }
+    member("member-21");
+    expect(await post({ url: "https://github.com/synthetic-user" })).toEqual(
+      refused(503, full),
+    );
+    expect(await jobFiles()).toHaveLength(20);
+    expect(await get()).toEqual(found(null));
+    expect(errors.calls).toEqual([]);
+  });
+
+  test("GET by another member shows none of the first member's job or profile", async () => {
+    member("member-a");
+    const jobA = await queued();
+    const resultA = resultOf("member-a", jobA.id);
+    await writeJson(profilePath("member-a"), resultA);
+    member("member-b");
+    expect(await get()).toEqual(found(null));
+    // B의 요청은 A의 진행 중 요청에 막히지 않고 B 것으로 만들어진다.
+    const jobB = await queued("https://github.com/synthetic-other");
+    expect(jobB).toMatchObject({
+      subjectId: "member-b",
+      login: "synthetic-other",
+    });
+    expect(await get()).toEqual(found(jobB));
+    member("member-a");
+    expect(await get()).toEqual(found(jobA, resultA));
+    expect(errors.calls).toEqual([]);
+  });
+
+  test("an unexpected error is 500 and the log has the error name only", async () => {
+    member("member-a");
+    const input = "https://github.com/Synthetic-Login/synthetic-repo";
+    // 요청 폴더에 읽을 수 없는 요청 파일(EACCES)이 있다. 이 오류의 글(message)에는 그 파일 경로가 있다.
+    const planted = await finished("member-z");
+    await chmod(jobPath(planted.job.id), 0o000);
+    expect(await post({ url: input })).toEqual(refused(500, requestFailed));
+    expect(await get()).toEqual(refused(500, lookupFailed));
+    // rateLimit이 한도가 아닌 것(DB 등)으로 실패하면 429가 아니라 500이다. Error가 아닌 것을 던져도 같다.
+    const database = path.join(dataDir, "career.sqlite");
+    double.limitError = new Error(`unable to open database file ${database}`);
+    expect(await post({ url: input })).toEqual(refused(500, requestFailed));
+    double.limitError = "synthetic failure";
+    expect(await post({ url: input })).toEqual(refused(500, requestFailed));
+    // 기록은 오류 이름만 남긴다: 경로·파일 이름·오류 코드·넣은 주소·아이디·회원 id가 없다.
+    expect(errors.calls).toEqual([
+      ["LV analysis request failed", { error: "Error" }],
+      ["LV analysis lookup failed", { error: "Error" }],
+      ["LV analysis request failed", { error: "Error" }],
+      ["LV analysis request failed", { error: "UnknownError" }],
+    ]);
+    const logged = JSON.stringify(errors.calls);
+    for (const leak of [
+      dataDir,
+      planted.job.id,
+      "EACCES",
+      "career.sqlite",
+      "synthetic failure",
+      input,
+      "Synthetic-Login",
+      "member-a",
+    ])
+      expect(logged, leak).not.toContain(leak);
+    expect(await jobFiles()).toEqual([`${planted.job.id}.json`]);
   });
 });
