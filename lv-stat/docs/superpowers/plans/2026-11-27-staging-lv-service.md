@@ -289,3 +289,17 @@ Task 2 검토에서 나온 두 가지를 고친다. ① Linguist 자료(`lv-stat
 - [ ] 공개 레포 점검: 비밀값 모양·공고 글·지인 계정/레포 이름이 커밋할 파일에 없음(이름 목록은 scratchpad에서만 읽음).
 - [ ] superpowers:verification-before-completion: `lv-stat/service/tests`(3.10)·`deploy/lv-stat/tests`·`pipeline/selftest.py`·`npm run lint`·`typecheck`·`test:api-contract`·`build` 결과를 다시 돌려 보고서에 붙인다.
 - [ ] superpowers:finishing-a-development-branch: push `feature/lv-stat` → develop PR → CI 통과 → 병합 → CD 성공·`career-lv-worker-staging` active 확인 → 스테이징에서 시험 회원으로 로그인 → 본인 계정 분석 → 공고 화면 레이더 스크린샷 → 사용자에게 보고, 남은 문제는 CLAUDE.md 「미정」으로.
+
+## 변경 기록 (2026-11-28, 작업 중 정한 것)
+
+검토에서 나온 지적을 컨트롤러가 판정해 위 글과 다르게 만든 곳이다. 자세한 근거는 각 커밋 메시지와 [CONTRACT.md](../../../service/CONTRACT.md)에 있다.
+
+- Task 2b: raw 읽기는 `-M` 대신 `-M100%`(그냥 `-M`은 내용을 읽어 blob:none에서 멈춤), 내 경로 numstat에 `--full-history`, 경로는 `-z`로 읽음, 합친 커밋에서만 생긴 내 경로의 판도 받음, gitlink는 받지 않음, 받은 뒤 부분 clone 설정(`remote.origin.promisor`·`partialclonefilter`·`extensions.partialClone`)을 지워 git 2.45 전 판에서도 더 받으러 가지 않음, blame 실패는 `partial.blame_failed`로 기록. 「제안」 내 경로가 생긴 커밋에서 지워진 파일의 판 하나씩도 받음(확인 전).
+- Task 3: LLM 보충을 끈 판에서 LLM 확인을 기다리는 변수는 모름으로 센다(확인 0은 평균에서 뺌, 0보다 크면 확인된 만큼). 게이트가 대기라 0이면 B는 null(판정 불가). B 평균은 10진수로 반올림.
+- Task 4: 시간 배분(「Claude 임시값」 받기 50%·색인 80%, 마무리 몫 4분을 뺀 시간 기준, 모든 단계가 상한 안에서 끝남), 색인 0개면 `레포를 색인하지 못했습니다. 잠시 뒤 다시 시도해 주세요.`, 반쯤 쓴 vars 파일은 지우고 메모, 규칙 단계가 시간 상한에 닿으면 메모 한 줄.
+- Task 5: 같은 데이터 폴더에 작업자 하나(`.worker.lock`), 프로필을 쓴 뒤 요청을 done으로 바꿈, 자체 점검은 git 판을 찍지 않음(시작 로그에만), 요청 파일 쓰기에 실패한 요청은 건너뜀.
+- Task 6: 되돌릴 때 작업자 로그를 CI 로그에 옮기지 않음, 자체 점검의 stdout만 CI 로그에 남김, 실수로 올린 `__pycache__`를 뺌(기록에서도 push 전에 지움).
+- Task 8: `readProfile`은 CONTRACT 모양 전체와 그 사람의 것인지까지 확인.
+- Task 9·10: 공고 문장·my-levels 실패를 서버 로그에 이름만 남김. 공고 LV 행에 `usedCodes`. 데모 계정은 프로필을 읽지 않음.
+- Task 11: 데모 계정 POST는 403 `데모 계정은 GitHub 분석을 할 수 없어요.`, GET은 파일을 읽지 않고 null. 같은 규칙을 CI가 도는 계약 시험에도 둠.
+- Task 12: 레이더는 `usedCodes ?? categoryCodes` 축에만 값을 놓음, 분석 결과 행은 '(더미)' 대신 라벨 한 줄.
