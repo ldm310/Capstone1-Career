@@ -1,0 +1,164 @@
+{
+ "person": "eun",
+ "repos": [
+  "demo/shopmall"
+ ],
+ "stat": {
+  "Kubernetes": {
+   "lv": 5,
+   "kind": "tool",
+   "source": "lifted",
+   "by": "무중단 배포",
+   "evidence": [
+    {
+     "repo": "demo/shopmall",
+     "where": "k8s/order-deployment.yaml:10"
+    }
+   ]
+  },
+  "무중단 배포": {
+   "lv": 5,
+   "kind": "activity",
+   "source": "own",
+   "by": null,
+   "evidence": [
+    {
+     "repo": "demo/shopmall",
+     "where": "k8s/order-deployment.yaml:10"
+    }
+   ]
+  },
+  "JPA": {
+   "lv": 4,
+   "kind": "tool",
+   "source": "lifted",
+   "by": "동시성 제어",
+   "evidence": [
+    {
+     "repo": "demo/shopmall",
+     "where": "order-service/src/main/java/com/shop/order/product/StockRepository.java:10"
+    }
+   ]
+  },
+  "Kafka": {
+   "lv": 4,
+   "kind": "tool",
+   "source": "lifted",
+   "by": "이벤트 기반 아키텍처",
+   "evidence": [
+    {
+     "repo": "demo/shopmall",
+     "where": "payment-service/src/main/java/com/shop/payment/PaymentEventListener.java:8 (받는 쪽) + order-service/src/main/java/com/shop/order/event/OrderEventPublisher.java:15 (보내는 쪽)"
+    }
+   ]
+  },
+  "Kubernetes 운영 설정": {
+   "lv": 4,
+   "kind": "activity",
+   "source": "own",
+   "by": null,
+   "evidence": [
+    {
+     "repo": "demo/shopmall",
+     "where": "k8s/order-deployment.yaml:16"
+    }
+   ]
+  },
+  "동시성 제어": {
+   "lv": 4,
+   "kind": "activity",
+   "source": "own",
+   "by": null,
+   "evidence": [
+    {
+     "repo": "demo/shopmall",
+     "where": "order-service/src/main/java/com/shop/order/product/StockRepository.java:10"
+    }
+   ]
+  },
+  "운영 대응 이력": {
+   "lv": 4,
+   "kind": "activity",
+   "source": "own",
+   "by": null,
+   "evidence": [
+    {
+     "repo": "demo/shopmall",
+     "where": "커밋 814cc09 \"hotfix: 결제 중복 승인 장애 수정\" 외 1개 (배포 설정 이후)"
+    }
+   ]
+  },
+  "이벤트 기반 아키텍처": {
+   "lv": 4,
+   "kind": "activity",
+   "source": "own",
+   "by": null,
+   "evidence": [
+    {
+     "repo": "demo/shopmall",
+     "where": "payment-service/src/main/java/com/shop/payment/PaymentEventListener.java:8 (받는 쪽) + order-service/src/main/java/com/shop/order/event/OrderEventPublisher.java:15 (보내는 쪽)"
+    }
+   ]
+  },
+  "Java": {
+   "lv": 3,
+   "kind": "tool",
+   "source": "lifted",
+   "by": "메시지 큐",
+   "evidence": [
+    {
+     "repo": "demo/shopmall",
+     "where": "order-service/src/main/java/com/shop/order/event/OrderEventPublisher.java:8"
+    }
+   ]
+  },
+  "Spring": {
+   "lv": 3,
+   "kind": "tool",
+   "source": "lifted",
+   "by": "메시지 큐",
+   "evidence": [
+    {
+     "repo": "demo/shopmall",
+     "where": "order-service/src/main/java/com/shop/order/event/OrderEventPublisher.java:8"
+    }
+   ]
+  },
+  "메시지 큐": {
+   "lv": 3,
+   "kind": "activity",
+   "source": "own",
+   "by": null,
+   "evidence": [
+    {
+     "repo": "demo/shopmall",
+     "where": "order-service/src/main/java/com/shop/order/event/OrderEventPublisher.java:8"
+    }
+   ]
+  },
+  "Git": {
+   "lv": 1,
+   "kind": "tool",
+   "source": "own",
+   "by": null,
+   "evidence": [
+    {
+     "repo": "demo/shopmall",
+     "where": "커밋 f5e55d1"
+    }
+   ]
+  }
+ },
+ "weak": {
+  "모니터링 설정": {
+   "claimed_lv": 3,
+   "evidence": [
+    {
+     "repo": "demo/shopmall",
+     "where": "monitoring/prometheus.yml 5줄"
+    }
+   ],
+   "reason": "점검에서 모름"
+  }
+ }
+}

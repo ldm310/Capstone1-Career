@@ -1,0 +1,277 @@
+{
+ "meta": {
+  "repo": "demo/shopmall",
+  "head": "da78f8d058a158524f234d80cec9f77eba771ca2",
+  "extractor": "v4",
+  "practice": false,
+  "people": [
+   "do",
+   "eun"
+  ],
+  "merged": {},
+  "ai_commits": {},
+  "generated_files": 2
+ },
+ "evidence": [
+  {
+   "person": "do",
+   "key": "CI/CD 구축",
+   "kind": "activity",
+   "lv": 3,
+   "where": ".github/workflows/deploy.yml:15 (배포 15줄이 있는 workflow에 내 줄 17줄)",
+   "n": 1
+  },
+  {
+   "person": "do",
+   "key": "DB 설계",
+   "kind": "activity",
+   "lv": 3,
+   "where": "테이블 5개, 관계 4개",
+   "n": 1
+  },
+  {
+   "person": "do",
+   "key": "GitHub Actions",
+   "kind": "tool",
+   "lv": 3,
+   "where": ".github/workflows/deploy.yml 17줄",
+   "n": 1,
+   "own_lv": 2,
+   "lifted_by": "CI/CD 구축",
+   "lifted_where": ".github/workflows/deploy.yml:15 (배포 15줄이 있는 workflow에 내 줄 17줄)"
+  },
+  {
+   "person": "do",
+   "key": "Java",
+   "kind": "tool",
+   "lv": 3,
+   "where": "Java 내 줄 85줄",
+   "n": 1,
+   "own_lv": 1,
+   "lifted_by": "OAuth 연동",
+   "lifted_where": "order-service/src/main/java/com/shop/order/auth/KakaoUserService.java:9"
+  },
+  {
+   "person": "do",
+   "key": "OAuth 연동",
+   "kind": "activity",
+   "lv": 3,
+   "where": "order-service/src/main/java/com/shop/order/auth/KakaoUserService.java:9",
+   "n": 6
+  },
+  {
+   "person": "do",
+   "key": "Spring",
+   "kind": "tool",
+   "lv": 3,
+   "where": "order-service/src/main/java/com/shop/order/OrderController.java:9",
+   "n": 12,
+   "own_lv": 2,
+   "lifted_by": "OAuth 연동",
+   "lifted_where": "order-service/src/main/java/com/shop/order/auth/KakaoUserService.java:9"
+  },
+  {
+   "person": "do",
+   "key": "Spring Security",
+   "kind": "tool",
+   "lv": 3,
+   "where": "order-service/src/main/java/com/shop/order/auth/KakaoUserService.java:9",
+   "n": 7,
+   "own_lv": 2,
+   "lifted_by": "OAuth 연동",
+   "lifted_where": "order-service/src/main/java/com/shop/order/auth/KakaoUserService.java:9"
+  },
+  {
+   "person": "do",
+   "key": "결제 연동",
+   "kind": "activity",
+   "lv": 3,
+   "where": "order-service/src/main/java/com/shop/order/pay/TossPaymentClient.java:13",
+   "n": 3
+  },
+  {
+   "person": "do",
+   "key": "캐시 도입",
+   "kind": "activity",
+   "lv": 3,
+   "where": "order-service/src/main/java/com/shop/order/product/ProductQueryService.java:10",
+   "n": 1
+  },
+  {
+   "person": "do",
+   "key": "쿼리 튜닝",
+   "kind": "activity",
+   "lv": 3,
+   "where": "order-service/src/main/resources/db/migration/V2__add_order_index.sql:1 (테이블 orders을 만든 뒤, 이미 있던 컬럼에 인덱스 추가)",
+   "n": 1
+  },
+  {
+   "person": "do",
+   "key": "API 개발",
+   "kind": "activity",
+   "lv": 2,
+   "where": "order-service/src/main/java/com/shop/order/OrderController.java:17",
+   "n": 1
+  },
+  {
+   "person": "do",
+   "key": "JPA",
+   "kind": "tool",
+   "lv": 2,
+   "where": "order-service/src/main/java/com/shop/order/Order.java:7",
+   "n": 4
+  },
+  {
+   "person": "do",
+   "key": "외부 API 연동",
+   "kind": "activity",
+   "lv": 2,
+   "where": "order-service/src/main/java/com/shop/order/pay/TossPaymentClient.java:15",
+   "n": 1
+  },
+  {
+   "person": "do",
+   "key": "인증·인가 구현",
+   "kind": "activity",
+   "lv": 2,
+   "where": "order-service/src/main/java/com/shop/order/auth/SecurityConfig.java:11",
+   "n": 3
+  },
+  {
+   "person": "do",
+   "key": "Git",
+   "kind": "tool",
+   "lv": 1,
+   "where": "커밋 5da8c35",
+   "n": 1
+  },
+  {
+   "person": "do",
+   "key": "SQL",
+   "kind": "tool",
+   "lv": 1,
+   "where": "order-service/src/main/resources/db/migration/V1__init.sql:1",
+   "n": 5
+  },
+  {
+   "person": "eun",
+   "key": "Kubernetes",
+   "kind": "tool",
+   "lv": 5,
+   "where": "k8s/order-deployment.yaml 23줄",
+   "n": 2,
+   "own_lv": 2,
+   "lifted_by": "무중단 배포",
+   "lifted_where": "k8s/order-deployment.yaml:10"
+  },
+  {
+   "person": "eun",
+   "key": "무중단 배포",
+   "kind": "activity",
+   "lv": 5,
+   "where": "k8s/order-deployment.yaml:10",
+   "n": 1
+  },
+  {
+   "person": "eun",
+   "key": "JPA",
+   "kind": "tool",
+   "lv": 4,
+   "where": "order-service/src/main/java/com/shop/order/product/Stock.java:6",
+   "n": 5,
+   "own_lv": 2,
+   "lifted_by": "동시성 제어",
+   "lifted_where": "order-service/src/main/java/com/shop/order/product/StockRepository.java:10"
+  },
+  {
+   "person": "eun",
+   "key": "Kafka",
+   "kind": "tool",
+   "lv": 4,
+   "where": "order-service/src/main/java/com/shop/order/event/OrderEventPublisher.java:8",
+   "n": 5,
+   "own_lv": 2,
+   "lifted_by": "이벤트 기반 아키텍처",
+   "lifted_where": "payment-service/src/main/java/com/shop/payment/PaymentEventListener.java:8 (받는 쪽) + order-service/src/main/java/com/shop/order/event/OrderEventPublisher.java:15 (보내는 쪽)"
+  },
+  {
+   "person": "eun",
+   "key": "Kubernetes 운영 설정",
+   "kind": "activity",
+   "lv": 4,
+   "where": "k8s/order-deployment.yaml:16",
+   "n": 1
+  },
+  {
+   "person": "eun",
+   "key": "동시성 제어",
+   "kind": "activity",
+   "lv": 4,
+   "where": "order-service/src/main/java/com/shop/order/product/StockRepository.java:10",
+   "n": 1
+  },
+  {
+   "person": "eun",
+   "key": "운영 대응 이력",
+   "kind": "activity",
+   "lv": 4,
+   "where": "커밋 814cc09 \"hotfix: 결제 중복 승인 장애 수정\" 외 1개 (배포 설정 이후)",
+   "n": 1
+  },
+  {
+   "person": "eun",
+   "key": "이벤트 기반 아키텍처",
+   "kind": "activity",
+   "lv": 4,
+   "where": "payment-service/src/main/java/com/shop/payment/PaymentEventListener.java:8 (받는 쪽) + order-service/src/main/java/com/shop/order/event/OrderEventPublisher.java:15 (보내는 쪽)",
+   "n": 1
+  },
+  {
+   "person": "eun",
+   "key": "Java",
+   "kind": "tool",
+   "lv": 3,
+   "where": "Java 내 줄 56줄",
+   "n": 1,
+   "own_lv": 1,
+   "lifted_by": "메시지 큐",
+   "lifted_where": "order-service/src/main/java/com/shop/order/event/OrderEventPublisher.java:8"
+  },
+  {
+   "person": "eun",
+   "key": "Spring",
+   "kind": "tool",
+   "lv": 3,
+   "where": "order-service/src/main/java/com/shop/order/event/OrderEventPublisher.java:6",
+   "n": 2,
+   "own_lv": 2,
+   "lifted_by": "메시지 큐",
+   "lifted_where": "order-service/src/main/java/com/shop/order/event/OrderEventPublisher.java:8"
+  },
+  {
+   "person": "eun",
+   "key": "메시지 큐",
+   "kind": "activity",
+   "lv": 3,
+   "where": "order-service/src/main/java/com/shop/order/event/OrderEventPublisher.java:8",
+   "n": 4
+  },
+  {
+   "person": "eun",
+   "key": "모니터링 설정",
+   "kind": "activity",
+   "lv": 3,
+   "where": "monitoring/prometheus.yml 5줄",
+   "n": 1
+  },
+  {
+   "person": "eun",
+   "key": "Git",
+   "kind": "tool",
+   "lv": 1,
+   "where": "커밋 f5e55d1",
+   "n": 1
+  }
+ ],
+ "weak": []
+}

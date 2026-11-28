@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "공고 매칭 결과 (pipeline/match.py 출력)",
+  "type": "object",
+  "required": ["person", "line_mode", "postings"],
+  "properties": {
+    "person": {"type": "string"},
+    "line_mode": {"enum": ["any", "all"]},
+    "postings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["posting_id", "company", "title", "summary", "competencies", "lines"],
+        "properties": {
+          "posting_id": {"type": "string"}, "company": {"type": "string"}, "title": {"type": "string"}, "position": {"type": "string"}, "link": {"type": "string"}, "career": {"type": "string"},
+          "career_note": {"type": ["string", "null"], "description": "경력 조건이 있으면 '경력 조건 있음(판정 안 함)'"},
+          "summary": {
+            "type": "object",
+            "properties": {
+              "충족": {"type": "integer"}, "기법 충족": {"type": "integer"}, "부분": {"type": "integer"}, "미충족": {"type": "integer"}, "판단 불가": {"type": "integer"},
+              "judged": {"type": "integer", "description": "판단 불가를 뺀 줄 수"},
+              "rate": {"type": ["number", "null"], "description": "충족 / judged"},
+              "rate_with_technique": {"type": ["number", "null"], "description": "(충족 + 기법 충족) / judged"}
+            }
+          },
+          "competencies": {"type": "array", "description": "이 공고 기준 내 역량: 공고가 요구하는 키마다 요구 LV와 내 LV", "items": {"type": "object", "properties": {"key": {"type": "string"}, "lv_required": {"type": "integer"}, "my_lv": {"type": "integer"}}}},
+          "lines": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "line_id": {"type": "string"}, "section": {"type": "string"}, "text": {"type": "string"}, "lv_required": {"type": ["integer", "null"]}, "career_rule": {"type": ["string", "null"]},
+                "status": {"enum": ["충족", "기법 충족", "부분", "미충족", "판단 불가"]},
+                "my_lv": {"type": ["integer", "null"]},
+                "keys": {"type": "array", "items": {"type": "object", "properties": {"key": {"type": "string"}, "my_lv": {"type": "integer"}, "via": {"type": ["string", "null"]}, "evidence": {"type": "array"}}}}
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

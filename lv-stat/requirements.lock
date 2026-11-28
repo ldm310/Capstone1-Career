@@ -1,0 +1,22 @@
+# lv-stat 코드 구조 파서(tree-sitter). 2026-11-26 사용자 결정: Java·Kotlin·JS·TS(TSX)는 tree-sitter로 읽는다(Python은 표준 ast).
+# 판(==)과 sha256을 고정한다. 해시는 PyPI가 주는 sha256이다(macOS arm64 + Linux x86_64 wheel, CPython 3.12).
+# 설치: python3.12 -m venv .venv && .venv/bin/python -m pip install --require-hashes --only-binary=:all: --no-deps -r requirements.lock
+# 코어 0.27.0(2026-11-23)은 나온 지 얼마 안 돼 0.26.1을 쓴다(설계 9.8). Swift는 모바일 앱(사용자 결정 2026-11-26)용이다.
+tree-sitter==0.26.1 \
+    --hash=sha256:8ac2d0d115e73be14dbd569b353a4f762368c134a64248aa4483afdc297dd4b4 \
+    --hash=sha256:7b14ac81a2afdcf75610f714f1d2eeaac40da93965c104cabb5c4c2b536a488a
+tree-sitter-java==0.23.5 \
+    --hash=sha256:24acd59c4720dedad80d548fe4237e43ef2b7a4e94c8549b0ca6e4c4d7bf6e69 \
+    --hash=sha256:370b204b9500b847f6d0c5ad584045831cee69e9a3e4d878535d39e4a7e4c4f1
+tree-sitter-javascript==0.25.0 \
+    --hash=sha256:8264a996b8845cfce06965152a013b5d9cbb7d199bc3503e12b5682e62bb1de1 \
+    --hash=sha256:9dc04ba91fc8583344e57c1f1ed5b2c97ecaaf47480011b92fbeab8dda96db75
+tree-sitter-typescript==0.23.2 \
+    --hash=sha256:c7cc1b0ff5d91bac863b0e38b1578d5505e718156c9db577c8baea2557f66de8 \
+    --hash=sha256:e96d36b85bcacdeb8ff5c2618d75593ef12ebaf1b4eace3477e2bdb2abb1752c
+tree-sitter-kotlin==1.1.0 \
+    --hash=sha256:910b41a580dae00d319e555075f3886a41386d1067931b14c7de504eeae3ae2a \
+    --hash=sha256:9a92afe24b634cf914c5812af0f5c53184b1c18bdf6ee5505c83afac81f6bf6c
+tree-sitter-swift==0.7.4 \
+    --hash=sha256:62ce592607fa532687a2d4656a90db2f04cbc197e34077038bca2e47073b6db7 \
+    --hash=sha256:d11d15a479d7d3b14c7fc526b4daab107995feca5752936fec5c60cc7fa6fe4d

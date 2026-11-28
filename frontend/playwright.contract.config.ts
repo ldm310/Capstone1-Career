@@ -10,6 +10,7 @@ export default defineConfig({
     "extraction-review-storage.spec.ts",
     "job-catalog-storage.spec.ts",
     "posting-metadata.spec.ts",
+    "lv-stat-contract.spec.ts",
   ],
   workers: 1,
   reporter: "list",

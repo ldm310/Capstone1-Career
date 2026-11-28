@@ -1,0 +1,19 @@
+# 받은 레포와 결과(지인·남의 코드, 공고 매칭 결과가 들어갈 수 있음)
+repos/
+out/
+# 공고 글과 측정 자료는 공개 레포에 올리지 않는다
+data/
+!service/s2/data/
+eval/
+# 비밀값
+.env
+.env.*
+# Python
+__pycache__/
+*.pyc
+# 캐시(GitHub API·LLM 응답, 남의 커밋 메시지·diff가 들어감)와 파이썬 환경
+cache/
+.venv/
+
+# 스테이징 서비스(2026-11-27): 작업 폴더 없이 s2 모듈을 불러올 때 생기는 빈 HOME
+service/s2/.emptyhome/

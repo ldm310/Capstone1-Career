@@ -1,5 +1,5 @@
 # CD: develop·main 에 합쳐지면 바뀐 파트만 배포한다(develop → main PR 은 사람이 올림 — 사용자 결정).
-#   develop → 읽기 전용 RDS 백엔드(EC2 내부 18081번) + 웹 스테이징(3001번)
+#   develop → 읽기 전용 RDS 백엔드(EC2 내부 18081번) + 웹 스테이징(3001번) + LV 분석 작업자(lv-stat, systemd)
 #   main    → 웹 운영(EC2 3000번) + job-skill(RDS 마이그레이션 → 노트북 Airflow 전용 폴더)
 # 모두 몇 번 돌려도 같은 결과. 그 커밋에 웹 코드(frontend/)가 없으면 웹은 건드리지 않는다.
 # 해 둘 것(맨 위 README '관리자 설정'): Secrets RDS_HOST·RDS_PASSWORD, 러너 두 대 — 노트북(career-laptop)·EC2(career-ec2).
@@ -22,6 +22,7 @@ jobs:
       job_skill: ${{ steps.diff.outputs.job_skill }}
       web: ${{ steps.diff.outputs.web }}
       staging_backend: ${{ steps.diff.outputs.staging_backend }}
+      lv_worker: ${{ steps.diff.outputs.lv_worker }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -33,7 +34,7 @@ jobs:
         run: |
           # 손으로 돌렸거나 비교할 커밋이 없으면 모두 배포(어차피 멱등)
           if [ "${{ github.event_name }}" != push ] || ! files=$(git diff --name-only "$BASE" "$GITHUB_SHA" 2>/dev/null); then
-            files=$(printf 'job-skill/\nbackend/\nfrontend/\n')
+            files=$(printf 'job-skill/\nbackend/\nfrontend/\nlv-stat/\n')
           fi
           echo "$files"
           if echo "$files" | grep -qE '^(job-skill/|\.github/workflows/cd\.yml)'; then v=true; else v=false; fi
@@ -43,6 +44,9 @@ jobs:
           echo "web=$v" >> "$GITHUB_OUTPUT"
           if [ "$GITHUB_REF_NAME" = develop ] && echo "$files" | grep -qE '^(backend/|deploy/backend/|deploy/web/|\.github/workflows/cd\.yml)'; then v=true; else v=false; fi
           echo "staging_backend=$v" >> "$GITHUB_OUTPUT"
+          # LV 분석 작업자(lv-stat/service)는 스테이징(develop)에만 — main 에서는 늘 false
+          if [ "$GITHUB_REF_NAME" = develop ] && echo "$files" | grep -qE '^(lv-stat/|deploy/lv-stat/|\.github/workflows/cd\.yml)'; then v=true; else v=false; fi
+          echo "lv_worker=$v" >> "$GITHUB_OUTPUT"
 
   staging-backend-build:
     needs: changes
@@ -122,6 +126,18 @@ jobs:
       - name: Verify staging notice RDS connection
         if: github.ref_name == 'develop'
         run: python3 deploy/backend/staging_config.py verify-profile
+
+  staging-lv-worker:
+    needs: changes
+    if: github.ref_name == 'develop' && needs.changes.outputs.lv_worker == 'true'   # main·운영에서는 돌지 않음(스크립트도 거부)
+    runs-on: [self-hosted, career-ec2]
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4      # 이 커밋의 lv-stat/service 를 판 폴더로 복사함
+      - name: Deploy staging LV analysis worker (systemd career-lv-worker-staging)
+        env:
+          LV_GITHUB_TOKEN: ${{ secrets.STAGING_LV_GITHUB_TOKEN }}   # 비어 있으면 서버의 기존 토큰 파일을 그대로 둠
+        run: bash deploy/lv-stat/deploy_worker.sh "$GITHUB_SHA" "$GITHUB_WORKSPACE/lv-stat/service"
 
   rds-migrate:
     needs: changes

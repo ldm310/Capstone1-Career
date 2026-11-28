@@ -1,6 +1,7 @@
 # CI: develop·main 으로 오는 PR(과 합쳐진 뒤)마다, 바뀐 폴더의 시험만 돌린다.
 #   job-skill/ -> pytest (GitHub 가 잠깐 띄운 PostgreSQL 에 임시 DB 를 만들어 씀, RDS·노트북 DB 는 안 건드림)
 #   backend/·외부 합격자료 -> 격리 PostgreSQL 전체 검증, frontend/ -> 프로덕션 빌드.
+#   lv-stat/·deploy/lv-stat/·deploy/web/deploy.sh -> 분석 작업자 시험 + 내 줄 뽑기 자체 시험 + 작업자 배포·웹 LV 스위치 시험(Python 3.10, 표준 라이브러리만).
 # 바뀌지 않은 폴더의 잡은 '건너뜀'으로 끝나고, 건너뜀은 필수 검사에서 통과로 친다.
 name: CI
 
@@ -29,6 +30,7 @@ jobs:
       frontend: ${{ steps.diff.outputs.frontend }}
       dags: ${{ steps.diff.outputs.dags }}
       external_pass: ${{ steps.diff.outputs.external_pass }}
+      lv_stat: ${{ steps.diff.outputs.lv_stat }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -40,7 +42,7 @@ jobs:
         run: |
           # 새 브랜치 첫 push 처럼 비교할 커밋이 없으면 모두 바뀐 것으로 본다
           if [ -z "$BASE" ] || ! files=$(git diff --name-only "$BASE" "$GITHUB_SHA" 2>/dev/null); then
-            files=$(printf 'job-skill/\nbackend/\nfrontend/\n')
+            files=$(printf 'job-skill/\nbackend/\nfrontend/\nlv-stat/\n')
           fi
           echo "$files"
           for part in job-skill backend frontend; do     # 폴더가 바뀌었거나 이 파일이 바뀌면 그 잡을 돌린다
@@ -54,6 +56,9 @@ jobs:
           dag_files='^(job-skill/airflow/|job-skill/(pipeline_tasks|notify|db_queries)\.py|job-skill/tests/test_dags\.py|\.github/workflows/ci\.yml)'
           if echo "$files" | grep -qE "$dag_files"; then v=true; else v=false; fi
           echo "dags=$v" >> "$GITHUB_OUTPUT"
+          # LV·STAT 파트(동민): 코드와 그 배포 스크립트, 웹 배포의 LV 스위치(deploy/web/deploy.sh 의 CAREER_LV_STAT)
+          if echo "$files" | grep -qE '^(lv-stat/|deploy/lv-stat/|deploy/web/deploy\.sh|\.github/workflows/ci\.yml)'; then v=true; else v=false; fi
+          echo "lv_stat=$v" >> "$GITHUB_OUTPUT"
 
   job-skill:
     needs: changes
@@ -174,3 +179,23 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - run: npm run test:api-contract
       - run: npm run build
+
+  lv-stat:
+    needs: changes
+    if: needs.changes.outputs.lv_stat == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+      PYTHONIOENCODING: utf-8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'          # 작업자 최저 판(스테이징 EC2 의 python3 도 3.10 이상이어야 함)
+      - name: 분석 작업자 시험(lv-stat/service)
+        run: python -m unittest discover -s lv-stat/service/tests -v
+      - name: 내 줄 뽑기 자체 시험(합성 레포만, 네트워크 없음)
+        run: python lv-stat/pipeline/selftest.py
+      - name: 작업자 배포 스크립트·웹 LV 스위치 시험(가짜 HOME·systemctl)
+        run: bash -n deploy/lv-stat/deploy_worker.sh && python -m unittest discover -s deploy/lv-stat/tests -v
