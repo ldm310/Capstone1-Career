@@ -43,10 +43,10 @@ export async function GET() {
     if (current.email === demoAccount.email)
       return reply(200, { job: null, profile: null });
     const namespace = profileNamespace();
-    const [job, profile] = await Promise.all([
-      latestJob(namespace, current.id),
-      readProfile(namespace, current.id),
-    ]);
+    // 요청을 먼저, 프로필을 나중에 읽는다. 작업자는 프로필을 다 쓴 뒤에 요청을 done으로 바꾸므로(CONTRACT '쓰는 차례')
+    // done인 요청을 읽었으면 그 요청의 프로필이 이미 있다. 함께 읽으면 done인 요청과 옛 프로필이 올 수 있다.
+    const job = await latestJob(namespace, current.id);
+    const profile = await readProfile(namespace, current.id);
     return reply(200, { job, profile });
   } catch (error) {
     return unexpected(

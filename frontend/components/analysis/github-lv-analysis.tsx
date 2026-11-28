@@ -18,6 +18,10 @@ import type {
 const route = "/api/lv-stat/analysis";
 // 요청이 대기·진행 중일 때만 이 간격으로 다시 읽는다.
 const pollMs = 5000;
+// 「Claude 임시값」 요청이 done인데 받은 결과가 그 요청의 것(profile.jobId가 같음)이 아니면 같은 간격으로 이만큼 더 읽는다.
+// 작업자는 결과를 먼저 쓰므로 곧 온다. 그래도 안 오면 읽기를 멈추고 resultLost를 보인다.
+const extraReads = 3;
+const resultLost = "분석 결과를 불러오지 못했어요.";
 // 요약에 보이는 카테고리 순서(lv-stat 카테고리 7개).
 const order: LvCategoryCode[] = ["L", "O", "B", "E", "D", "F", "A"];
 // 서버가 오류 글을 주지 않았거나 연결이 끊겼을 때(기존 분석 흐름과 같은 글).
@@ -35,6 +39,8 @@ interface State {
   readError: string;
   // 끝난 GET 수. 진행 중이면 GET이 끝날 때마다 다음 읽기를 잡는다.
   reads: number;
+  // done인 요청과 그 요청의 것이 아닌 결과를 연달아 받은 횟수(그런 답이 아니면 0). 0보다 크면 결과를 보이지 않는다.
+  stale: number;
 }
 
 type Reply = { status: number; body: unknown };
@@ -79,6 +85,8 @@ function received(state: State, reply: Reply | null): State {
       readError: errorText(reply.body),
     };
   const body = reply.body as { job: LvJob | null; profile: LvProfile | null };
+  const stale =
+    body.job?.status === "done" && body.profile?.jobId !== body.job.id;
   return {
     ...state,
     reads,
@@ -86,6 +94,7 @@ function received(state: State, reply: Reply | null): State {
     readError: "",
     job: body.job,
     profile: body.profile,
+    stale: stale ? state.stale + 1 : 0,
   };
 }
 
@@ -106,6 +115,7 @@ export function GithubLvAnalysis() {
     profile: null,
     readError: "",
     reads: 0,
+    stale: 0,
   });
   const [url, setUrl] = useState("");
   const [sending, setSending] = useState(false);
@@ -113,11 +123,13 @@ export function GithubLvAnalysis() {
   // 같은 순간의 두 번 누름이 요청 두 개가 되지 않게(state는 다음 그리기에야 바뀐다).
   const lock = useRef(false);
   const running = active(state.job?.status);
+  // done인데 그 요청의 결과를 아직 받지 못함: extraReads번까지 더 읽는다.
+  const settling = state.stale > 0 && state.stale <= extraReads;
 
-  // 처음 한 번 바로 읽고, 그 뒤로는 대기·진행 중일 때만 5초마다 읽는다. 끝·실패면 멈추고, 화면을 떠나면 잡아
-  // 둔 읽기와 보낸 요청을 모두 거둔다.
+  // 처음 한 번 바로 읽고, 그 뒤로는 대기·진행 중이거나 결과를 기다릴 때만 5초마다 읽는다. 끝·실패면 멈추고, 화면을
+  // 떠나면 잡아 둔 읽기와 보낸 요청을 모두 거둔다.
   useEffect(() => {
-    if (state.reads > 0 && !running) return;
+    if (state.reads > 0 && !running && !settling) return;
     const controller = new AbortController();
     const timer = setTimeout(
       () => {
@@ -138,7 +150,7 @@ export function GithubLvAnalysis() {
       clearTimeout(timer);
       controller.abort();
     };
-  }, [state.reads, running]);
+  }, [state.reads, running, settling]);
 
   async function send(address: string) {
     if (lock.current) return;
@@ -153,7 +165,7 @@ export function GithubLvAnalysis() {
       });
       const job = (reply.body as { job?: LvJob } | null)?.job;
       if (reply.status === 202 && job)
-        setState((current) => ({ ...current, job }));
+        setState((current) => ({ ...current, job, stale: 0 }));
       else if (reply.status === 401)
         setState((current) => ({
           ...current,
@@ -161,6 +173,7 @@ export function GithubLvAnalysis() {
           loginNote: errorText(reply.body),
           job: null,
           profile: null,
+          stale: 0,
         }));
       else setSendError(errorText(reply.body));
     } catch {
@@ -174,7 +187,10 @@ export function GithubLvAnalysis() {
   if (state.off || state.signedIn === null) return null;
   const { job, profile } = state;
   const failed = job?.status === "failed";
-  const problem = sendError || state.readError;
+  const problem =
+    sendError ||
+    state.readError ||
+    (state.stale > extraReads ? resultLost : "");
   return (
     <section className="github-lv-analysis" aria-labelledby={titleId}>
       <h2 id={titleId}>GitHub 계정으로 공고별 LV 보기</h2>
@@ -231,7 +247,7 @@ export function GithubLvAnalysis() {
           </button>
         </div>
       )}
-      {profile && (
+      {profile && !state.stale && (
         <div className="github-lv-summary">
           <ul>
             {order.map((code) => {

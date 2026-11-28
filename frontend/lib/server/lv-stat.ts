@@ -168,7 +168,11 @@ export async function readProfile(
       `${profileKey(namespace, subjectId)}.json`,
     ),
   );
-  return isProfileOf(value, namespace, subjectId) ? value : null;
+  if (value === null) return null;
+  if (isProfileOf(value, namespace, subjectId)) return value;
+  // 있는 파일을 모양 때문에 버린다. 첫 배포에서 작업자와 약속이 어긋나면 보이게 서버 기록에 한 줄 남긴다(경로·내용은 남기지 않음).
+  console.error("LV profile ignored", { error: "ShapeMismatch" });
+  return null;
 }
 
 async function readJobs(): Promise<LvJob[]> {

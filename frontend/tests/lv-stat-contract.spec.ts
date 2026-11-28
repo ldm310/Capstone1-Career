@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
   chmod,
@@ -419,6 +420,8 @@ test.describe("store", () => {
   let store: typeof LvStore;
   let dataDir: string;
   let previousDataDir: string | undefined;
+  // readProfile이 모양이 다른 파일을 버릴 때 남기는 서버 기록(시험 출력이 깨끗하게 모은다)
+  let errors: ReturnType<typeof captureErrors>;
 
   const busy = "이미 분석 중이에요. 끝나면 다시 시도해 주세요.";
   const full = "지금 분석 요청이 많아요. 잠시 뒤 다시 시도해 주세요.";
@@ -436,9 +439,11 @@ test.describe("store", () => {
     previousDataDir = process.env.CAREER_DATA_DIR;
     dataDir = await mkdtemp(path.join(tmpdir(), "lv-stat-store-"));
     process.env.CAREER_DATA_DIR = dataDir;
+    errors = captureErrors();
   });
 
   test.afterEach(async () => {
+    errors.restore();
     if (previousDataDir === undefined) delete process.env.CAREER_DATA_DIR;
     else process.env.CAREER_DATA_DIR = previousDataDir;
     await rm(dataDir, { recursive: true, force: true });
@@ -929,6 +934,39 @@ test.describe("store", () => {
     empty = withField(empty, "categories.L.best", null);
     await writeJson(profileFile("staging", "subject-a"), empty);
     expect(await store.readProfile("staging", "subject-a")).toEqual(empty);
+  });
+
+  test("readProfile logs one line without path or content when it drops an existing file for its shape", async () => {
+    // 첫 배포에서 작업자와 웹의 약속(CONTRACT 모양)이 어긋나면 서버 기록에 보이게 한다. 경로·파일 이름·내용은 남기지 않는다.
+    const file = profileFile("staging", "subject-a");
+    await writeJson(
+      file,
+      withField(storedProfile("subject-a"), "categories.A", undefined),
+    );
+    expect(await store.readProfile("staging", "subject-a")).toBeNull();
+    expect(errors.calls).toEqual([
+      ["LV profile ignored", { error: "ShapeMismatch" }],
+    ]);
+    const logged = JSON.stringify(errors.calls);
+    for (const leak of [
+      dataDir,
+      contractKey("staging", "subject-a"),
+      "subject-a",
+      "synthetic-user",
+      "프로그래밍 활용",
+    ])
+      expect(logged, leak).not.toContain(leak);
+    // 파일이 없거나 반쯤 쓴 JSON이면, 그리고 모양이 맞으면 남기지 않는다.
+    errors.calls.length = 0;
+    await rm(file);
+    expect(await store.readProfile("staging", "subject-a")).toBeNull();
+    await writeFile(file, '{"schema": "lv-stat-profile/1", "categories": {');
+    expect(await store.readProfile("staging", "subject-a")).toBeNull();
+    await writeJson(file, storedProfile("subject-a"));
+    expect(await store.readProfile("staging", "subject-a")).toEqual(
+      storedProfile("subject-a"),
+    );
+    expect(errors.calls).toEqual([]);
   });
 
   test("profile path ignores client input", async () => {
@@ -2391,6 +2429,40 @@ test.describe("analysis api", () => {
     const result = resultOf("member-a", job.id);
     await writeJson(profilePath("member-a"), result);
     expect(await get()).toEqual(found(job, result));
+    expect(errors.calls).toEqual([]);
+  });
+
+  test("GET reads the job before the profile, so a done job comes back with that job's profile", async () => {
+    // 작업자는 프로필을 다 쓴 뒤에 요청을 done으로 바꾼다(CONTRACT '쓰는 차례'). 읽는 쪽은 요청을 먼저, 프로필을 나중에 읽어야
+    // done인 요청과 그 요청의 프로필이 같이 온다. 요청 파일 자리를 FIFO로 두어 route가 요청을 읽는 사이에 작업자처럼
+    // 새 프로필을 쓰고 요청을 done으로 넘긴다(두 파일을 함께 읽으면 옛 프로필이 온다).
+    member("member-a");
+    await writeJson(
+      profilePath("member-a"),
+      resultOf("member-a", "11111111-1111-4111-8111-111111111111"),
+    );
+    const job: LvJob = {
+      id: "6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b",
+      namespace,
+      subjectId: "member-a",
+      login: "synthetic-user",
+      input: "https://github.com/synthetic-user",
+      status: "done",
+      createdAt: "2026-11-28T00:00:00.000Z",
+      stage: "끝",
+      progress: null,
+      startedAt: "2026-11-28T00:00:01.000Z",
+      finishedAt: "2026-11-28T00:01:00.000Z",
+      profileKey: contractKey(namespace, "member-a"),
+    };
+    await mkdir(jobsDir(), { recursive: true });
+    execFileSync("mkfifo", [jobPath(job.id)]);
+    const answered = get(); // route가 요청 파일(FIFO)을 읽으며 기다린다
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    const fresh = resultOf("member-a", job.id);
+    await writeJson(profilePath("member-a"), fresh); // 작업자: 프로필 먼저
+    await writeFile(jobPath(job.id), JSON.stringify(job)); // 그다음 요청 done
+    expect(await answered).toEqual(found(job, fresh));
     expect(errors.calls).toEqual([]);
   });
 

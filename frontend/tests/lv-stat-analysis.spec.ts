@@ -55,8 +55,11 @@ const refused = (status: number, error: unknown) => ({
 const found = (body: unknown) => ({ status: 200, cacheControl: noStore, body });
 const nothing = found({ job: null, profile: null });
 
-// 작업자가 쓴 분석 결과(CONTRACT.md 모양, 합성 값). 화면 시험도 같은 값을 쓴다.
-function syntheticProfile(subjectId: string): LvProfile {
+// 작업자가 쓴 분석 결과(CONTRACT.md 모양, 합성 값). 화면 시험도 같은 값을 쓴다. jobId는 그 결과를 낸 요청이다.
+function syntheticProfile(
+  subjectId: string,
+  jobId: string = randomUUID(),
+): LvProfile {
   return {
     schema: "lv-stat-profile/1",
     method: "lv-stat-s2-20261127",
@@ -64,7 +67,7 @@ function syntheticProfile(subjectId: string): LvProfile {
     namespace,
     subjectId,
     login: "synthetic-user",
-    jobId: randomUUID(),
+    jobId,
     analyzedAt: "2026-11-28T00:05:00.000Z",
     repos: { found: 2, analyzed: 1, failed: 1, notes: ["합성 메모"] },
     categories: {
@@ -370,9 +373,11 @@ test.describe("analysis screen", () => {
   ];
   type Reply = { status: number; json: unknown };
 
+  // 화면 시험의 요청 id. 끝난 요청의 결과(profile.jobId)는 이 id다(작업자가 쓰는 그대로).
+  const screenJobId = "00000000-0000-4000-8000-000000000012";
   function job(fields: Partial<LvJob>): LvJob {
     return {
-      id: "00000000-0000-4000-8000-000000000012",
+      id: screenJobId,
       namespace,
       subjectId: "screen-member",
       login: "synthetic-user",
@@ -535,7 +540,7 @@ test.describe("analysis screen", () => {
           progress: { done: 5, total: 5 },
           profileKey: profileKey("screen-member"),
         },
-        syntheticProfile("screen-member"),
+        syntheticProfile("screen-member", screenJobId),
       ),
     );
     await page.clock.runFor(5000);
@@ -550,6 +555,70 @@ test.describe("analysis screen", () => {
     expect(api.calls.get).toBe(first + 2);
   });
 
+  // 끝난 요청인데 결과가 그 요청의 것이 아니면(다른 분석의 결과이거나 없음) 아직 끝나지 않은 것으로 보고 같은 간격으로 더 읽는다.
+  async function startedThenDone(page: Page, stale: LvProfile | null) {
+    await account(page, true);
+    const api = await analysisApi(page);
+    await page.clock.install({ time: loaded });
+    await page.goto("/analysis");
+    const block = page.getByRole("region", { name: title });
+    const start = block.getByRole("button", { name: "분석 시작", exact: true });
+    await block.getByPlaceholder("https://github.com/아이디").fill(address);
+    await expect(start).toBeEnabled();
+    await page.clock.pauseAt(paused);
+    const first = api.calls.get;
+    api.answerGet(reading({ status: "done", stage: "끝" }, stale));
+    await start.click();
+    await expect(block.getByRole("status")).toHaveText("대기");
+    // 5초마다 한 번 읽는다. 다음 차례를 잡을 틈을 준 뒤 시간을 넘긴다.
+    const readAgain = async (count: number) => {
+      await page.clock.runFor(5000);
+      await expect.poll(() => api.calls.get).toBe(first + count);
+      await settle(page);
+    };
+    return { api, block, first, readAgain };
+  }
+
+  test("a done job whose profile arrives on a later read shows that summary and stops reading", async ({
+    page,
+  }) => {
+    const { api, block, first, readAgain } = await startedThenDone(
+      page,
+      syntheticProfile("screen-member"),
+    );
+    await readAgain(1);
+    await expect(block.getByRole("listitem")).toHaveCount(0); // 다른 분석의 결과는 보이지 않는다
+    api.answerGet(
+      reading(
+        { status: "done", stage: "끝" },
+        syntheticProfile("screen-member", screenJobId),
+      ),
+    );
+    await readAgain(2);
+    await expect(block.getByRole("listitem")).toHaveText(summary);
+    await expect(block.getByRole("alert")).toHaveCount(0);
+    await page.clock.runFor(30000);
+    await settle(page);
+    expect(api.calls.get).toBe(first + 2);
+  });
+
+  test("a done job whose profile never arrives is read 3 more times, then the block says the result could not be loaded", async ({
+    page,
+  }) => {
+    const { api, block, first, readAgain } = await startedThenDone(page, null);
+    for (let count = 1; count <= 4; count++) {
+      await readAgain(count);
+      if (count < 4) await expect(block.getByRole("alert")).toHaveCount(0);
+    }
+    await expect(block.getByRole("alert")).toHaveText(
+      "분석 결과를 불러오지 못했어요.",
+    );
+    await expect(block.getByRole("listitem")).toHaveCount(0);
+    await page.clock.runFor(30000);
+    await settle(page);
+    expect(api.calls.get).toBe(first + 4);
+  });
+
   test("a finished analysis shows the summary when the page opens, without reading again", async ({
     page,
   }) => {
@@ -558,7 +627,7 @@ test.describe("analysis screen", () => {
     api.answerGet(
       reading(
         { status: "done", stage: "끝", progress: { done: 1, total: 1 } },
-        syntheticProfile("screen-member"),
+        syntheticProfile("screen-member", screenJobId),
       ),
     );
     await page.clock.install({ time: loaded });
