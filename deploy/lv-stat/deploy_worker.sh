@@ -110,6 +110,9 @@ EnvironmentFile=-$envfile
 ExecStart=$py -I -u $base/current/service/worker.py --data-dir $lvdata
 Restart=on-failure
 RestartSec=10
+# systemctl stop 의 SIGTERM 에 작업자는 정리한 뒤(자식 끝냄·work/<요청 id> 지움) 143(128 + 15)으로 끝난다. 이 값을 성공으로 봐
+#   유닛이 failed 가 아니라 inactive 로 남는다(systemd 가 SIGTERM 신호로 끝난 프로세스를 대하는 것과 같게, 다시 켜지도 않음)
+SuccessExitStatus=143
 # 「Claude 임시값」: 같은 EC2 의 운영 웹(3000)·스테이징 웹(3001)·스테이징 백엔드보다 뒤로 미루는 값.
 #   Nice·CPUQuota 숫자는 실제 분석 시간을 재 보고 맞춘다.
 Nice=10

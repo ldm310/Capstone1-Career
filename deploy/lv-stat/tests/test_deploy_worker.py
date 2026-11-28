@@ -285,8 +285,10 @@ class DeployWorkerTest(unittest.TestCase):
         self.assertTrue(os.path.isabs(python), exec_line)
         self.assertTrue(exec_line.endswith(f'-I -u {self.base}/current/service/worker.py --data-dir {self.home}/career-data-staging/lv-stat'), exec_line)
         # OOMPolicy=continue: 메모리 한도(MemoryMax)로 자식(색인 등) 하나가 죽어도 유닛 전체를 멈추지 않는다(그 단계만 실패 메모)
+        # SuccessExitStatus=143: systemctl stop 의 SIGTERM 에 작업자는 정리한 뒤 143 으로 끝난다. 성공으로 봐야 유닛이
+        #   failed 가 아니라 inactive 로 남는다
         for want in ('Restart=on-failure', 'Nice=10', 'IOSchedulingClass=idle', 'CPUQuota=100%', 'MemoryHigh=400M',
-                     'MemoryMax=512M', 'OOMPolicy=continue', f'EnvironmentFile=-{self.envfile}'):
+                     'MemoryMax=512M', 'OOMPolicy=continue', 'SuccessExitStatus=143', f'EnvironmentFile=-{self.envfile}'):
             self.assertIn(want, lines)
         # 메모리 한도 줄은 이 둘뿐이다(같은 이름이 또 있으면 systemd 는 뒤의 값을 쓴다)
         self.assertEqual([l for l in lines if l.startswith('Memory')], ['MemoryHigh=400M', 'MemoryMax=512M'])
